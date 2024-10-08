@@ -1,5 +1,4 @@
-"# LeDron-James" 
-# Nome Progetto
+# LeDron-James
 
 Breve descrizione del tuo progetto. Spiega cosa fa, perché è utile, e come funziona.
 
