@@ -8,7 +8,7 @@ Breve descrizione del tuo progetto. Spiega cosa fa, perché è utile, e come fun
 
 ## Installazione
 
-Non serve creare la cartella lo fa da solo! \n
+Non serve creare la cartella lo fa da solo!  
 Spiega come installare o configurare il progetto sul sistema locale, ad esempio:
 
 ```bash
