@@ -1,2 +1,2 @@
-mod simulation_controller;
+pub mod simulation_controller;
 pub use simulation_controller::*;
