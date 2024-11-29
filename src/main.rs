@@ -1,5 +1,5 @@
 use serde::{Serialize, Deserialize};
-use simulation_controller;
+use simulation_controller::simulation_controller::*;
 #[derive(Serialize, Deserialize,Debug)]
 struct Example {
     id: u32,
@@ -17,5 +17,7 @@ fn main() {
     let deserialized: Example = serde_json::from_str(&serialized).unwrap();
     println!("Deserialized: {:?}", deserialized);
 
-    simulation_controller::simulation_controller::testing()
+
+    //-------------SIMULATION CONTROLLER----------------
+    build_simulation_controller()
 }
