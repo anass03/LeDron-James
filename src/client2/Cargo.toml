@@ -3,10 +3,6 @@ name = "client2"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "client2"
-path = "src/mod.rs"
-
 [dependencies]
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
 serde = { version = "1.0.215", features = ["derive"] }

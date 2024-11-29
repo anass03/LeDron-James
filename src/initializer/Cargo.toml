@@ -1,11 +1,7 @@
 [package]
-name = "inizializer"
+name = "initializer"
 version = "0.1.0"
 edition = "2021"
-
-[[bin]]
-name = "inizializer"
-path = "src/mod.rs"
 
 [dependencies]
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}

@@ -45,7 +45,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
 
 [[package]]
-name = "inizializer"
+name = "drone"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wg_2024",
+]
+
+[[package]]
+name = "initializer"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -58,15 +67,6 @@ name = "itoa"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d75a2a4b1b190afb6f5425f10f6a8f959d2ea0b9c2b1d79553551850539e4674"
-
-[[package]]
-name = "ledron_james"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "wg_2024",
-]
 
 [[package]]
 name = "memchr"
