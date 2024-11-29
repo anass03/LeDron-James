@@ -11,7 +11,7 @@
       <sourceFolder url="file://$MODULE_DIR$/wg_2024/crates/wg_packet/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/wg_2024/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/wg_2024/src" isTestSource="false" />
-      <sourceFolder url="file://$MODULE_DIR$/src/client1/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/client/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/client2/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/drone/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/initializer/src" isTestSource="false" />

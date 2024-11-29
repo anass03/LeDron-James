@@ -12,16 +12,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "client1"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "wg_2024",
-]
-
-[[package]]
-name = "client2"
+name = "client"
 version = "0.1.0"
 dependencies = [
  "serde",
