@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use crate::styles::*;
+use crate::ui::styles::*;
 
 pub fn spawn_camera(
     mut commands: Commands,
