@@ -9,6 +9,7 @@ impl Plugin for ServerPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(Startup, spawn_server)
+            .add_systems(Update, join)
         ;
     }
 }

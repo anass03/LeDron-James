@@ -3,3 +3,4 @@ pub mod drone;
 mod ui;
 mod client;
 mod server;
+mod commands;

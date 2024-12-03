@@ -1,40 +1,3 @@
-/*use std::collections::HashMap;
-use bevy::prelude::*;
-use crate::client::ClientPlugin;
-use crate::drone::DronePlugin;
-use crate::server::ServerPlugin;
-use crate::ui::UiPlugin;
-use crossbeam_channel::{select_biased, unbounded, Receiver, Sender};
-use std::{fs, thread};
-use wg_2024::config::Config;
-use wg_2024::controller::{DroneCommand, NodeEvent};
-use wg_2024::drone::Drone;
-use wg_2024::network::NodeId;
-use wg_2024::packet::{Packet, PacketType};
-use wg_internal::drone::DroneOptions;
-
-pub struct SimulationController {
-        drones: HashMap<NodeId, Sender<DroneCommand>>,
-        node_event_recv: Receiver<NodeEvent>
-}
-
-
-
-impl SimulationController {
-        pub fn build_simulation_controller() {
-                App::new()
-                    .add_plugins(DefaultPlugins)
-                    .add_plugins((
-                            UiPlugin,
-                            DronePlugin,
-                            ClientPlugin,
-                            ServerPlugin,
-                    ))
-                    .insert_resource(ClearColor(Color::srgb(0.3, 0.3, 0.3)))
-                    .run();
-        }
-}
-*/
 use bevy::prelude::*;
 use crate::client::ClientPlugin;
 use crate::drone::DronePlugin;
@@ -44,12 +7,16 @@ use crate::ui::UiPlugin;
 use crossbeam_channel::{select_biased, unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::{fs, thread};
+use bevy::asset::AssetContainer;
 use wg_2024::config::Config;
+use wg_2024::config::Drone as DroneConfig;
+use wg_2024::config::Client as ClientConfig;
+use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::{DroneCommand, NodeEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet, PacketType};
 use bevy::prelude::*;
-use wg_2024::drone::{Drone, DroneOptions};
+use wg_2024::drone::Drone;
 
 /// Example of drone implementation
 struct MyDrone {
@@ -62,14 +29,21 @@ struct MyDrone {
 }
 
 impl Drone for MyDrone {
-    fn new(options: DroneOptions) -> Self {
+    fn new(
+        id: NodeId,
+        controller_send: Sender<NodeEvent>,
+        controller_recv: Receiver<DroneCommand>,
+        packet_recv: Receiver<Packet>,
+        packet_send: HashMap<NodeId, Sender<Packet>>,
+        pdr: f32,
+    ) -> Self {
         Self {
-            id: options.id,
-            controller_send: options.controller_send,
-            controller_recv: options.controller_recv,
-            packet_recv: options.packet_recv,
-            pdr: options.pdr,
-            packet_send: HashMap::new(),
+            id,
+            controller_send,
+            controller_recv,
+            packet_recv,
+            packet_send,
+            pdr,
         }
     }
 
@@ -110,15 +84,11 @@ impl MyDrone {
             DroneCommand::AddSender(_node_id, _sender) => todo!(),
             DroneCommand::SetPacketDropRate(_pdr) => todo!(),
             DroneCommand::Crash => unreachable!(),
+            DroneCommand::RemoveSender(_node_id) => todo!(),
         }
     }
 }
-#[derive(Resource)]     //I'm making the SimController a bevy resource so that it can be accessed from different modules in the app
-pub struct SimulationController {
-    pub drones: HashMap<NodeId, Sender<DroneCommand>>,
-    pub node_event_recv: Receiver<NodeEvent>,
-}
-
+/*
 impl SimulationController {
     fn crash_all(&mut self) {
         for (_, sender) in self.drones.iter() {
@@ -126,12 +96,7 @@ impl SimulationController {
         }
     }
 }
-
-fn parse_config(file: &str) -> Config {
-    let file_str = fs::read_to_string(file).unwrap();
-    toml::from_str(&file_str).unwrap()
-}
-
+*/
 pub fn main() {
 
     let config = parse_config("/Users/bibo/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
@@ -151,7 +116,7 @@ pub fn main() {
     }
 
     let mut handles = Vec::new();
-    for drone in config.drone.into_iter() {
+    for drone in config.clone().drone.into_iter() {
         // controller
         let (controller_drone_send, controller_drone_recv) = unbounded();
         controller_drones.insert(drone.id, controller_drone_send);
@@ -165,22 +130,19 @@ pub fn main() {
             .collect();
 
         handles.push(thread::spawn(move || {
-            let mut drone = MyDrone::new(DroneOptions {
-                id: drone.id,
-                controller_recv: controller_drone_recv,
-                controller_send: node_event_send,
+            let mut drone = MyDrone::new(
+                drone.id,
+                node_event_send,
+                controller_drone_recv,
                 packet_recv,
                 packet_send,
-                pdr: drone.pdr,
-            });
+                drone.pdr,
+            );
 
             drone.run();
         }));
     }
-    let mut controller = SimulationController {
-        drones: controller_drones,
-        node_event_recv,
-    };
+    let mut controller = SimulationController::new(config);
 
     //controller.crash_all();
 
@@ -200,3 +162,37 @@ pub fn main() {
         handle.join().unwrap();
     }
 }
+
+pub fn parse_config(file: &str) -> Config {
+    let file_str = fs::read_to_string(file).unwrap();
+    toml::from_str(&file_str).unwrap()
+}
+#[derive(Resource)]
+pub struct SimulationController {
+    pub drones: Vec<DroneConfig>,
+    pub clients: Vec<ClientConfig>,
+    pub servers: Vec<ServerConfig>
+}
+
+impl SimulationController {
+    pub fn new(config: Config) -> Self {
+        let mut drones = vec![];
+        for drone in config.drone {
+            drones.push(drone);
+        }
+        let mut clients = vec![];
+        for client in config.client {
+            clients.push(client);
+        }
+        let mut servers = vec![];
+        for server in config.server {
+            servers.push(server);
+        }
+        Self {
+            drones,
+            clients,
+            servers
+        }
+    }
+}
+

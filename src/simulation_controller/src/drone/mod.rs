@@ -1,5 +1,5 @@
 pub mod systems;
-mod components;
+pub mod components;
 pub mod style;
 
 use bevy::prelude::*;
