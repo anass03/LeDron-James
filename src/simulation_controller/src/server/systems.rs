@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
-use crate::client::components::Client;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::get_drone_from_id;
 use crate::server::components::Server;

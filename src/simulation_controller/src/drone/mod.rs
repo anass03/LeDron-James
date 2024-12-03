@@ -3,10 +3,7 @@ pub mod components;
 pub mod style;
 
 use bevy::prelude::*;
-use bevy_prototype_lyon::plugin::ShapePlugin;
 use crate::drone::systems::*;
-use crate::simulation_controller::SimulationController;
-
 pub struct DronePlugin;
 
 impl Plugin for DronePlugin {

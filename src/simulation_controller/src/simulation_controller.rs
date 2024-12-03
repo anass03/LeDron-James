@@ -102,7 +102,7 @@ pub fn main() {
     let config = parse_config("/Users/bibo/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
 
     let mut controller_drones = HashMap::new();
-    let (node_event_send, node_event_recv) = unbounded();
+    let (node_event_send, _node_event_recv) = unbounded();
 
     let mut packet_channels = HashMap::new();
     for drone in config.drone.iter() {
@@ -142,7 +142,7 @@ pub fn main() {
             drone.run();
         }));
     }
-    let mut controller = SimulationController::new(config);
+    let controller = SimulationController::new(config);
 
     //controller.crash_all();
 

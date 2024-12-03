@@ -4,7 +4,6 @@ use crate::drone::components::*;
 use rand::Rng;
 use wg_2024::network::NodeId;
 use crate::drone::style::*;
-use crate::client::components::Client;
 use crate::simulation_controller::SimulationController;
 
 pub fn spawn_drone(     //this bevy system spawns each drone that has been inserted in the SimContr
