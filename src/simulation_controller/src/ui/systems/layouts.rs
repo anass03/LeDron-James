@@ -1,6 +1,7 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
+use bevy::window::{PrimaryWindow, WindowCloseRequested};
 use crate::ui::styles::*;
+use bevy::app::AppExit;
 
 pub fn spawn_camera(
     mut commands: Commands,
@@ -13,30 +14,4 @@ pub fn spawn_camera(
             ..default()
         }
     );
-}
-
-pub fn spawn_demo(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
-    commands.spawn(
-        NodeBundle {
-            style: DEMO_TEXT_STYLE,
-            ..default()
-        }
-    ).with_children(|parent| {
-        parent.spawn(
-            TextBundle {
-                text: Text {
-                    sections: vec![TextSection::new(
-                        "SIMULATION CONTROLLER DEMO",
-                        get_demo_text_style(&asset_server)
-                    )],
-                    ..default()
-                },
-                ..default()
-            }
-        );
-    })
-    ;
 }

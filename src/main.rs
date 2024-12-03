@@ -1,5 +1,10 @@
+#![allow(unused)]
 use serde::{Serialize, Deserialize};
 use simulation_controller::simulation_controller::*;
+use wg_2024::drone::{Drone, DroneOptions};
+
+
+
 #[derive(Serialize, Deserialize,Debug)]
 struct Example {
     id: u32,
@@ -19,5 +24,7 @@ fn main() {
 
 
     //-------------SIMULATION CONTROLLER----------------
-    build_simulation_controller()
+
+    simulation_controller::simulation_controller::main();
+
 }
