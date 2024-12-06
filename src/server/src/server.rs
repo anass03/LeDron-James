@@ -1,125 +1,64 @@
 use wg_2024::network::*;
 use wg_2024::packet::ServerType;
 use crate::message::*;
+use image::io::Reader as ImageReader;
+use image::{DynamicImage, ImageBuffer, Rgba};
 
-pub trait Server {
-    type RequestType: Request;
-    type ResponseType: Response;
 
-    fn compose_message(
-        source_id: NodeId,
-        session_id: u64,
-        raw_content: String,
-        ) -> Result<Message<Self::RequestType>, String> {
-            let content = Self::RequestType::from_string(raw_content)?;
-            Ok(Message {
-                session_id,
-                source_id,
-                content,
-            })
-    }
-    fn on_request_arrived(&mut self, source_id: NodeId, session_id: u64, raw_content: String) {
-        if raw_content == "ServerType" {
-            let _server_type = Self::get_sever_type();
-            // send response
-            return;
-        }
-        match Self::compose_message(source_id, session_id, raw_content) {
-            Ok(message) => {
-                let response = self.handle_request(message.content);
-                self.send_response(response);
-            }
-            Err(str) => panic!("{}", str),
-        }
-    }
+pub trait MediaServer {//: host
+    fn processing_image();
+    fn processing_text();
+    fn server_type() -> ServerType;
 
-    fn send_response(&mut self, _response: Self::ResponseType) {
-        // send response
-    }
 
-    fn handle_request(&mut self, request: Self::RequestType) -> Self::ResponseType;
-
-    fn get_sever_type() -> ServerType;
 }
+pub trait ChatServer<M:DroneSend> {
+    fn client_list()-> Vec<NodeId>;
+    fn server_type();
+    fn process_message(client_id:NodeId,message:Message<M>)->(NodeId,Message<M>);
 
-pub(crate) struct ChatServer;
-pub(crate) struct MediaServer;
+}
+struct Image{
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+}
+fn convert_image()->Image{
+    let path = r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\images\i1.jpg"; // Replace with your image path
+    let img: DynamicImage = ImageReader::open(path).unwrap().decode().unwrap();
+    // Convert the image to raw bytes
+    let width = img.width();
+    let height = img.height();
+    let img = img.to_rgba8();
+    let raw_bytes: Vec<u8> = img.to_vec();
 
-impl Server for ChatServer {
-    type RequestType = ChatRequest;
-    type ResponseType = ChatResponse;
-
-    fn handle_request(&mut self, request: Self::RequestType) -> Self::ResponseType {
-        match request {
-            ChatRequest::ClientList => {
-                println!("Sending ClientList");
-                ChatResponse::ClientList(vec![1, 2]) // modify
-            }
-            ChatRequest::Register(id) => {
-                println!("Registering {}", id);
-                ChatResponse::ClientList(vec![1, 2]) // modify
-            }
-            ChatRequest::SendMessage {
-                message,
-                to,
-                from: _, // modify
-            } => {
-                println!("Sending message \"{}\" to {}", message, to);
-                // effectively forward message
-
-                ChatResponse::MessageSent
-            }
-        }
-    }
-
-    fn get_sever_type() -> ServerType {
-        ServerType::Chat
+    // Print the length of the byte vector
+    println!("Image converted to Vec<u8> with length: {}", raw_bytes.len());
+    Image{
+        width,
+        height,
+        data: raw_bytes,
     }
 }
-impl Server for MediaServer{
-    type RequestType =MediaRequest;
-    type ResponseType = MediaResponse;
-
-    fn compose_message(source_id: NodeId, session_id: u64, raw_content: String) -> Result<Message<Self::RequestType>, String> {
-        let content = Self::RequestType::from_string(raw_content)?;
-        Ok(Message {
-            session_id,
-            source_id,
-            content,
-        })
+fn revert_image(image:Image) -> Result<DynamicImage, String> {
+    if image.data.len() != (image.width * image.height * 4) as usize {
+        return Err(format!(
+            "Byte vector size mismatch: expected {}, got {}",
+            image.width * image.height * 4,
+            image.data.len()
+        ));
     }
+    // Try creating the image buffer
+    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(image.width, image.height, image.data)
+        .ok_or("Failed to create ImageBuffer from raw bytes")?;
 
-    fn on_request_arrived(&mut self, source_id: NodeId, session_id: u64, raw_content: String) {
-        todo!()
-    }
-
-    fn send_response(&mut self, _response: Self::ResponseType) {
-        todo!()
-    }
-
-    fn handle_request(&mut self, request: Self::RequestType) -> Self::ResponseType {
-        todo!()
-    }
-
-    fn get_sever_type() -> ServerType {
-        todo!()
-    }
+    Ok(DynamicImage::ImageRgba8(img_buffer))
 }
-
-
 #[test]
 fn main() {
-    let mut server = ChatServer;
-    server.on_request_arrived(1, 1, ChatRequest::Register(1).stringify());
-    server.on_request_arrived(
-        1,
-        1,
-        ChatRequest::SendMessage {
-            from: 1,
-            to: 2,
-            message: "Hello".to_string(),
-        }
-            .stringify(),
-    );
-    server.on_request_arrived(1, 1, "ServerType".to_string());
+    let t=convert_image();
+    match revert_image(t) {
+        Ok(img) => img.save("output_image.png").unwrap(),
+        Err(e) => eprintln!("Error: {}", e),
+    }
 }
