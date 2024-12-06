@@ -7,13 +7,15 @@ edition = "2021"
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
-client = { path = "src/server"}
+client = { path = "src/client"}
+host = {path = "src/host"}
+crossbeam-channel = "0.5.13"
 
 [workspace]
-members = [
+members = ["src/host",
     "src/client",
     "src/drone",
     "src/initializer",
     "src/server",
-    "src/simulation_controller"
+    "src/simulation_controller",
 ]
