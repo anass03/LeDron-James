@@ -4,87 +4,122 @@ use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, PacketType, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment};
 use std::collections::{HashMap, HashSet};
 use std::time::Duration;
-use serde::{ Serialize, Deserialize };
+use petgraph::algo::dijkstra;
+use serde::{Serialize, Deserialize };
 use serde::de::DeserializeOwned;
 use petgraph::graph::{DiGraph, NodeIndex};
 
 type FileId = usize;
 type MediaId = usize;
 type ClientId = NodeId;
+//pub struct Client {
+//     topology: HashMap<NodeId, Vec<NodeId>>, // Memorizza la topologia
+//     pdr_data: HashMap<NodeId, f32>, // PDR stimata per ogni nodo connesso
+// }
 
-pub trait Host{
-    fn create_graph(&self)->DiGraph<u8,i32>{
-        DiGraph::new()
-    }
-    fn initiate_flood(&mut self) {
-        let flood_request = Packet {
-            pack_type: PacketType::FloodRequest(FloodRequest {
-                flood_id: rand::random(),
-                initiator_id: self.id,
-                path_trace: vec![(self.id, NodeType::Client)],
-            }),
-            routing_header: SourceRoutingHeader {
-                hop_index: 0,
-                hops: vec![self.id],
-            },
-            session_id: rand::random(),
-        };
 
-        if self.packet_send.send(flood_request).is_err() {
-            println!("Client {}: Error initiating flood", self.id);
+pub struct Host{
+    pub id:NodeId,
+    pub controller_send:Sender<DroneEvent>,
+    pub controller_recv:Receiver<DroneCommand>,
+    pub packet_recv:Receiver<Packet>,
+    pub packet_send: HashMap<NodeId, Sender<Packet>>,
+    pub flood_cache:HashMap<u64,bool>,
+    topology: HashMap<NodeId,(NodeIndex,Vec<NodeId>)>,
+    pub graph:DiGraph<u8, f64>,
+    pub connected_drone_ids:Vec<NodeId>,
+}
+
+pub trait HosT {
+    fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
+    fn process_flood_response(&mut self, response: FloodResponse);
+    fn process_flood_request(&mut self, flood_request: FloodRequest);
+    fn initiate_flood(&mut self);
+    fn create_graph(&mut self)->DiGraph<u8,f64>;
+    fn update_graph(&mut self);
+    fn log<S: AsRef<str>>(&self, message: S);
+    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f32);
+}
+impl<S: AsRef<str>> HosT for Host {
+    fn find_best_route(&self, destination: NodeId){
+        let mut graph = DiGraph::new();
+
+        // Add nodes
+        let a = graph.add_node("A"); // Node 0
+        let b = graph.add_node("B"); // Node 1
+        let c = graph.add_node("C"); // Node 2
+
+        // Add weighted edges
+        graph.add_edge(a, b, 1); // A -> B (weight 1)
+        graph.add_edge(b, c, 2); // B -> C (weight 2)
+        graph.add_edge(a, c, 4); // A -> C (weight 4)
+
+        // Perform Dijkstra's algorithm from node A
+        let start = a;
+        let goal = c;
+
+        let shortest_paths = dijkstra(&graph, start, Some(goal), |edge| *edge.weight());
+
+        // Check the result
+        if let Some(cost) = shortest_paths.get(&goal) {
+            println!("The shortest path cost from {:?} to {:?} is {}", graph[start], graph[goal], cost);
+        } else {
+            println!("There is no path from {:?} to {:?}", graph[start], graph[goal]);
         }
     }
-
-    fn process_flood_request(&mut self, flood_request: FloodRequest) {
-        if self.flood_cache.contains_key(&flood_request.flood_id) {
-            return; // Già processata
-        }
-        self.flood_cache.insert(flood_request.flood_id, true);
-
-        println!("Client {}: Processing FloodRequest {:?}", self.id, flood_request);
-
-        // Inoltra la richiesta di Flood a droni collegati
-        for &drone_id in &self.connected_drone_ids {
-            let mut request = flood_request.clone();
-            request.path_trace.push((drone_id, NodeType::Drone));
-            let packet = Packet {
-                pack_type: PacketType::FloodRequest(request),
-                routing_header: SourceRoutingHeader {
-                    hop_index: 1,
-                    hops: vec![self.id, drone_id],
-                },
-                session_id: rand::random(),
-            };
-            if let Err(e) = self.packet_send.send(packet) {
-                println!("Client {}: Error forwarding FloodRequest: {:?}", self.id, e);
-            }
-        }
-    }
-
-
     fn process_flood_response(&mut self, response: FloodResponse) {
-        println!(
-            "Client {}: Processing FloodResponse for flood ID: {}",
-            self.id, response.flood_id
-        );
-
         // Itera sui nodi nel percorso della FloodResponse
         let path = &response.path_trace;
-        for i in 0..path.len() - 1 {
-            let (current_node, _) = path[i];
-            let (next_node, _) = path[i + 1];
-
-            // Ottieni la PDR tra i nodi
-            let pdr = self.pdr_data.get(&next_node).cloned().unwrap_or(1.0); // Default PDR 1.0
-
-            // Aggiungi il collegamento al grafo
-            self.graph.add_edge(current_node, next_node, pdr);
-            self.graph.add_edge(next_node, current_node, pdr); // Per grafi bidirezionali
+        for j in 0..path.len()-1{
+            let i = path[j];
+           match self.topology.contains_key(&i.0){
+               true =>{
+                   let (_,v)=self.topology.get_mut(&i.0).unwrap();
+                   match v.contains(&path[j+1].0) {
+                       true => {}
+                       false => {v.push(path[j+1].0);}
+                   }
+               }
+               false => {
+                   self.topology.insert(i.0, (self.graph.add_node(i.0), vec![]));
+               }
+           }
         }
-
+        self.update_graph();
+        // adding nodes how?
+    }
+    fn process_flood_request(&mut self, flood_request: FloodRequest) {
+        todo!()
+    }
+    fn initiate_flood(&mut self) {
+        todo!()
+    }
+    fn create_graph(&mut self)->DiGraph<u8,f64>{
+        DiGraph::new()
+    }
+    fn update_graph(&mut self){
+        for (i,j) in self.topology.values(){
+            for k in j{
+                match self.graph.contains_edge(*i, self.topology.get(k).unwrap().0) {
+                    true => {match self.graph.contains_edge( self.topology.get(k).unwrap().0,*i){
+                        true => {}
+                        false => {self.graph.add_edge( self.topology.get(k).unwrap().0,*i, 0.0);}
+                    }}
+                    false => {self.graph.add_edge(*i, self.topology.get(k).unwrap().0, 0.0);}
+                }
+            }
+        }
         println!("Client {}: Updated topology: {:?}", self.id, self.graph);
     }
+    fn log<S: AsRef<str>>(&self, message: S) {
+        println!("Host ID {} - {}", self.id, message.as_ref());
+    }
+    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f32) {
+       // sto lavorando
+    }
 }
+
+
 
 // fn evaluate_drones(&mut self) {
 //     for &drone_id in &self.connected_drone_ids {
@@ -128,43 +163,6 @@ pub trait Host{
 //     }
 // }
 
-fn find_best_route(&self, destination: NodeId) -> Vec<NodeId> {
-    let mut dist = HashMap::new();
-    let mut prev = HashMap::new();
-    let mut unvisited: HashSet<NodeId> = self.graph.adj_list.keys().cloned().collect();
-
-    for &node in &unvisited {
-        dist.insert(node, f32::INFINITY);
-    }
-    dist.insert(self.id, 0.0);
-
-    while let Some(&current) = unvisited.iter().min_by_key(|&&node| dist.get(&node).cloned().unwrap_or(f32::INFINITY) as i32) {
-        unvisited.remove(&current);
-
-        if current == destination {
-            break;
-        }
-
-        for &(neighbor, weight) in &self.graph.get_neighbors(current) {
-            let alt = dist.get(&current).cloned().unwrap_or(f32::INFINITY) + weight;
-            if alt < dist.get(&neighbor).cloned().unwrap_or(f32::INFINITY) {
-                dist.insert(neighbor, alt);
-                prev.insert(neighbor, current);
-            }
-        }
-    }
-
-    // Ricostruisce il percorso
-    let mut path = Vec::new();
-    let mut current = destination;
-    while let Some(&prev_node) = prev.get(&current) {
-        path.push(current);
-        current = prev_node;
-    }
-    path.push(self.id);
-    path.reverse();
-    path
-}
 pub enum ClientToServer<M: DroneSend>{
     ServerType,
     FilesList,

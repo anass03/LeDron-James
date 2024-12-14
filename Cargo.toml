@@ -15,5 +15,5 @@ members = [
     "src/initializer",
     "src/server",
     "src/simulation_controller",
-    "src/host"
+    "src/host",
 ]

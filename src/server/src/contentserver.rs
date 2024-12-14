@@ -1,32 +1,28 @@
 use std::collections::HashMap;
 use std::{fs, thread};
 use std::fmt::{Debug, Display, Formatter};
-use std::process::Command;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
+use petgraph::graph::{DiGraph};
 use wg_2024::controller::DroneEvent::{PacketDropped, PacketSent};
-use wg_2024::drone;
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Fragment, Packet, PacketType};
+use wg_2024::packet::{FloodRequest, FloodResponse, Fragment, Packet, PacketType};
 use wg_2024::packet::PacketType::MsgFragment;
 use crate::MediaServer;
 use crate::textserver::TextServer;
+use host::{Host, HosT};
+use delegate::delegate;
 struct COntentServer{
-    controller_recv: Receiver<Command>,
-    controller_send: Sender<Command>,
-    packet_send: HashMap<NodeId, Sender<Packet>>,
-    packet_recv: Receiver<Packet>,
+    host:Host,
     rom:HashMap<u64, (u8,Vec<u8>)>,
     files:Vec<String>,
     media:Vec<String>,
-    id: String
 }
 pub trait ContentServer:MediaServer+ TextServer{
-    fn run(&mut self);
     fn handling_packets(&mut self, packet: Result<Packet,crossbeam_channel::RecvError>);
     fn create_message(&self, id:String);
-    fn count_files(&self);
-    fn count_media(&self,folder_path:Vec<String>);
+    fn count_files(&mut self);
+    fn count_media(&self,folder_path:String)->Vec<String>;
     fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes;
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
 }
@@ -35,18 +31,30 @@ impl MediaServer for COntentServer {}
 
 impl TextServer for COntentServer {}
 
-impl ContentServer for COntentServer {
+impl<S: AsRef<str>> COntentServer{
+    delegate!{
+        to self.host {
+                fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
+                fn process_flood_response(&mut self, response: FloodResponse);
+                fn process_flood_request(&mut self, flood_request: FloodRequest);
+                fn initiate_flood(&mut self);
+                fn create_graph(&mut self)->DiGraph<u8,f64>;
+                fn update_graph(&mut self);
+                fn log(&self, message:S);
+                fn modify_pdr(&mut self, drone_id: NodeId, pdr: f32);
+        }
+    }
     fn run(&mut self){
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages using select_biased! macro.
-                recv(self.controller_recv) -> command => {
+                recv(self.host.controller_recv) -> command => {
                     if let Ok(command) = command {
-                        self.handle_command(command);
+                        // self.handle_command(command);
                     }else{
                         // println!("Drone ID {:?} - Failed to parse command-packet [Crossbeam Error - Channel Closed / Empty]", self.id);
                     }
                 }
-                recv(self.packet_recv) -> packet => {
+                recv(self.host.packet_recv) -> packet => {
                     self.handling_packets(packet);
                 thread::sleep(Duration::from_millis(2000));
                 /*
@@ -58,8 +66,11 @@ impl ContentServer for COntentServer {
             }
         }
     }
+}
+
+impl ContentServer for COntentServer {
     fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
-        if !self.packet_recv.is_empty(){
+        if !self.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 // Only Ack, Nack, FloodResponse already sent
                 // before the drone-crash will be forwarded
@@ -68,14 +79,14 @@ impl ContentServer for COntentServer {
                     PacketType::Nack(_) |
                     PacketType::Ack(_) |
                     PacketType::FloodResponse(_) => {
-                        self.handle_packet(packet);
+                        // self.handle_packet(packet);
                     },
                     // This the case of Flood Request / Fragment message:
                     PacketType::FloodRequest(_) => {
 
                     },
                     PacketType::MsgFragment(fragment) => {
-                        self.creating_files(fragment,packet.session_id);
+                        // self.creating_files(fragment,packet.session_id);
                     }
                 }
             }else{
@@ -136,8 +147,8 @@ impl ContentServer for COntentServer {
     }
 
     fn count_files(&mut self) {
-        self.media=self.media(r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\images");
-        self.files=self.media(r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\files");
+        self.media=self.count_media(r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\images".parse().unwrap());
+        self.files=self.count_media(r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\files".parse().unwrap());
     }
 
     fn count_media(&self,folder_path:String) ->Vec<String>{
@@ -158,42 +169,42 @@ impl ContentServer for COntentServer {
         file_names
     }
     fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes { // OK
-        self.log("Sending packet...");
+        // self.log("Sending packet...");
         //
         match channel {
             Some(ch) => {
                 match ch.send(packet.clone()) {
                     Ok(_) => {
                         // self.sendto_controller(packet, false); Ack to Sim. Controller
-                        self.log("Successfully sent packet...");
+                        // self.log("Successfully sent packet...");
                         SendingCodes::SuccessfullySent(packet.session_id)
                     },
                     Err(er) => {
-                        println!("Server ID {:?} - {:?}", self.id, er.to_string());
+                        println!("Server ID {:?} - {:?}", self.host.id, er.to_string());
                         let _ = self.sendto_controller(packet, false); // We send the packet to Sim.Controller
                         SendingCodes::ErrorSending(er.to_string())
                     }
                 }
             },
             None => {
-                let channeltosend = self.packet_send.get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);
+                let channeltosend = self.host.packet_send.get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);
                 match channeltosend {
                     Some(ch) => {
                         match ch.send(packet.clone()) {
                             Ok(_) => {
-                                self.log("Successfully sent packet...");
+                                // self.log("Successfully sent packet...");
                                 let _ = self.sendto_controller(packet.clone(), true); //Ack to Sim. Controller
                                 SendingCodes::SuccessfullySent(packet.session_id)
                             },
                             Err(er) => {
-                                println!("Server ID {:?} - {:?}", self.id, er.to_string());
+                                println!("Server ID {:?} - {:?}", self.host.id, er.to_string());
                                 let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
                                 SendingCodes::ErrorSending(er.to_string())
                             }
                         }
                     },
                     None => {
-                        self.log("Neighbour not found...");
+                        // self.log("Neighbour not found...");
                         let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
                         SendingCodes::NoNextHop("Neighbour not found".to_string())
                     }
@@ -202,26 +213,26 @@ impl ContentServer for COntentServer {
         }
     }
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>{
-        self.log("Sending to controller...");
+        // self.log("Sending to controller...");
         if sent {
-            match self.controller_send.send(PacketSent(packet)){
+            match self.host.controller_send.send(PacketSent(packet)){
                 Ok(_) => {
-                    self.log("Successfully sent to controller.");
+                    // self.log("Successfully sent to controller.");
                     Ok(())
                 },
                 Err(er) => {
-                    println!("Server ID {} - {:?}", self.id, er.to_string());
+                    println!("Server ID {} - {:?}", self.host.id, er.to_string());
                     Err(er.to_string())
                 }
             }
         }else{
-            match self.controller_send.send(PacketDropped(packet)) {
+            match self.host.controller_send.send(PacketDropped(packet)) {
                 Ok(_) => {
-                    self.log("Successfully sent to controller.");
+                    // self.log("dropped Successfully sent to controller.");
                     Ok(())
                 },
                 Err(er) => {
-                    println!("Server ID {} - {:?}", self.id, er.to_string());
+                    println!("Server ID {} - {:?}", self.host.id, er.to_string());
                     Err(er.to_string())
                 }
             }
