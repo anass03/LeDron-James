@@ -1,4 +1,6 @@
-mod server;
-mod message;
+mod mediaserver;
+mod contentserver;
+mod chatserver;
+mod textserver;
 
-pub use server::*;
+pub use mediaserver::*;
