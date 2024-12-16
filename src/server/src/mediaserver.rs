@@ -92,6 +92,7 @@ fn main() {
     //     println!("{},{}", graph.edge_count(),graph.contains_edge(node_index, node_index2));
     // }
     // create_message("i1".to_string());
+
 }
 fn revert_image(image:Image) -> Result<DynamicImage, String> {
     if image.data.len() != (image.width * image.height * 4) as usize {

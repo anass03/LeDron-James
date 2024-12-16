@@ -3,70 +3,114 @@ use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, PacketType, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment};
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Debug, Display, Formatter};
 use std::time::Duration;
 use petgraph::algo::dijkstra;
+use petgraph::Direction;
 use serde::{Serialize, Deserialize };
 use serde::de::DeserializeOwned;
 use petgraph::graph::{DiGraph, NodeIndex};
-
+use petgraph::visit::{EdgeRef, IntoEdgesDirected};
+use wg_2024::controller::DroneEvent::{PacketDropped, PacketSent};
 type FileId = usize;
 type MediaId = usize;
 type ClientId = NodeId;
-//pub struct Client {
-//     topology: HashMap<NodeId, Vec<NodeId>>, // Memorizza la topologia
-//     pdr_data: HashMap<NodeId, f32>, // PDR stimata per ogni nodo connesso
-// }
-
-
 pub struct Host{
     pub id:NodeId,
+    pub type_host:NodeType,
     pub controller_send:Sender<DroneEvent>,
     pub controller_recv:Receiver<DroneCommand>,
     pub packet_recv:Receiver<Packet>,
     pub packet_send: HashMap<NodeId, Sender<Packet>>,
-    pub flood_cache:HashMap<u64,bool>,
+    pub flood_cache:HashMap<NodeId, u64>,
     topology: HashMap<NodeId,(NodeIndex,Vec<NodeId>)>,
     pub graph:DiGraph<u8, f64>,
     pub connected_drone_ids:Vec<NodeId>,
 }
-
-pub trait HosT {
-    fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
-    fn process_flood_response(&mut self, response: FloodResponse);
-    fn process_flood_request(&mut self, flood_request: FloodRequest);
+pub trait HosT{
+    fn log<S: AsRef<str>>(&self, message: S);
     fn initiate_flood(&mut self);
+    fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
+    fn process_flood_response(&mut self, response: FloodResponse);
     fn create_graph(&mut self)->DiGraph<u8,f64>;
     fn update_graph(&mut self);
-    fn log<S: AsRef<str>>(&self, message: S);
-    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f32);
+    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64);
+    fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
+    fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes;
+    fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
+    fn build_packet_flood_response(flreq_header: FloodRequest, srcid:u64) -> Packet;
 }
-impl<S: AsRef<str>> HosT for Host {
-    fn find_best_route(&self, destination: NodeId){
-        let mut graph = DiGraph::new();
-
-        // Add nodes
-        let a = graph.add_node("A"); // Node 0
-        let b = graph.add_node("B"); // Node 1
-        let c = graph.add_node("C"); // Node 2
-
-        // Add weighted edges
-        graph.add_edge(a, b, 1); // A -> B (weight 1)
-        graph.add_edge(b, c, 2); // B -> C (weight 2)
-        graph.add_edge(a, c, 4); // A -> C (weight 4)
-
-        // Perform Dijkstra's algorithm from node A
-        let start = a;
-        let goal = c;
-
-        let shortest_paths = dijkstra(&graph, start, Some(goal), |edge| *edge.weight());
-
-        // Check the result
-        if let Some(cost) = shortest_paths.get(&goal) {
-            println!("The shortest path cost from {:?} to {:?} is {}", graph[start], graph[goal], cost);
-        } else {
-            println!("There is no path from {:?} to {:?}", graph[start], graph[goal]);
+impl HosT for Host {
+    fn log<S: AsRef<str>>(&self, message: S) {
+        println!("Host ID {} - {}", self.id, message.as_ref());
+    }
+    fn initiate_flood(&mut self) {
+        let flood_request = Packet {
+            pack_type: PacketType::FloodRequest(FloodRequest {
+                flood_id: rand::random(),
+                initiator_id: self.id,
+                path_trace: vec![(self.id, NodeType::Client)],
+            }),
+            routing_header: SourceRoutingHeader {
+                hop_index: 0,
+                hops: vec![self.id],
+            },
+            session_id: rand::random(),
+        };
+        for i in &mut self.packet_send.clone(){
+                self.send_packet(flood_request.clone(), Some(i.1));
         }
     }
+    fn process_flood_request(&mut self, mut flood_request: FloodRequest,packet: Packet) {
+        self.log("Handling FloodRequest...");
+        if self.flood_cache.iter().any(|(k,v)| *v == flood_request.flood_id && *k == flood_request.initiator_id) {
+            // Already received this FloodReq, we need to build a FloodResponse
+            flood_request.path_trace.push((self.id.clone(), NodeType::Drone)); // We add our ID to the path
+            self.send_packet(Self::build_packet_flood_response(flood_request, packet.session_id),None);
+        }else{
+            let packetreceivedfrom = flood_request.path_trace.get(flood_request.path_trace.len()-1usize)
+                .expect(("Server ID ".to_string()+self.id.to_string().as_str()+" - Received Flood Request with empty path-trace!").as_str()).clone();
+            self.flood_cache.insert(flood_request.initiator_id.clone(), flood_request.flood_id.clone()); // **
+            let mut return_packet = Packet{
+                session_id: packet.session_id,
+                routing_header: packet.routing_header,
+                pack_type: {
+                    let mut return_packet_typefield = flood_request.clone();
+                    return_packet_typefield.path_trace.push((self.id.clone(), self.type_host)); // We adding our ID to the path trace
+                    PacketType::FloodRequest(return_packet_typefield)
+                }
+            };
+            // We send the packet to all the neighbors besides the one we received the packet from
+            for i in &mut self.packet_send.clone(){
+                if *i.0 !=  packetreceivedfrom.0{
+                    self.send_packet(return_packet.clone(), Some(i.1));
+                }
+            }
+        }
+        // if self.flood_cache.contains_key(&flood_request.flood_id) {
+        //     return; // Già processata
+        // }
+        // self.flood_cache.insert(flood_request.flood_id, true);
+        //
+        // println!("Client {}: Processing FloodRequest {:?}", self.id, flood_request);
+        //
+        // // Inoltra la richiesta di Flood a droni collegati
+        // for &drone_id in &self.connected_drone_ids {
+        //     let mut request = flood_request.clone();
+        //     request.path_trace.push((drone_id, NodeType::Drone));
+        //     let packet = Packet {
+        //         pack_type: PacketType::FloodRequest(request),
+        //         routing_header: SourceRoutingHeader {
+        //             hop_index: 1,
+        //             hops: vec![self.id, drone_id],
+        //         },
+        //         session_id: rand::random(),
+        //     };
+        //     self.send_packet(packet, None);
+        //     // if let Err(e) = self.packet_send.send(packet) {
+        //     //     println!("Client {}: Error forwarding FloodRequest: {:?}", self.id, e);
+        //     // }
+        }
     fn process_flood_response(&mut self, response: FloodResponse) {
         // Itera sui nodi nel percorso della FloodResponse
         let path = &response.path_trace;
@@ -88,12 +132,6 @@ impl<S: AsRef<str>> HosT for Host {
         self.update_graph();
         // adding nodes how?
     }
-    fn process_flood_request(&mut self, flood_request: FloodRequest) {
-        todo!()
-    }
-    fn initiate_flood(&mut self) {
-        todo!()
-    }
     fn create_graph(&mut self)->DiGraph<u8,f64>{
         DiGraph::new()
     }
@@ -109,63 +147,135 @@ impl<S: AsRef<str>> HosT for Host {
                 }
             }
         }
-        println!("Client {}: Updated topology: {:?}", self.id, self.graph);
+        println!("Host {}: Updated topology: {:?}", self.id, self.graph);
     }
-    fn log<S: AsRef<str>>(&self, message: S) {
-        println!("Host ID {} - {}", self.id, message.as_ref());
+    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64) {
+       for i in self.graph.clone().edges_directed(self.topology.get(&drone_id).unwrap().0, Direction::Outgoing){
+           if *i.weight() != pdr{
+               if let Some(weight_mut) = self.graph.edge_weight_mut(i.id()) {
+                   *weight_mut =pdr; // Example modification: increment weight by 1
+               }
+           }
+       }
     }
-    fn modify_pdr(&mut self, drone_id: NodeId, pdr: f32) {
-       // sto lavorando
+    fn find_best_route(&self, destination: NodeId)->Vec<NodeId>{
+        let shortest_paths = dijkstra(&self.graph, self.topology.get(&self.id).unwrap().0, Some(self.topology.get(&destination).unwrap().0), |edge| *edge.weight());
+        // Reconstruct the path
+        let mut current = self.topology.get(&destination).unwrap().0;
+        let mut path = vec![current];
+        // Traverse back using the cost map
+        while let Some(prev_node) = shortest_paths
+            .iter()
+            .find_map(|(node, &dist)| {
+                self.graph
+                    .edges_connecting(*node, current)
+                    .find(|edge| dist + edge.weight() == shortest_paths[&current]).map(|_| *node)
+            })
+        {
+            current = prev_node;
+            path.push(current);
+        }
+        // Reverse the path to get it in start-to-end order
+        path.reverse();
+        let path_names: Vec<_> = path.iter().map(|&n| self.graph[n]).collect();
+        println!("Shortest path: {:?}", path_names);
+        path_names
+    }
+    fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes { // OK
+        self.log("Sending packet...");
+        match channel {
+            Some(ch) => {
+                match ch.send(packet.clone()) {
+                    Ok(_) => {
+                        let e =SendingCodes::SuccessfullySent(packet.session_id);
+                        self.sendto_controller(packet, false).expect("TODO: panic message"); //Ack to Sim. Controller
+                        self.log("Successfully sent packet...");
+                        e
+                    },
+                    Err(er) => {
+                        println!("Server ID {:?} - {:?}", self.id, er.to_string());
+                        let _ = self.sendto_controller(packet, false); // We send the packet to Sim.Controller
+                        SendingCodes::ErrorSending(er.to_string())
+                    }
+                }
+            },
+            None => {
+                let channeltosend = self.packet_send.get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);
+                match channeltosend {
+                    Some(ch) => {
+                        match ch.send(packet.clone()) {
+                            Ok(_) => {
+                                // self.log("Successfully sent packet...");
+                                let _ = self.sendto_controller(packet.clone(), true); //Ack to Sim. Controller
+                                SendingCodes::SuccessfullySent(packet.session_id)
+                            },
+                            Err(er) => {
+                                println!("Host ID {:?} - {:?}", self.id, er.to_string());
+                                let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
+                                SendingCodes::ErrorSending(er.to_string())
+                            }
+                        }
+                    },
+                    None => {
+                        // self.log("Neighbour not found...");
+                        let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
+                        SendingCodes::NoNextHop("Neighbour not found".to_string())
+                    }
+                }
+            }
+        }
+    }
+    fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>{
+        self.log("Sending to controller...");
+        if sent {
+            match self.controller_send.send(PacketSent(packet)){
+                Ok(_) => {
+                    self.log("Successfully sent to controller.");
+                    Ok(())
+                },
+                Err(er) => {
+                    println!("Drone ID {} - {:?}", self.id, er.to_string());
+                    Err(er.to_string())
+                }
+            }
+        }else{
+            match self.controller_send.send(PacketDropped(packet)) {
+                Ok(_) => {
+                    self.log("Successfully sent to controller.");
+                    Ok(())
+                },
+                Err(er) => {
+                    println!("Drone ID {} - {:?}", self.id, er.to_string());
+                    Err(er.to_string())
+                }
+            }
+        }
+    }
+    fn build_packet_flood_response(mut flreq_header: FloodRequest, srcid:u64) -> Packet{
+        let return_packet:Packet = Packet{
+            routing_header: SourceRoutingHeader{
+                // Hop Index 1,
+                hop_index:1,
+                hops: {
+                    flreq_header.path_trace.iter().cloned().rev().map(|(id, _)| id).collect()
+                }
+            },
+            pack_type: {
+                PacketType::FloodResponse(FloodResponse{
+                    flood_id:flreq_header.flood_id,
+                    path_trace:flreq_header.path_trace,
+                })
+            },
+            session_id: srcid// random number or session id from the old packet?,
+        };
+        println!("Host ID {} - Building Flood Response", return_packet.routing_header.hops[0]);
+        return_packet
     }
 }
-
-
-
-// fn evaluate_drones(&mut self) {
-//     for &drone_id in &self.connected_drone_ids {
-//         let mut sent = 0;
-//         let mut acked = 0;
-//
-//         // Testa con un certo numero di pacchetti
-//         for _ in 0..10 {
-//             let test_packet = Packet {
-//                 pack_type: PacketType::MsgFragment(Fragment {
-//                     fragment_index: 0,
-//                     total_n_fragments: 1,
-//                     length: 0,
-//                     data: [0; 128],
-//                 }),
-//                 routing_header: SourceRoutingHeader {
-//                     hop_index: 0,
-//                     hops: vec![self.id, drone_id],
-//                 },
-//                 session_id: rand::random(),
-//             };
-//
-//             if self.packet_send.send(test_packet).is_ok() {
-//                 sent += 1;
-//             }
-//
-//             // Verifica se riceviamo un Ack
-//             if let Ok(DroneEvent::PacketSent(_)) = self.controller_recv.recv_timeout(Duration::from_millis(100)) {
-//                 acked += 1;
-//             }
-//         }
-//
-//         // Calcola la PDR
-//         let pdr = if sent > 0 { acked as f32 / sent as f32 } else { 1.0 };
-//         self.pdr_data.insert(drone_id, pdr);
-//
-//         println!(
-//             "Client {}: Estimated PDR for drone {}: {:.2}",
-//             self.id, drone_id, pdr
-//         );
-//     }
-// }
-
 pub enum ClientToServer<M: DroneSend>{
     ServerType,
     FilesList,
+
     File(FileId),
     MediaList,
     Media(MediaId),
@@ -196,15 +306,6 @@ pub struct Message<M: DroneSend> {
     pub session_id: u64,
     pub content: M,
 }
-pub trait DroneSend: Serialize + DeserializeOwned {
-    fn stringify(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-    fn from_string(raw: String) -> Result<Self, String> {
-        serde_json::from_str(raw.as_str()).map_err(|e| e.to_string())
-    }
-}
-
 // ReqServerType,
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextRequest {
@@ -217,6 +318,7 @@ pub enum MediaRequest {
     MediaList,
     Media(u64),
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChatRequest {
     ClientList,
@@ -227,19 +329,18 @@ pub enum ChatRequest {
         message: String,
     },
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TextResponse {
     TextList(Vec<u64>),
     Text(String),
     NotFound,
 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum MediaResponse {
     MediaList(Vec<u64>),
     Media(Vec<u8>), // should we use some other type?
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ChatResponse {
     ClientList(Vec<NodeId>),
@@ -247,16 +348,35 @@ pub enum ChatResponse {
     MessageSent,
 }
 
-
-
-
-
-
-
-
+pub trait DroneSend: Serialize + DeserializeOwned {
+    fn stringify(&self) -> String {
+        serde_json::to_string(self).unwrap()
+    }
+    fn from_string(raw: String) -> Result<Self, String> {
+        serde_json::from_str(raw.as_str()).map_err(|e| e.to_string())
+    }
+}
+pub enum SendingCodes { // For performance and logic enhancements
+    SuccessfullySent(u64),
+    ErrorSending(String),
+    NoNextHop(String)
+}
+impl Debug for SendingCodes {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            SendingCodes::SuccessfullySent(n) => write!(f, "Successfully sent [Packet {}]", n),
+            SendingCodes::ErrorSending(s) => write!(f, "Error sending the packet [{}]", s),
+            SendingCodes::NoNextHop(s) => write!(f, "No next hop available [{}]", s)
+        }
+    }
+}
+impl Display for SendingCodes {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        Debug::fmt(self, f)
+    }
+}
 pub trait Request: DroneSend {}
 pub trait Response: DroneSend {}
-
 impl DroneSend for TextRequest {}
 impl Request for TextRequest {}
 impl DroneSend for MediaRequest {}
@@ -267,6 +387,9 @@ impl DroneSend for TextResponse {}
 impl Response for TextResponse {}
 impl DroneSend for MediaResponse {}
 impl Response for MediaResponse {}
-
 impl DroneSend for ChatResponse {}
 impl Response for ChatResponse {}
+#[test]
+fn main(){
+    println!("Hello, world!");
+}

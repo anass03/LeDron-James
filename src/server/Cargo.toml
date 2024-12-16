@@ -11,3 +11,4 @@ crossbeam-channel = "0.5.13"
 host = {path = "../host" }
 petgraph = "0.6.5"
 delegate = "0.13.1"
+url = "2.5.4"
