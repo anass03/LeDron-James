@@ -1,10 +1,9 @@
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Packet, PacketType, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment};
-use std::collections::{HashMap, HashSet};
+use wg_2024::packet::{Packet, PacketType, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType};
+use std::collections::{HashMap};
 use std::fmt::{Debug, Display, Formatter};
-use std::time::Duration;
 use petgraph::algo::dijkstra;
 use petgraph::Direction;
 use serde::{Serialize, Deserialize };
@@ -38,7 +37,9 @@ pub trait HosT{
     fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
     fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes;
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
-    fn build_packet_flood_response(flreq_header: FloodRequest, srcid:u64) -> Packet;
+    fn handle_ack(&self, ack: Ack, session_id: u64);
+    fn handle_nack(&self, nack: Nack, session_id: u64);
+    fn build_packet_flood_response(&self,floodrequest_header: FloodRequest, search_id:u64) -> Packet;
 }
 impl HosT for Host {
     fn log<S: AsRef<str>>(&self, message: S) {
@@ -63,10 +64,11 @@ impl HosT for Host {
     }
     fn process_flood_request(&mut self, mut flood_request: FloodRequest,packet: Packet) {
         self.log("Handling FloodRequest...");
-        if self.flood_cache.iter().any(|(k,v)| *v == flood_request.flood_id && *k == flood_request.initiator_id) {
-            // Already received this FloodReq, we need to build a FloodResponse
+        if self.flood_cache.iter().any(|(k,v)| *v == flood_request.flood_id && *k == flood_request.initiator_id) { // Already received this FloodReq,
+            // we need
+            // to build a FloodResponse
             flood_request.path_trace.push((self.id.clone(), NodeType::Drone)); // We add our ID to the path
-            self.send_packet(Self::build_packet_flood_response(flood_request, packet.session_id),None);
+            self.send_packet(self.build_packet_flood_response(flood_request, packet.session_id),None);
         }else{
             let packetreceivedfrom = flood_request.path_trace.get(flood_request.path_trace.len()-1usize)
                 .expect(("Server ID ".to_string()+self.id.to_string().as_str()+" - Received Flood Request with empty path-trace!").as_str()).clone();
@@ -76,7 +78,7 @@ impl HosT for Host {
                 routing_header: packet.routing_header,
                 pack_type: {
                     let mut return_packet_typefield = flood_request.clone();
-                    return_packet_typefield.path_trace.push((self.id.clone(), self.type_host)); // We adding our ID to the path trace
+                    return_packet_typefield.path_trace.push((self.id.clone(), self.type_host)); // We're adding our ID to the path trace
                     PacketType::FloodRequest(return_packet_typefield)
                 }
             };
@@ -87,30 +89,7 @@ impl HosT for Host {
                 }
             }
         }
-        // if self.flood_cache.contains_key(&flood_request.flood_id) {
-        //     return; // Già processata
-        // }
-        // self.flood_cache.insert(flood_request.flood_id, true);
-        //
-        // println!("Client {}: Processing FloodRequest {:?}", self.id, flood_request);
-        //
-        // // Inoltra la richiesta di Flood a droni collegati
-        // for &drone_id in &self.connected_drone_ids {
-        //     let mut request = flood_request.clone();
-        //     request.path_trace.push((drone_id, NodeType::Drone));
-        //     let packet = Packet {
-        //         pack_type: PacketType::FloodRequest(request),
-        //         routing_header: SourceRoutingHeader {
-        //             hop_index: 1,
-        //             hops: vec![self.id, drone_id],
-        //         },
-        //         session_id: rand::random(),
-        //     };
-        //     self.send_packet(packet, None);
-        //     // if let Err(e) = self.packet_send.send(packet) {
-        //     //     println!("Client {}: Error forwarding FloodRequest: {:?}", self.id, e);
-        //     // }
-        }
+    }
     fn process_flood_response(&mut self, response: FloodResponse) {
         // Itera sui nodi nel percorso della FloodResponse
         let path = &response.path_trace;
@@ -130,7 +109,6 @@ impl HosT for Host {
            }
         }
         self.update_graph();
-        // adding nodes how?
     }
     fn create_graph(&mut self)->DiGraph<u8,f64>{
         DiGraph::new()
@@ -164,18 +142,14 @@ impl HosT for Host {
         let mut current = self.topology.get(&destination).unwrap().0;
         let mut path = vec![current];
         // Traverse back using the cost map
-        while let Some(prev_node) = shortest_paths
-            .iter()
-            .find_map(|(node, &dist)| {
+        while let Some(prev_node) = shortest_paths.iter().find_map(|(node, &dist)| {
                 self.graph
                     .edges_connecting(*node, current)
                     .find(|edge| dist + edge.weight() == shortest_paths[&current]).map(|_| *node)
-            })
-        {
+             }){
             current = prev_node;
             path.push(current);
-        }
-        // Reverse the path to get it in start-to-end order
+        } // Reverse the path to get it in start-to-end order
         path.reverse();
         let path_names: Vec<_> = path.iter().map(|&n| self.graph[n]).collect();
         println!("Shortest path: {:?}", path_names);
@@ -205,19 +179,20 @@ impl HosT for Host {
                     Some(ch) => {
                         match ch.send(packet.clone()) {
                             Ok(_) => {
-                                // self.log("Successfully sent packet...");
-                                let _ = self.sendto_controller(packet.clone(), true); //Ack to Sim. Controller
+                                self.log("Successfully sent packet...");
+                                // let _ = self.sendto_controller(packet.clone(), true); //Ack to Sim. Controller
                                 SendingCodes::SuccessfullySent(packet.session_id)
                             },
                             Err(er) => {
                                 println!("Host ID {:?} - {:?}", self.id, er.to_string());
-                                let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
+                                // let _ = self.sendto_controller(packet, true);
+                                // We send the packet to Sim.Controller
                                 SendingCodes::ErrorSending(er.to_string())
                             }
                         }
                     },
                     None => {
-                        // self.log("Neighbour not found...");
+                        self.log("Neighbour not found...");
                         let _ = self.sendto_controller(packet, true); // We send the packet to Sim.Controller
                         SendingCodes::NoNextHop("Neighbour not found".to_string())
                     }
@@ -251,22 +226,49 @@ impl HosT for Host {
             }
         }
     }
-    fn build_packet_flood_response(mut flreq_header: FloodRequest, srcid:u64) -> Packet{
+    fn handle_ack(&self, ack: Ack, session_id: u64) {
+        println!(
+            "Host {}: Received Ack for fragment index {} (session ID: {})",
+            self.id, ack.fragment_index, session_id
+        );
+        // Aggiorna stato o logica per confermare la ricezione
+        // Ad esempio: rimuovere il frammento dalla lista dei frammenti da inviare
+    }
+    fn handle_nack(&self, nack: Nack, session_id: u64) {
+        println!("Host {}: Received Nack for fragment index {} (session ID: {}). Reason: {:?}", self.id, nack.fragment_index, session_id, nack.nack_type);
+        match nack.nack_type {
+            NackType::Dropped => {
+                println!("Host {}: Retrying fragment due to drop.", self.id);
+                // Logica per ritrasmettere il frammento
+            }
+            NackType::ErrorInRouting(node_id) => {
+                println!(
+                    "Host {}: Routing error encountered. Node ID: {}",
+                    self.id, node_id
+                );
+                // Adotta azioni per correggere il percorso, se possibile
+            }
+            _ => {
+                println!("Host {}: Unhandled Nack type: {:?}", self.id, nack.nack_type);
+            }
+        }
+    }
+    fn build_packet_flood_response(&self,mut floodrequest_header: FloodRequest, search_id:u64) -> Packet{
         let return_packet:Packet = Packet{
             routing_header: SourceRoutingHeader{
                 // Hop Index 1,
                 hop_index:1,
                 hops: {
-                    flreq_header.path_trace.iter().cloned().rev().map(|(id, _)| id).collect()
+                    floodrequest_header.path_trace.iter().cloned().rev().map(|(id, _)| id).collect()
                 }
             },
             pack_type: {
                 PacketType::FloodResponse(FloodResponse{
-                    flood_id:flreq_header.flood_id,
-                    path_trace:flreq_header.path_trace,
+                    flood_id:floodrequest_header.flood_id,
+                    path_trace:floodrequest_header.path_trace,
                 })
             },
-            session_id: srcid// random number or session id from the old packet?,
+            session_id: search_id// random number or session id from the old packet?,
         };
         println!("Host ID {} - Building Flood Response", return_packet.routing_header.hops[0]);
         return_packet
@@ -284,6 +286,7 @@ pub enum ClientToServer<M: DroneSend>{
     ClientList,
     MessageFor(ClientId, Message<M>)
 }
+
 pub enum ServerToClient<M: DroneSend>{
     ServerType(ServerType),
     FilesList(Vec<FileId>),
