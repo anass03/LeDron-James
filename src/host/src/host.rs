@@ -40,6 +40,8 @@ pub trait HosT{
     fn handle_ack(&self, ack: Ack, session_id: u64);
     fn handle_nack(&self, nack: Nack, session_id: u64);
     fn build_packet_flood_response(&self,floodrequest_header: FloodRequest, search_id:u64) -> Packet;
+    fn build_packet_nack(&self,packet: Packet, nack_id: NackType, optional_fragment_index: Option<u64>) -> Packet;
+    fn build_packet_ack(&self,packet: Packet, ack_id: Ack) -> Packet;
 }
 impl HosT for Host {
     fn log<S: AsRef<str>>(&self, message: S) {
@@ -272,6 +274,36 @@ impl HosT for Host {
         };
         println!("Host ID {} - Building Flood Response", return_packet.routing_header.hops[0]);
         return_packet
+    }
+    fn build_packet_nack(&self, packet: Packet, nack_id: NackType, optional_fragment_index: Option<u64>) -> Packet{
+        Packet {
+            session_id: packet.session_id,
+            routing_header: {
+                let mut old_srh = packet.routing_header;
+                old_srh = old_srh.sub_route(0..=old_srh.hop_index).unwrap();
+                old_srh.reverse();
+                old_srh.hop_index=1;
+                println!("Host ID {:?} - Building Nack [{:?}]...", old_srh.hops[0], nack_id);
+                old_srh
+            },
+            pack_type: PacketType::Nack(Nack{
+                fragment_index: optional_fragment_index.unwrap_or(0),
+                nack_type: nack_id
+            })
+        }
+    }
+    fn build_packet_ack(&self, packet: Packet, ack_id: Ack) -> Packet{
+        Packet{
+            routing_header: {
+                let mut old_srh = packet.routing_header;
+                old_srh.reverse();
+                old_srh.hop_index=1;
+                println!("Host ID {:?} - Building Ack [{:?}]...", old_srh.hops[0], ack_id);
+                old_srh
+            },
+            session_id:packet.session_id,
+            pack_type: PacketType::Ack(ack_id),
+        }
     }
 }
 pub enum ClientToServer<M: DroneSend>{

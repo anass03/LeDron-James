@@ -6,7 +6,7 @@ use crossbeam_channel::Sender;
 use petgraph::graph::DiGraph;
 use wg_2024::controller::DroneEvent::{PacketDropped, PacketSent};
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, PacketType};
+use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, Packet, PacketType};
 use wg_2024::packet::PacketType::MsgFragment;
 use crate::MediaServer;
 use crate::textserver::TextServer;
@@ -41,6 +41,8 @@ impl COntentServer{
             fn handle_ack(&self, ack: Ack, session_id: u64);
             fn handle_nack(&self, nack: Nack, session_id: u64);
             fn build_packet_flood_response(&self, floodrequest_header: FloodRequest, search_id:u64) -> Packet;
+            fn build_packet_nack(&self, packet: Packet, nack_id: NackType, optional_fragment_index: Option<u64>) -> Packet;
+            fn build_packet_ack(&self, packet: Packet, ack_id: Ack) -> Packet;
         }
     }
     fn run(&mut self){
