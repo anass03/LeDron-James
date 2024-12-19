@@ -6,7 +6,7 @@ use std::collections::{HashMap};
 use std::fmt::{Debug, Display, Formatter};
 use petgraph::algo::dijkstra;
 use petgraph::Direction;
-use serde::{Serialize, Deserialize };
+use serde::{Serialize};
 use serde::de::DeserializeOwned;
 use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::{EdgeRef, IntoEdgesDirected};
@@ -25,6 +25,28 @@ pub struct Host{
     topology: HashMap<NodeId,(NodeIndex,Vec<NodeId>)>,
     pub graph:DiGraph<u8, f64>,
     pub connected_drone_ids:Vec<NodeId>,
+}
+impl Host{
+    pub fn new(id:NodeId,
+           type_host:NodeType,
+           controller_send:Sender<DroneEvent>,
+           controller_recv:Receiver<DroneCommand>,
+           packet_recv:Receiver<Packet>,
+           packet_send:HashMap<NodeId, Sender<Packet>>,
+           connected_drone_ids:Vec<NodeId>) ->Self{
+        Self{
+            id,
+            type_host,
+            controller_send,
+            controller_recv,
+            packet_recv,
+            packet_send,
+            flood_cache: HashMap::new(),
+            topology: HashMap::new(),
+            graph: DiGraph::new(),
+            connected_drone_ids,
+        }
+    }
 }
 pub trait HosT{
     fn log<S: AsRef<str>>(&self, message: S);
@@ -308,30 +330,30 @@ impl HosT for Host {
 }
 pub enum ClientToServer<M: DroneSend>{
     ServerType,
-    FilesList,
 
+    FilesList,
     File(FileId),
+
     MediaList,
     Media(MediaId),
 
-    RegistrationToChat,
+    RegistrationToChat(ClientId),
     ClientList,
     MessageFor(ClientId, Message<M>)
 }
 
 pub enum ServerToClient<M: DroneSend>{
-    ServerType(ServerType),
+    ServerType(ServerTypes),
     FilesList(Vec<FileId>),
     MediaList(Vec<MediaId>),
-    // File(),
-    // Media(),
+    File,
+    Media,
     ErrNotFound,
-    ErrNotSupported,
     ClientList(Vec<ClientId>),
     MessageFrom(ClientId, Message<M>),
     ErrClientId
 }
-enum ServerType{
+pub enum ServerTypes{
     Chat,
     Content
 }
@@ -342,47 +364,6 @@ pub struct Message<M: DroneSend> {
     pub content: M,
 }
 // ReqServerType,
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TextRequest {
-    TextList,
-    Text(u64),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MediaRequest {
-    MediaList,
-    Media(u64),
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ChatRequest {
-    ClientList,
-    Register(NodeId),
-    SendMessage {
-        from: NodeId,
-        to: NodeId,
-        message: String,
-    },
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum TextResponse {
-    TextList(Vec<u64>),
-    Text(String),
-    NotFound,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum MediaResponse {
-    MediaList(Vec<u64>),
-    Media(Vec<u8>), // should we use some other type?
-}
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ChatResponse {
-    ClientList(Vec<NodeId>),
-    MessageFrom { from: NodeId, message: Vec<u8> },
-    MessageSent,
-}
-
 pub trait DroneSend: Serialize + DeserializeOwned {
     fn stringify(&self) -> String {
         serde_json::to_string(self).unwrap()
@@ -412,18 +393,6 @@ impl Display for SendingCodes {
 }
 pub trait Request: DroneSend {}
 pub trait Response: DroneSend {}
-impl DroneSend for TextRequest {}
-impl Request for TextRequest {}
-impl DroneSend for MediaRequest {}
-impl Request for MediaRequest {}
-impl DroneSend for ChatRequest {}
-impl Request for ChatRequest {}
-impl DroneSend for TextResponse {}
-impl Response for TextResponse {}
-impl DroneSend for MediaResponse {}
-impl Response for MediaResponse {}
-impl DroneSend for ChatResponse {}
-impl Response for ChatResponse {}
 #[test]
 fn main(){
     println!("Hello, world!");
