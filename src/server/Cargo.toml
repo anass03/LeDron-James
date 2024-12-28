@@ -12,3 +12,5 @@ host = {path = "../host" }
 petgraph = "0.6.5"
 delegate = "0.13.1"
 url = "2.5.4"
+reqwest = { version = "0.11", features = ["blocking"] }
+tokio = { version = "1", features = ["full"] }
