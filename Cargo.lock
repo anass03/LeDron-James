@@ -3,18 +3,6 @@
 version = 3
 
 [[package]]
-name = "LeDron-James"
-version = "0.1.0"
-dependencies = [
- "client",
- "crossbeam-channel",
- "host",
- "serde",
- "serde_json",
- "wg_2024",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -43,6 +31,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "host",
  "rand",
  "serde",
  "serde_json",
@@ -63,17 +52,6 @@ name = "crossbeam-utils"
 version = "0.8.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
-
-[[package]]
-name = "drone"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "rand",
- "serde",
- "serde_json",
- "wg_2024",
-]
 
 [[package]]
 name = "errno"
@@ -106,15 +84,6 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "rand",
- "serde",
- "serde_json",
- "wg_2024",
-]
-
-[[package]]
-name = "initializer"
-version = "0.1.0"
-dependencies = [
  "serde",
  "serde_json",
  "wg_2024",
@@ -201,7 +170,7 @@ checksum = "c8478de76992f2825a1052cc2ae9d1401cdb62687761d4100ddd69a73dc3dc48"
 dependencies = [
  "rand_chacha",
  "rand_core",
- "zerocopy 0.8.11",
+ "zerocopy 0.8.13",
 ]
 
 [[package]]
@@ -221,7 +190,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a98fa0b8309344136abe6244130311e76997e546f76fae8054422a7539b43df7"
 dependencies = [
  "getrandom",
- "zerocopy 0.8.11",
+ "zerocopy 0.8.13",
 ]
 
 [[package]]
@@ -273,24 +242,6 @@ dependencies = [
  "memchr",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "wg_2024",
-]
-
-[[package]]
-name = "simulation_controller"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "wg_2024",
 ]
 
 [[package]]
@@ -377,7 +328,7 @@ checksum = "6ee99da9c5ba11bd675621338ef6fa52296b76b83305e9b6e5c77d4c286d6d49"
 [[package]]
 name = "wg_2024"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "wg_internal",
 ]
@@ -385,7 +336,7 @@ dependencies = [
 [[package]]
 name = "wg_config"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "wg_network",
 ]
@@ -393,7 +344,7 @@ dependencies = [
 [[package]]
 name = "wg_controller"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "crossbeam-channel",
  "wg_network",
@@ -403,7 +354,7 @@ dependencies = [
 [[package]]
 name = "wg_drone"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "crossbeam-channel",
  "wg_controller",
@@ -414,26 +365,38 @@ dependencies = [
 [[package]]
 name = "wg_internal"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "wg_config",
  "wg_controller",
  "wg_drone",
  "wg_network",
  "wg_packet",
+ "wg_tests",
 ]
 
 [[package]]
 name = "wg_network"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 
 [[package]]
 name = "wg_packet"
 version = "0.1.0"
-source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#3f14068f5141a15564e035b11ab09d3827b0f012"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
 dependencies = [
  "wg_network",
+]
+
+[[package]]
+name = "wg_tests"
+version = "0.1.0"
+source = "git+https://github.com/WGL-2024/WGL_repo_2024.git#f88f1f263ba5e0d356bac60b694f787bcc8c7107"
+dependencies = [
+ "crossbeam-channel",
+ "wg_drone",
+ "wg_network",
+ "wg_packet",
 ]
 
 [[package]]
@@ -539,11 +502,11 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.11"
+version = "0.8.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cce3b5629d87654b53a49002acc2ce64aa5aa7255f5c718374a37ac7fd98c218"
+checksum = "67914ab451f3bfd2e69e5e9d2ef3858484e7074d63f204fd166ec391b54de21d"
 dependencies = [
- "zerocopy-derive 0.8.11",
+ "zerocopy-derive 0.8.13",
 ]
 
 [[package]]
@@ -559,9 +522,9 @@ dependencies = [
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.11"
+version = "0.8.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a82c26c3986af2623ec9eb890ff4aa19c006e30a1133dc9bd1830ec1612e20"
+checksum = "7988d73a4303ca289df03316bc490e934accf371af6bc745393cf3c2c5c4f25d"
 dependencies = [
  "proc-macro2",
  "quote",
