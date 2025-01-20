@@ -17,9 +17,10 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet, PacketType};
 use bevy::prelude::*;
 use wg_2024::drone::Drone;
+use drone::Drone as LeDron;
 
 /// Example of drone implementation
-struct MyDrone {
+/*struct MyDrone {
     id: NodeId,
     controller_send: Sender<NodeEvent>,
     controller_recv: Receiver<DroneCommand>,
@@ -87,7 +88,7 @@ impl MyDrone {
             DroneCommand::RemoveSender(_node_id) => todo!(),
         }
     }
-}
+}*/
 /*
 impl SimulationController {
     fn crash_all(&mut self) {
@@ -130,7 +131,7 @@ pub fn main() {
             .collect();
 
         handles.push(thread::spawn(move || {
-            let mut drone = MyDrone::new(
+            let mut drone = LeDron::new(
                 drone.id,
                 node_event_send,
                 controller_drone_recv,
@@ -142,9 +143,9 @@ pub fn main() {
             drone.run();
         }));
     }
-    let controller = SimulationController::new(config);
+    let mut controller = SimulationController::new(config, controller_drones);
 
-    //controller.crash_all();
+    controller.crash_all();
 
     App::new()
         .add_plugins(DefaultPlugins)
@@ -171,11 +172,12 @@ pub fn parse_config(file: &str) -> Config {
 pub struct SimulationController {
     pub drones: Vec<DroneConfig>,
     pub clients: Vec<ClientConfig>,
-    pub servers: Vec<ServerConfig>
+    pub servers: Vec<ServerConfig>,
+    pub sender: HashMap<NodeId, Sender<DroneCommand>>,
 }
 
 impl SimulationController {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, sender: HashMap<NodeId, Sender<DroneCommand>>) -> Self {
         let mut drones = vec![];
         for drone in config.drone {
             drones.push(drone);
@@ -191,8 +193,8 @@ impl SimulationController {
         Self {
             drones,
             clients,
-            servers
+            servers,
+            sender,
         }
     }
 }
-

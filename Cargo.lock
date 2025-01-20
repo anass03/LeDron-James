@@ -7,6 +7,7 @@ name = "LeDron-James"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "drone",
  "serde",
  "serde_json",
  "simulation_controller",
@@ -4404,6 +4405,7 @@ dependencies = [
  "bevy 0.14.2",
  "bevy_prototype_lyon",
  "crossbeam-channel",
+ "drone",
  "rand 0.8.5",
  "serde",
  "serde_json",

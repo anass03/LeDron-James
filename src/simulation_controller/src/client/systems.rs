@@ -3,8 +3,9 @@ use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
 use crate::client::components::Client;
 use crate::drone::components::ScDrone;
-use crate::drone::systems::get_drone_from_id;
+use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
 use crate::simulation_controller::SimulationController;
+use crate::ui::components::*;
 
 pub fn spawn_clients(
     mut commands: Commands,
@@ -12,8 +13,10 @@ pub fn spawn_clients(
     window_query: Query<&Window, With<PrimaryWindow>>,
     simulation_controller: Res<SimulationController>,
 ) {
+    let mut i = 0;
     for client in simulation_controller.clients.iter() {
-        spawn(&mut commands, &window_query, &asset_server, &client.id);
+        spawn(&mut commands, &window_query, &asset_server, &client.id, i);
+        i += 1;;
     }
 }
 
@@ -21,10 +24,10 @@ pub fn spawn(
     commands: &mut Commands,
     window_query: &Query<&Window, With<PrimaryWindow>>,
     asset_server: &Res<AssetServer>,
-    id: &NodeId
+    id: &NodeId,
+    i: u8
 ) {
     let window = window_query.get_single().unwrap();
-    for i in 0..2 {
         commands.spawn((
             SpriteBundle {
                 transform: match i {
@@ -37,7 +40,6 @@ pub fn spawn(
             },
             Client { id: id.clone() },
         ));
-    }
 }
 
 pub fn join(
@@ -49,13 +51,13 @@ pub fn join(
     for (client1, transform) in client_query.iter() {
         let start = transform.translation;
         for conn_drone in simulation_controller.drones.iter() {
-            if conn_drone.connected_node_ids.contains(&client1.id) {      //connects two drones if needed
-                let end = get_drone_from_id(&drone_query, &conn_drone.id).unwrap().translation;
+            if conn_drone.connected_node_ids.contains(&client1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id) {      //connects two drones if needed
+                let end = get_drone_transform_from_id(&drone_query, &conn_drone.id).unwrap().translation;
                 let mid_point = (start + end) / 2.0;
                 let length = start.distance(end);
                 let angle = (end.y - start.y).atan2(end.x - start.x);
 
-                commands.spawn( SpriteBundle {
+                commands.spawn( (SpriteBundle {
                     sprite: Sprite {
                         color: Color::srgb(1.0,0.0,0.0),
                         custom_size: Some(Vec2::new(length, 2.0)),
@@ -67,7 +69,9 @@ pub fn join(
                         ..default()
                     },
                     ..default()
-                });
+                },
+                    NodeConnection(client1.id, conn_drone.id)
+                ));
             }
         }
     }

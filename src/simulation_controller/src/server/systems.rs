@@ -2,9 +2,10 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
 use crate::drone::components::ScDrone;
-use crate::drone::systems::get_drone_from_id;
+use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
 use crate::server::components::Server;
 use crate::simulation_controller::SimulationController;
+use crate::ui::components::NodeConnection;
 
 pub fn spawn_server(
     mut commands: Commands,
@@ -43,13 +44,13 @@ pub fn join(
     for (server1, transform) in server_query.iter() {
         let start = transform.translation;
         for conn_drone in simulation_controller.drones.iter() {
-            if conn_drone.connected_node_ids.contains(&server1.id) {      //connects two drones if needed
-                let end = get_drone_from_id(&drone_query, &conn_drone.id).unwrap().translation;
+            if conn_drone.connected_node_ids.contains(&server1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id){      //connects two drones if needed
+                let end = get_drone_transform_from_id(&drone_query, &conn_drone.id).unwrap().translation;
                 let mid_point = (start + end) / 2.0;
                 let length = start.distance(end);
                 let angle = (end.y - start.y).atan2(end.x - start.x);
 
-                commands.spawn( SpriteBundle {
+                commands.spawn( (SpriteBundle {
                     sprite: Sprite {
                         color: Color::srgb(1.0,0.0,0.0),
                         custom_size: Some(Vec2::new(length, 2.0)),
@@ -61,7 +62,9 @@ pub fn join(
                         ..default()
                     },
                     ..default()
-                });
+                },
+                    NodeConnection(server1.id, conn_drone.id)
+                ));
             }
         }
     }

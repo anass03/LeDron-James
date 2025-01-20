@@ -5,6 +5,7 @@ use rand::Rng;
 use wg_2024::network::NodeId;
 use crate::drone::style::*;
 use crate::simulation_controller::SimulationController;
+use crate::ui::components::*;
 
 pub fn spawn_drone(     //this bevy system spawns each drone that has been inserted in the SimContr
     mut commands: Commands,
@@ -33,13 +34,15 @@ pub fn spawn(
             transform: Transform::from_xyz(x, y, 0.0),  //for now the drones are spawned in a random position
             ..default()
         },
-        ScDrone { id: drone.clone() },
-        Interaction::None
+        ScDrone {
+            id: drone.clone(),
+            crashed: false,
+        }
     ));
     
 }
 
-pub fn get_drone_from_id(
+pub fn get_drone_transform_from_id(
     drone_query: &Query<(&ScDrone, &Transform), With<ScDrone>>,
     id: &NodeId
 ) -> Option<Transform> {
@@ -51,35 +54,81 @@ pub fn get_drone_from_id(
     None
 }
 
+pub fn get_drone_crashed_form_id(
+    drone_query: &Query<(&ScDrone, &Transform), With<ScDrone>>,
+    id: &NodeId
+) -> bool {
+    for (drone, _) in drone_query.iter() {
+        if drone.id == *id {
+            return drone.crashed
+        }
+    } false
+}
+
+
+
 pub fn join(                        //this system joins the drones together
     mut commands: Commands,
     drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
     simulation_controller: Res<SimulationController>,
 ) {
     for (drone1, trans1,) in drone_query.iter() {   //iters on the Drone components
-        let start = trans1.translation;
-        for conn_drone in simulation_controller.drones.iter() {  //iters on the giver connected nodes in the declaration
-            if conn_drone.connected_node_ids.contains(&drone1.id) {      //connects two drones if needed
-                let end = get_drone_from_id(&drone_query, &conn_drone.id).unwrap().translation;
-                let mid_point = (start + end) / 2.0;
-                let length = start.distance(end);
-                let angle = (end.y - start.y).atan2(end.x - start.x);
+        if !drone1.crashed{
+            let start = trans1.translation;
+            for conn_drone in simulation_controller.drones.iter() {  //iters on the giver connected nodes in the declaration
+                if conn_drone.connected_node_ids.contains(&drone1.id) {      //connects two drones if needed
+                    let end = get_drone_transform_from_id(&drone_query, &conn_drone.id).unwrap().translation;
+                    let mid_point = (start + end) / 2.0;
+                    let length = start.distance(end);
+                    let angle = (end.y - start.y).atan2(end.x - start.x);
 
-                commands.spawn( SpriteBundle {                      //spawns the line that connects two drones
-                    sprite: Sprite {
-                        color: Color::srgb(1.0,0.0,0.0),
-                        custom_size: Some(Vec2::new(length, 2.0)),
+                    commands.spawn((SpriteBundle {                      //spawns the line that connects two drones
+                        sprite: Sprite {
+                            color: Color::srgb(1.0, 0.0, 0.0),
+                            custom_size: Some(Vec2::new(length, 2.0)),
+                            ..default()
+                        },
+                        transform: Transform {
+                            translation: mid_point,
+                            rotation: Quat::from_rotation_z(angle),
+                            ..default()
+                        },
                         ..default()
                     },
-                    transform: Transform {
-                        translation: mid_point,
-                        rotation: Quat::from_rotation_z(angle),
-                        ..default()
-                    },
-                    ..default()
-                });
+                                    NodeConnection(drone1.id, conn_drone.id)
+                    ));
+                }
             }
         }
     }
 }
+
+/*pub fn crash(
+    mut button_query: Query<&Interaction, (Changed<Interaction>, With<CrashButton>)>,
+    mut drone_query: Query<&mut ScDrone>
+) {
+    let mut drone = drone_query.get_single_mut().unwrap();
+    if let Some(interaction) = button_query.get_single() {
+        match interaction {
+            Interaction::Pressed {
+                drone
+            }
+        }
+    }
+}*/
+
+/*pub fn crash(
+    mut commands: Commands,
+    mut drone_query: Query<&mut ScDrone>,
+    mut connection_query: Query<Entity, With<NodeConnection>>,
+) {
+    for mut drone in drone_query.iter_mut() {
+        drone.crashed = true;
+        for mut connection in connection_query.iter_mut() {
+                commands.entity(connection).despawn();
+            }
+    }
+}*/
+
+
 

@@ -1,2 +1,2 @@
-mod drone;
+pub mod drone;
 pub use drone::*;
