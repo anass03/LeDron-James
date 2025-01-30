@@ -1,10 +1,7 @@
 use bevy::prelude::*;
-use bevy::window::{PrimaryWindow, WindowCloseRequested};
-use crate::ui::styles::*;
-use bevy::app::AppExit;
+use bevy::window::{PrimaryWindow};
 use crate::drone::components::ScDrone;
-//use crate::drone::systems::crash;
-use crate::ui::components::{CrashButton, NodeConnection};
+use crate::simulation_controller::{OptionMenu, SelectedNode};
 
 pub fn spawn_camera(
     mut commands: Commands,
@@ -18,60 +15,32 @@ pub fn spawn_camera(
         }
     );
 }
-/*
-pub fn spawn_button(
-    mut commands: Commands,
-    asset_server: Res<AssetServer>,
-) {
-    commands.spawn(NodeBundle {
-        style: Style {
-            width: Val::Px(100.0),
-            height: Val::Px(100.0),
-            justify_content: JustifyContent::Center,
-            align_items: AlignItems::Center,
-            ..default()
-        },
-        ..default()
-    }).with_children(|parent| {
-        parent.spawn((ButtonBundle {
-            style: Style {
-                width: Val::Px(200.0),
-                height: Val::Px(50.0),
-                justify_content: JustifyContent::Center,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-            background_color: Color::BLACK.into(),
-            ..default()
-        },
-                      CrashButton {}
-        ))
-            .with_children(|button| {
-                button.spawn(TextBundle {
-                    text: Text::from_section(
-                        "Crash Drones",
-                        TextStyle {
-                            font: asset_server.load("/Users/bibo/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
-                            font_size: 30.0,
-                            color: Color::WHITE,
-                        },
-                    ),
-                    ..default()
-                });
-            });
-    });
-}
 
-pub fn click_button(
-    mut commands: Commands,
-    mut button_query: Query<&Interaction, (Changed<Interaction>, With<CrashButton>)>,
-    drone_query: Query<&mut ScDrone>,
-    mut connection_query: Query<Entity, With<NodeConnection>>,
+pub fn drone_clicked(
+    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut next_app_state: ResMut<NextState<OptionMenu>>,
+    mut selected_node: ResMut<SelectedNode>
 ) {
-    if let Ok(interaction) = button_query.get_single() {
-        if *interaction == Interaction::Pressed{
-            println!("Clicked button: {:?}", interaction);
-            crash(commands, drone_query, connection_query)
+    let window = window_query.get_single().unwrap();
+    let mut clicked = false;
+    if mouse.pressed(MouseButton::Left) {
+        if let Some(mouse_pos) = window.cursor_position() {
+            for (drone, transform) in drone_query.iter() {
+                if ((mouse_pos.x - transform.translation.x) as f64).powi(2) + ((mouse_pos.y - (window.height() - transform.translation.y)) as f64).powi(2) <= (32 as f64).powi(2) {
+                    clicked = true;
+                    selected_node.node_id = Some(drone.id.clone());
+                    break;
+                } else {
+                    clicked = false;
+                }
+            }
+            if clicked {
+                next_app_state.set(OptionMenu::On);
+            } else {
+                next_app_state.set(OptionMenu::Off);
+            }
         }
     }
-}*/
+}

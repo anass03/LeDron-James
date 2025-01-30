@@ -5,7 +5,6 @@ use crate::client::components::Client;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
 use crate::simulation_controller::SimulationController;
-use crate::ui::components::*;
 
 pub fn spawn_clients(
     mut commands: Commands,
@@ -16,7 +15,7 @@ pub fn spawn_clients(
     let mut i = 0;
     for client in simulation_controller.clients.iter() {
         spawn(&mut commands, &window_query, &asset_server, &client.id, i);
-        i += 1;;
+        i += 1;
     }
 }
 
@@ -35,43 +34,31 @@ pub fn spawn(
                     1 => Transform::from_xyz(window.width() / 6.0, window.height() / 3.0 * 2.0, 0.0),
                     _ => Transform::from_xyz(0.0, 0.0, 0.0),
                 },
-                texture: asset_server.load("/Users/bibo/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/sprites/client.png"),
+                texture: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/sprites/client.png"),
                 ..default()
             },
             Client { id: id.clone() },
         ));
 }
 
+
 pub fn join(
-    mut commands: Commands,
-    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
+    mut gizmos: Gizmos,
     client_query: Query<(&Client, &Transform), With<Client>>,
+    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
     simulation_controller: Res<SimulationController>,
 ) {
     for (client1, transform) in client_query.iter() {
-        let start = transform.translation;
-        for conn_drone in simulation_controller.drones.iter() {
-            if conn_drone.connected_node_ids.contains(&client1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id) {      //connects two drones if needed
-                let end = get_drone_transform_from_id(&drone_query, &conn_drone.id).unwrap().translation;
-                let mid_point = (start + end) / 2.0;
-                let length = start.distance(end);
-                let angle = (end.y - start.y).atan2(end.x - start.x);
+        let start = transform.translation.truncate(); // Convert to Vec2
 
-                commands.spawn( (SpriteBundle {
-                    sprite: Sprite {
-                        color: Color::srgb(1.0,0.0,0.0),
-                        custom_size: Some(Vec2::new(length, 2.0)),
-                        ..default()
-                    },
-                    transform: Transform {
-                        translation: mid_point,
-                        rotation: Quat::from_rotation_z(angle),
-                        ..default()
-                    },
-                    ..default()
-                },
-                    NodeConnection(client1.id, conn_drone.id)
-                ));
+        for conn_drone in simulation_controller.drones.iter() {
+            if conn_drone.connected_node_ids.contains(&client1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id) {
+                if let Some(trans2) = get_drone_transform_from_id(&drone_query, &conn_drone.id) {
+                    let end = trans2.translation.truncate(); // Convert to Vec2
+
+                    // Draw a red line between the client and drone
+                    gizmos.line_2d(start, end, Color::srgb(1.0, 0.0, 0.0));
+                }
             }
         }
     }

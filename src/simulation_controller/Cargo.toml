@@ -6,7 +6,6 @@ edition = "2021"
 
 [dependencies]
 bevy = { version = "=0.14.2", features = ["bevy_audio"] }
-bevy_prototype_lyon = "0.13.0"
 rand = "0.8.5"
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
