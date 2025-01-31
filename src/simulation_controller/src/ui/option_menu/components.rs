@@ -8,7 +8,10 @@ pub struct OptionMenu{}
 pub struct CrashButton{}
 
 #[derive(Component)]
-pub struct NodeIdText{}
+pub struct DroneIdText {}
+
+#[derive(Component)]
+pub struct ClientIdText {}
 
 #[derive(Component)]
 pub struct SetPdrButton{}
@@ -54,11 +57,60 @@ pub struct ConfirmPdrButton;
 pub struct SelectedPdr(pub(crate) f32);
 
 #[derive(Component)]
-pub struct InputText {
+pub struct PdrInputText {
     pub(crate) value: String
 }
 
 #[derive(Resource)]
 pub struct IsPdrMenuOpen(pub bool);
 
+//Client Commands
 
+#[derive(Component)]
+pub struct ServerTypeButton;
+
+#[derive(Component)]
+pub struct FileListButton;
+
+#[derive(Component)]
+pub struct FileButton;
+
+#[derive(Component)]
+pub struct MediaListButton;
+
+#[derive(Component)]
+pub struct MediaButton;
+
+#[derive(Component)]
+pub struct RegistrationToChatButton;
+
+#[derive(Component)]
+pub struct ClientListButton;
+
+#[derive(Component)]
+pub struct MessageForButton;
+
+#[derive(Component)]
+pub struct ControllerShortcutButton;
+
+#[derive(Component)]
+pub struct ChooseFileMenu;
+
+#[derive(Component)]
+pub struct FileNameInputText {
+    pub(crate) value: String
+}
+
+#[derive(Component)]
+pub struct ConfirmFileNameButton;
+
+#[derive(Component)]
+pub struct ChooseMediaMenu;
+
+#[derive(Component)]
+pub struct MediaNameInputText {
+    pub(crate) value: String
+}
+
+#[derive(Component)]
+pub struct ConfirmMediaNameButton;

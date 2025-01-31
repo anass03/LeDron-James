@@ -2,10 +2,11 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use crate::drone::components::*;
 use rand::Rng;
-use wg_2024::controller::{DroneCommand};
+use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
+use host::DroneSend;
 use crate::drone::style::*;
-use crate::simulation_controller::{SelectedNode, SimulationController};
+use crate::simulation_controller::{SelectedDrone, SimulationController};
 
 pub fn spawn_drone(     //this bevy system spawns each drone that has been inserted in the SimContr
     mut commands: Commands,
@@ -15,6 +16,31 @@ pub fn spawn_drone(     //this bevy system spawns each drone that has been inser
 ) {
     for drone in drones.drones.iter() {
         spawn(&mut commands, &window_query,&asset_server, &drone.id);
+    }
+}
+
+//Joins the connected drones with a line
+pub fn join(
+    mut gizmos: Gizmos,
+    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
+    simulation_controller: Res<SimulationController>,
+) {
+    for (drone1, trans1) in drone_query.iter() {
+        if !drone1.crashed {
+            let start = trans1.translation.truncate(); // Convert to Vec2
+
+            for conn_drone in simulation_controller.drones.iter() {
+                if conn_drone.connected_node_ids.contains(&drone1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id){
+
+                    if let Some(trans2) = get_drone_transform_from_id(&drone_query, &conn_drone.id) {
+                        let end = trans2.translation.truncate(); // Convert to Vec2
+
+                        // Draw a red line between the two drones
+                        gizmos.line_2d(start, end, Color::srgb(1.0, 0.0, 0.0));
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -89,9 +115,9 @@ pub fn crash(
 pub fn add_sender(
     node_id: &NodeId,
     simulation_controller: &Res<SimulationController>,
-    selected_node: &Res<SelectedNode>
+    selected_node: &Res<SelectedDrone>
 ) {
-    let current_drone = selected_node.node_id.unwrap();
+    let current_drone = selected_node.drone_id.unwrap();
     let command_forward = DroneCommand::AddSender(*node_id, simulation_controller.packet_sender.get(node_id).unwrap().clone());
     let command_backwards = DroneCommand::AddSender(current_drone, simulation_controller.packet_sender.get(&current_drone).unwrap().clone());
     //adding the sender to the selected drone
@@ -104,9 +130,9 @@ pub fn add_sender(
 pub fn remove_sender(
     node_id: &NodeId,
     simulation_controller: &Res<SimulationController>,
-    selected_node: &Res<SelectedNode>
+    selected_node: &Res<SelectedDrone>
 ) {
-    let current_drone = selected_node.node_id.unwrap();
+    let current_drone = selected_node.drone_id.unwrap();
     let command_forward = DroneCommand::RemoveSender(*node_id);
     let command_backwards = DroneCommand::RemoveSender(current_drone);
     //adding the sender to the selected drone
@@ -117,34 +143,30 @@ pub fn remove_sender(
 
 /// Command -> DroneCommand::SetPacketDropRate(f32)
 pub fn set_pdr(
-    selected_node: &Res<SelectedNode>,
+    selected_node: &Res<SelectedDrone>,
     simulation_controller: &Res<SimulationController>,
     new_pdr: f32
 ) {
-    let current_node = selected_node.node_id.unwrap();
+    let current_node = selected_node.drone_id.unwrap();
     simulation_controller.drone_command_sender.get(&current_node).unwrap().send(DroneCommand::SetPacketDropRate(new_pdr)).expect("ERROR setting pdr");
 
 }
 
-//Joins the connected drones with a line
-pub fn join(
-    mut gizmos: Gizmos,
-    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
+pub fn handle_packet_sent (
     simulation_controller: Res<SimulationController>,
+    drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
 ) {
-    for (drone1, trans1) in drone_query.iter() {
-        if !drone1.crashed {
-            let start = trans1.translation.truncate(); // Convert to Vec2
-
-            for conn_drone in simulation_controller.drones.iter() {
-                if conn_drone.connected_node_ids.contains(&drone1.id) && !get_drone_crashed_form_id(&drone_query, &conn_drone.id){
-
-                    if let Some(trans2) = get_drone_transform_from_id(&drone_query, &conn_drone.id) {
-                        let end = trans2.translation.truncate(); // Convert to Vec2
-
-                        // Draw a red line between the two drones
-                        gizmos.line_2d(start, end, Color::srgb(1.0, 0.0, 0.0));
-                    }
+    for reciever in simulation_controller.drone_event_receiver.iter() {
+        for recieved in reciever.1.iter() {
+            match recieved {
+                DroneEvent::PacketSent(packet) => {
+                    println!("Packet sent: {:?}", packet);
+                },
+                DroneEvent::PacketDropped(packet) => {
+                    println!("Packet dropped: {:?}", packet);
+                },
+                DroneEvent::ControllerShortcut(packet) => {
+                    println!("Controller shortcut: {:?}", packet);
                 }
             }
         }

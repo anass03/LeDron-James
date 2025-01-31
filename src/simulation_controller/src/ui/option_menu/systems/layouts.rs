@@ -1,8 +1,9 @@
 use bevy::prelude::*;
+use bevy::ui::NodeType::Rect;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
 use crate::drone::components::ScDrone;
-use crate::simulation_controller::SelectedNode;
+use crate::simulation_controller::{SelectedClient, SelectedDrone};
 use crate::ui::option_menu::components::*;
 use crate::ui::option_menu::styles::*;
 
@@ -11,7 +12,7 @@ pub fn spawn_option_menu(
     window_query: Query<&Window, With<PrimaryWindow>>,
     asset_server: Res<AssetServer>,
     drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
-    node_id: Res<SelectedNode>,
+    node_id: Res<SelectedDrone>,
 ) {
     build_option_menu(&mut commands, &window_query, &asset_server, &drone_query, &node_id);
 }
@@ -30,14 +31,14 @@ pub fn build_option_menu(
     window_query: &Query<&Window, With<PrimaryWindow>>,
     asset_server: &Res<AssetServer>,
     drone_query: &Query<(&ScDrone, &Transform), With<ScDrone>>,
-    node_id: &Res<SelectedNode>
+    node_id: &Res<SelectedDrone>
 
 ) -> Entity {
     let mut x = 0.0;
     let mut y = 0.0;
     let window = window_query.get_single().unwrap();
     for drone in drone_query.iter() {
-        if drone.0.id == node_id.node_id.unwrap() {
+        if drone.0.id == node_id.drone_id.unwrap() {
             x = drone.1.translation.x;
             y = window.height() - drone.1.translation.y;
         }
@@ -65,7 +66,7 @@ pub fn build_option_menu(
                 },
                 ..default()
             },
-            NodeIdText{}
+            DroneIdText {}
         ));
         //-------Add Sender Button---------
         parent.spawn((
@@ -299,7 +300,7 @@ pub fn spawn_set_pdr_button_menu(
                     color: Color::WHITE,
                 },
             ),
-            InputText {
+            PdrInputText {
                 value: String::new()
             },
         ));
@@ -318,6 +319,456 @@ pub fn spawn_set_pdr_button_menu(
                 ..default()
             },
             ConfirmPdrButton, // New component for confirmation
+        )).with_children(|button| {
+            button.spawn(TextBundle::from_section(
+                "Confirm",
+                TextStyle {
+                    font_size: 16.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+        });
+    });
+}
+
+pub fn spawn_client_menu(
+    mut commands: Commands,
+    asset_server: Res<AssetServer>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+    commands.spawn(NodeBundle {
+        style: Style {
+            position_type: PositionType::Absolute,
+            left: Val::Px(0.0), // Align left
+            top: Val::Px(0.0),
+            width: Val::Percent(10.0), // Menu width
+            height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            justify_content: JustifyContent::FlexStart, // Align elements from the top
+            align_items: AlignItems::Center, // Center horizontally
+            padding: UiRect::vertical(Val::Px(20.0)), // Add space at the top and bottom
+            ..Default::default()
+        },
+        background_color: Color::srgb(0.5, 0.5, 0.5).into(),
+        ..Default::default()
+    })
+        .with_children(|parent| {
+            // Client Title
+            parent.spawn((
+                TextBundle {
+                    style: Style {
+                        margin: UiRect::vertical(Val::Px(10.0)), // Add space above and below
+                        ..Default::default()
+                    },
+                    text: Text::from_section(
+                        "Client 1", // Change dynamically if needed
+                        TextStyle {
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                            font_size: 30.0,
+                            color: Color::WHITE,
+                        },
+                    ),
+                    ..Default::default()
+                },
+                ClientIdText {},
+            ));
+
+            // Top 5 Buttons (Spawned Separately)
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Server Type",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        ServerTypeButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "File List",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        FileListButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "File",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        FileButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Media List",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        MediaListButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Media",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        MediaButton
+                    ));
+                });
+
+            // Horizontal Separator
+            parent.spawn(NodeBundle {
+                style: Style {
+                    width: Val::Percent(85.0),
+                    height: Val::Px(2.0),
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::WHITE.into(),
+                ..Default::default()
+            });
+
+            // Bottom 4 Buttons (Spawned Separately)
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Chat Registration",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        RegistrationToChatButton
+                    ));
+                });
+
+            // Similarly, spawn Button 7, Button 8, Button 9 here...
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Client List",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        ClientListButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Message For",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        MessageForButton
+                    ));
+                });
+
+            parent.spawn(ButtonBundle {
+                style: Style {
+                    width: Val::Percent(80.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::vertical(Val::Px(10.0)),
+                    ..Default::default()
+                },
+                background_color: Color::srgb(0.6, 0.6, 0.6).into(),
+                ..Default::default()
+            })
+                .with_children(|button| {
+                    button.spawn((TextBundle::from_section(
+                        "Controller Shortcut",
+                        TextStyle {
+                            font_size: 20.0,
+                            color: Color::WHITE,
+                            font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                        },
+                    ),
+                        ControllerShortcutButton
+                    ));
+                });
+        });
+}
+
+pub fn update_client_text(
+    selected_client: Res<SelectedClient>,
+    mut query: Query<(&ClientIdText, &mut Text)>,
+) {
+    for (_, mut text) in query.iter_mut() {
+        // Cambia il testo in base al valore di SelectedClient
+        let client_text =  match selected_client.client_id {
+            Some(client_id) => {
+                format!("Client {:?}", client_id)
+            },
+            None => "Client".to_string()
+        };
+        text.sections[0].value = client_text.to_string();
+    }
+}
+
+pub fn spawn_choose_file_menu(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    window_query: &Query<&Window, With<PrimaryWindow>>
+) {
+    let window = window_query.get_single().unwrap();
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Px(250.0),
+                height: Val::Px(100.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(window.width() / 2.0 - 125.0),
+                top: Val::Px(window.height() / 2.0 - 50.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            background_color: Color::srgb(0.5, 0.5, 0.5).into(),
+            ..default()
+        },
+        ChooseFileMenu,
+    )).with_children(|parent| {
+        parent.spawn(
+            TextBundle::from_section(
+                "File Name",
+                TextStyle {
+                    font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            )
+        );
+        parent.spawn((
+            TextBundle::from_section(
+                "",
+                TextStyle {
+                    font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            ),
+            FileNameInputText {
+                value: String::new()
+            },
+        ));
+
+        // Confirm Button
+        parent.spawn((
+            ButtonBundle {
+                style: Style {
+                    width: Val::Px(100.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: Color::srgb(0.4, 0.4, 0.4).into(),
+                ..default()
+            },
+            ConfirmFileNameButton, // New component for confirmation
+        )).with_children(|button| {
+            button.spawn(TextBundle::from_section(
+                "Confirm",
+                TextStyle {
+                    font_size: 16.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+        });
+    });
+}
+
+pub fn spawn_choose_media_menu(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    window_query: &Query<&Window, With<PrimaryWindow>>
+) {
+    let window = window_query.get_single().unwrap();
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Px(250.0),
+                height: Val::Px(100.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(window.width() / 2.0 - 125.0),
+                top: Val::Px(window.height() / 2.0 - 50.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                ..default()
+            },
+            background_color: Color::srgb(0.5, 0.5, 0.5).into(),
+            ..default()
+        },
+        ChooseMediaMenu,
+    )).with_children(|parent| {
+        parent.spawn(
+            TextBundle::from_section(
+                "Media Name",
+                TextStyle {
+                    font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            )
+        );
+        parent.spawn((
+            TextBundle::from_section(
+                "",
+                TextStyle {
+                    font: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            ),
+            MediaNameInputText {
+                value: String::new()
+            },
+        ));
+
+        // Confirm Button
+        parent.spawn((
+            ButtonBundle {
+                style: Style {
+                    width: Val::Px(100.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    ..default()
+                },
+                background_color: Color::srgb(0.4, 0.4, 0.4).into(),
+                ..default()
+            },
+            ConfirmMediaNameButton, // New component for confirmation
         )).with_children(|button| {
             button.spawn(TextBundle::from_section(
                 "Confirm",

@@ -1,8 +1,8 @@
 use bevy::asset::AssetServer;
 use bevy::color::Color;
 use bevy::prelude::*;
-use crate::simulation_controller::SelectedNode;
-use crate::ui::option_menu::components::NodeIdText;
+use crate::simulation_controller::SelectedDrone;
+use crate::ui::option_menu::components::DroneIdText;
 
 pub const NORMAL_BUTTON_COLOR: Color = Color::srgb(0.15, 0.15, 0.15);
 pub const HOVERED_BUTTON_COLOR: Color = Color::srgb(0.25, 0.25, 0.25);
@@ -56,10 +56,10 @@ pub fn get_button_text_style(asset_server: &Res<AssetServer>) -> TextStyle {
 
 
 pub fn update_node_id_text(
-    mut text_query: Query<&mut Text, With<NodeIdText>>,
-    node_id: Res<SelectedNode>
+    mut text_query: Query<&mut Text, With<DroneIdText>>,
+    node_id: Res<SelectedDrone>
 ) {
     for mut text in text_query.iter_mut() {
-        text.sections[0].value = format!("Drone: {}", node_id.node_id.unwrap());
+        text.sections[0].value = format!("Drone: {}", node_id.drone_id.unwrap());
     }
 }

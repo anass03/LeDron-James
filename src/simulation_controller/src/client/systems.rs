@@ -1,10 +1,12 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
+use wg_internal::packet::Packet;
+use host::{ClientCommand, ClientId, DroneSend, FileId, MediaId, Message};
 use crate::client::components::Client;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
-use crate::simulation_controller::SimulationController;
+use crate::simulation_controller::{SelectedClient, SimulationController};
 
 pub fn spawn_clients(
     mut commands: Commands,
@@ -62,4 +64,135 @@ pub fn join(
             }
         }
     }
+}
+
+pub fn server_type(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::ServerType).expect("failed to send Server Type request");
+}
+
+pub fn file_list(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::FilesList).expect("failed to send File List request");
+}
+
+pub fn file(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+    file_id: usize,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::File(file_id)).expect("failed to send File request");
+}
+
+pub fn media_list(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::MediaList).expect("failed to send Media List request");
+}
+
+pub fn media(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+    media: MediaId,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::Media(media)).expect("failed to send Media request");
+}
+
+pub fn registration_to_chat(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::RegistrationToChat).expect("failed to send Registration to Chat request");
+}
+
+pub fn client_list(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::ClientList).expect("failed to send Client List request");
+}
+
+pub fn message_for(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+    recipient_client: &ClientId,
+    message: Message
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::MessageFor(*recipient_client, message)).expect("failed to send Message request");
+}
+
+pub fn controller_shortcut(
+    selected_client: &Res<SelectedClient>,
+    simulation_controller: &Res<SimulationController>,
+    packet: Packet
+) {
+    let current_client = match selected_client.clone().client_id {
+        Some(client_id) => client_id,
+        None => {
+            println!("No client selected!");
+            return;
+        }
+    };
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::ControllerShortcut(packet)).expect("failed to send Controller Shortcut Packet");
 }

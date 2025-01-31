@@ -12,13 +12,13 @@ pub struct UiPlugin;
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app
+            .add_plugins(OptionMenuPlugin)
             .add_systems(Startup, spawn_camera)
-            .add_systems(Update,
-                drone_clicked
-                )
-            .add_plugins(
-                OptionMenuPlugin
-            )
+            .add_systems(Update, (
+                drone_clicked,
+                client_clicked,
+            ))
+
         ;
     }
 }

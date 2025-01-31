@@ -1,7 +1,8 @@
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow};
 use crate::drone::components::ScDrone;
-use crate::simulation_controller::{OptionMenu, SelectedNode};
+use crate::client::components::Client;
+use crate::simulation_controller::{OptionMenu, SelectedClient, SelectedDrone};
 
 pub fn spawn_camera(
     mut commands: Commands,
@@ -21,7 +22,7 @@ pub fn drone_clicked(
     mouse: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
     mut next_app_state: ResMut<NextState<OptionMenu>>,
-    mut selected_node: ResMut<SelectedNode>
+    mut selected_node: ResMut<SelectedDrone>
 ) {
     let window = window_query.get_single().unwrap();
     let mut clicked = false;
@@ -30,7 +31,7 @@ pub fn drone_clicked(
             for (drone, transform) in drone_query.iter() {
                 if ((mouse_pos.x - transform.translation.x) as f64).powi(2) + ((mouse_pos.y - (window.height() - transform.translation.y)) as f64).powi(2) <= (32 as f64).powi(2) {
                     clicked = true;
-                    selected_node.node_id = Some(drone.id.clone());
+                    selected_node.drone_id = Some(drone.id.clone());
                     break;
                 } else {
                     clicked = false;
@@ -40,6 +41,29 @@ pub fn drone_clicked(
                 next_app_state.set(OptionMenu::On);
             } else {
                 next_app_state.set(OptionMenu::Off);
+            }
+        }
+    }
+}
+
+pub fn client_clicked(
+    client_query: Query<(&Client, &Transform), With<Client>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut selected_node: ResMut<SelectedClient>
+) {
+    let window = window_query.get_single().unwrap();
+    let mut clicked = false;
+    if mouse.pressed(MouseButton::Left) {
+        if let Some(mouse_pos) = window.cursor_position() {
+            for (client, transform) in client_query.iter() {
+                if ((mouse_pos.x - transform.translation.x) as f64).powi(2) + ((mouse_pos.y - (window.height() - transform.translation.y)) as f64).powi(2) <= (32 as f64).powi(2) {
+                    clicked = true;
+                    selected_node.client_id = Some(client.id.clone());
+                    break;
+                } else {
+                    clicked = false;
+                }
             }
         }
     }

@@ -14,8 +14,11 @@ use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::drone::Drone;
-use wg_2024::packet::Packet;
+use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
+use client::Client as LeClient;
+use host::{ClientCommand, DroneSend};
+
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -30,18 +33,21 @@ pub struct SimulationController {
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone
     pub drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,   //event receiver channel from drone
+    pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
     pub packet_receiver: HashMap<NodeId, Receiver<Packet>>,     //packet receiver of each node
-    //pub client_command_sender: HashMap<NodeId, Sender<>>
 }
 
 
-impl SimulationController {
-    pub fn new(config: Config,
-               drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
-               drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
-               packet_sender: HashMap<NodeId, Sender<Packet>>,
-               packet_receiver: HashMap<NodeId, Receiver<Packet>>,
+impl SimulationController{
+    pub fn new(
+        config: Config,
+        drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
+        drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
+        client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+        //client_event_receiver: HashMap<NodeId, Receiver<ClientEvent>>,
+        packet_sender: HashMap<NodeId, Sender<Packet>>,
+        packet_receiver: HashMap<NodeId, Receiver<Packet>>,
     ) -> Self {
         let mut drones = vec![];
         for drone in config.drone {
@@ -61,6 +67,7 @@ impl SimulationController {
             servers,
             drone_command_sender,
             drone_event_receiver,
+            client_command_sender,
             packet_sender,
             packet_receiver,
         }
@@ -87,25 +94,24 @@ pub fn main() {
     let mut handles = Vec::new();
 
     // - command_sender contains the channels senders to send commands to drones
-    let mut command_sender = HashMap::new();
+    let mut drone_command_sender = HashMap::new();
     // - event_receiver contains the channels receiver to receive events from drones
-    let mut event_receiver = HashMap::new();
+    let mut drone_event_receiver = HashMap::new();
 
     //let (node_event_send, _node_event_recv) = unbounded();
 
     for drone in config.clone().drone.into_iter() {
-        // command channel
+        // drone command channel
         let (controller_drone_send, controller_drone_recv) = unbounded();
-        // event channel
+        // drone event channel
         let (drone_event_sender, drone_event_recv) = unbounded();
         //creating the HashMap needed to send commands to drones
-        command_sender.insert(drone.id, controller_drone_send);
+        drone_command_sender.insert(drone.id, controller_drone_send);
         //creating the HashMap needed to receive events from drones
-        event_receiver.insert(drone.id, drone_event_recv);
-        // let node_event_send = node_event_send.clone();
+        drone_event_receiver.insert(drone.id, drone_event_recv);
         // packet
-        let packet_recv = packet_channels[&drone.id].1.clone();
-        let packet_send = drone
+        let drone_packet_recv = packet_channels[&drone.id].1.clone();
+        let drone_packet_send = drone
             .connected_node_ids
             .into_iter()
             .map(|id| (id, packet_channels[&id].0.clone()))
@@ -116,12 +122,53 @@ pub fn main() {
                 drone.id,
                 drone_event_sender,
                 controller_drone_recv,
-                packet_recv,
-                packet_send,
+                drone_packet_recv,
+                drone_packet_send,
                 drone.pdr,
             );
 
             drone.run();
+        }));
+    }
+
+    // - command_sender contains the channels senders to send commands to clients
+    let mut client_command_sender = HashMap::new();
+    // - event_receiver contains the channels receiver to receive events from clients
+    let mut client_event_receiver = HashMap::new();
+
+    for client in config.clone().client.iter() {  // ✅ Use `iter()` instead of `into_iter()`
+        let client_id = client.id;  // ✅ Copy primitive value
+        let connected_drone_ids = client.connected_drone_ids.clone(); // ✅ Clone so it can be moved later
+        let client_clone = client.clone(); // ✅ Clone full `client` if needed
+
+        // Client command channel
+        let (controller_client_send, controller_client_recv) = unbounded();
+        let (client_event_sender, client_event_recv) = unbounded();
+
+        // Insert into HashMaps
+        client_command_sender.insert(client_id, controller_client_send);
+        client_event_receiver.insert(client_id, client_event_recv);
+
+        // Packet channels
+        let packet_recv = packet_channels[&client_id].1.clone(); // ✅ Clone before move
+        let packet_send: HashMap<_, _> = connected_drone_ids
+            .iter()
+            .map(|&id| (id, packet_channels[&id].0.clone())) // ✅ Clone values, avoid move
+            .collect();
+
+        // Spawn the thread with only the necessary cloned values
+        handles.push(thread::spawn(move || {
+            let mut client = LeClient::new(
+                client_id,
+                NodeType::Client,
+                connected_drone_ids, // ✅ Uses cloned values
+                client_event_sender,
+                controller_client_recv,
+                packet_recv,
+                packet_send,
+            );
+
+            client.run();
         }));
     }
     let mut packet_senders = HashMap::new();
@@ -130,7 +177,7 @@ pub fn main() {
         packet_senders.insert(*node_id, sender.clone());
         packet_receivers.insert(*node_id, receiver.clone());
     }
-    let controller = SimulationController::new(config, command_sender, event_receiver, packet_senders, packet_receivers);
+    let controller = SimulationController::new(config, drone_command_sender, drone_event_receiver, client_command_sender, packet_senders, packet_receivers);
 
     // controller.crash_all();
 
@@ -138,8 +185,8 @@ pub fn main() {
         .add_plugins(DefaultPlugins)
         .insert_state(OptionMenu::default())
         .insert_resource(controller)
-        .insert_resource(SelectedNode::default())
-        .init_gizmo_group::<MyGizmos>()
+        .insert_resource(SelectedDrone::default())
+        .insert_resource(SelectedClient::default())
         .add_plugins((
             UiPlugin,
             DronePlugin,
@@ -167,8 +214,13 @@ pub enum OptionMenu {
 }
 
 #[derive(Resource, Default, Debug)]
-pub struct SelectedNode {
-    pub node_id: Option<NodeId>
+pub struct SelectedDrone {
+    pub drone_id: Option<NodeId>
+}
+
+#[derive(Resource, Default, Debug)]
+pub struct SelectedClient {
+    pub client_id: Option<NodeId>
 }
 
 #[derive(Default, Reflect, GizmoConfigGroup)]
