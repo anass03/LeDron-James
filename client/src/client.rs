@@ -5,12 +5,13 @@ use wg_2024::packet::{Packet, PacketType, NodeType};
 use std::collections::{HashMap};
 use std::sync::{Arc};
 use std::time::Duration;
-use host::{ClientCommand, Message, Host, DroneSend, Functionality, generate_unique_session_id};
+use host::{ClientCommand, Message, Host, DroneSend, Functionality, generate_unique_session_id, ServerTypes};
 
 pub struct Client<M: DroneSend + Send + 'static> {
     host: Arc<Host<M>>,
     connected_drone_ids: Vec<NodeId>,
-    messages: Vec<Message<M>>
+    messages: Vec<Message<M>>,
+    servers: HashMap<ServerTypes, NodeId>
 }
 
 impl<M: DroneSend + Send + 'static> Client<M> {
@@ -30,7 +31,7 @@ impl<M: DroneSend + Send + 'static> Client<M> {
         let host = Host::new(id, type_host, controller_send, controller_recv, packet_recv, packet_send);
 
         Self{
-            host, connected_drone_ids, messages: Vec::new()
+            host, connected_drone_ids, messages: Vec::new(), servers: HashMap::new()
         }
     }
     pub fn run(&mut self) {
@@ -68,34 +69,60 @@ impl<M: DroneSend + Send + 'static> Client<M> {
         };
 
         match command {
-            ClientCommand::ServerType(server_id) => {
-                send_message(server_id, "ServerType?".to_string());
+            ClientCommand::FilesList => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Content) {
+                    send_message(server_id, "FilesList?".to_string());
+                } else {
+                    self.host.log("No content server found.");
+                }
             }
-            ClientCommand::FilesList(server_id) => {
-                send_message(server_id, "FilesList?".to_string());
+            ClientCommand::File(id) => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Content) {
+                    send_message(server_id, format!("File? id:{}", id));
+                } else {
+                    self.host.log("No content server found.");
+                }
             }
-            ClientCommand::File(server_id, id) => {
-                send_message(server_id, format!("File? id:{}", id));
+            ClientCommand::MediaList => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Content) {
+                    send_message(server_id, "MediaList?".to_string());
+                } else {
+                    self.host.log("No content server found.");
+                }
             }
-            ClientCommand::MediaList(server_id) => {
-                send_message(server_id, "MediaList?".to_string());
+            ClientCommand::Media(id) => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Content) {
+                    send_message(server_id, format!("Media? id:{}", id));
+                } else {
+                    self.host.log("No content server found.");
+                }
             }
-            ClientCommand::Media(server_id, id) => {
-                send_message(server_id, format!("Media? id:{}", id));
+            ClientCommand::RegistrationToChat => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Chat) {
+                    send_message(server_id, format!("RegisterToChat id:{}", self.host.id));
+                } else {
+                    self.host.log("No chat server found.");
+                }
             }
-            ClientCommand::RegistrationToChat(server_id) => {
-                send_message(server_id, format!("RegisterToChat id:{}", self.host.id));
+            ClientCommand::ClientList => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Chat) {
+                    send_message(server_id, "ClientList?".to_string());
+                } else {
+                    self.host.log("No chat server found.");
+                }
             }
-            ClientCommand::ClientList(server_id) => {
-                send_message(server_id, "ClientList?".to_string());
+            ClientCommand::MessageFor(client_id, message) => {
+                if let Some(&server_id) = self.servers.get(&ServerTypes::Chat) {
+                    send_message(server_id, format!("MessageFor id:{}, message:{:?}", client_id, message.content));
+                } else {
+                    self.host.log("No chat server found.");
+                }
             }
-            ClientCommand::MessageFor(server_id, client_id, message) => {
-                send_message(server_id, format!("MessageFor id:{}, message:{:?}", client_id, message.content));
-            }
-            ClientCommand::ControllerShortcut(packet)=>{
+            ClientCommand::ControllerShortcut(packet) => {
                 self.handle_packet(packet);
                 self.host.initiate_flood();
             }
+            _ => {}
         }
     }
     fn handle_packet(&mut self, packet: Packet) {

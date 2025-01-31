@@ -684,17 +684,19 @@ impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
 
 
 pub enum ClientCommand<M: DroneSend + Send + 'static>{
-    ServerType(ServerId),
+    ServerType,
 
-    FilesList(ServerId),
-    File(ServerId,FileId),
+    //content-server
+    FilesList,
+    File(FileId),
 
-    MediaList(ServerId),
-    Media(ServerId,MediaId),
+    MediaList,
+    Media(MediaId),
 
-    RegistrationToChat(ServerId),
-    ClientList(ServerId),
-    MessageFor(ServerId, ClientId, Message<M>),
+    //chat-server
+    RegistrationToChat,
+    ClientList,
+    MessageFor(ClientId, Message<M>),
 
     ControllerShortcut(Packet)
 }
@@ -713,6 +715,7 @@ pub enum ServerToClient<M: DroneSend + Send + 'static>{
     ErrNotFound,
     ErrClientId
 }
+#[derive(Hash, Eq, PartialEq)]
 pub enum ServerTypes{
     Chat,
     Content
