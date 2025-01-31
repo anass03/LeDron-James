@@ -3,23 +3,24 @@ use wg_2024::controller::{DroneEvent};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType};
 use std::collections::{HashMap};
-use std::sync::{Arc};
+use std::fmt::Display;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use host::{ClientCommand, Message, Host, DroneSend, Functionality, generate_unique_session_id, ServerTypes};
+use host::ServerTypes::Content;
 
-pub struct Client<M: DroneSend + Send + 'static> {
-    host: Arc<Host<M>>,
+pub struct Client {
+    host: Host,
     connected_drone_ids: Vec<NodeId>,
-    messages: Vec<Message<M>>,
+    messages: Vec<Message>,
     servers: HashMap<ServerTypes, NodeId>
 }
-
-impl<M: DroneSend + Send + 'static> Client<M> {
+impl Client {
     pub fn new(id:NodeId,
                type_host:NodeType,
                connected_drone_ids: Vec<NodeId>,
                controller_send:Sender<DroneEvent>,
-               controller_recv:Receiver<ClientCommand<M>>,
+               controller_recv:Receiver<ClientCommand>,
                packet_recv:Receiver<Packet>,
                packet_send:HashMap<NodeId, Sender<Packet>>) ->Self{
         //Assicura che il client sia conneso a uno o due droni
@@ -29,7 +30,6 @@ impl<M: DroneSend + Send + 'static> Client<M> {
         );
 
         let host = Host::new(id, type_host, controller_send, controller_recv, packet_recv, packet_send);
-
         Self{
             host, connected_drone_ids, messages: Vec::new(), servers: HashMap::new()
         }
@@ -56,12 +56,12 @@ impl<M: DroneSend + Send + 'static> Client<M> {
         }
     }
 
-    fn handle_command(&mut self, command: ClientCommand<M>) {
+    fn handle_command(&mut self, command: ClientCommand) {
         // Funzione ausiliaria per costruire e inviare un messaggio
         let send_message = |destination: NodeId, content: String| {
             let message = Message {
                 session_id: generate_unique_session_id(), // Funzione che genera un ID univoco per la sessione
-                content: M::from(content)
+                content: Box::new(content)
             };
             if let Err(err) = self.host.build_msg_fragment(destination, message) {
                 self.host.log(&format!("Failed to send message: {}", err));
@@ -113,7 +113,7 @@ impl<M: DroneSend + Send + 'static> Client<M> {
             }
             ClientCommand::MessageFor(client_id, message) => {
                 if let Some(&server_id) = self.servers.get(&ServerTypes::Chat) {
-                    send_message(server_id, format!("MessageFor id:{}, message:{:?}", client_id, message.content));
+                    send_message(server_id, format!("MessageFor id:{}, message:{}", client_id, message.content));
                 } else {
                     self.host.log("No chat server found.");
                 }

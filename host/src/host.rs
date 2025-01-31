@@ -19,11 +19,13 @@ type FileId = usize;
 type MediaId = usize;
 type ClientId = NodeId;
 type ServerId = NodeId;
-pub struct Host<M: DroneSend + Send + 'static>{
+
+#[derive(Clone)]
+pub struct Host{
     pub id:NodeId,
     pub type_host:NodeType,
     pub controller_send:Sender<DroneEvent>,
-    pub controller_recv:Receiver<ClientCommand<M>>,
+    pub controller_recv:Receiver<ClientCommand>,
     pub packet_recv:Receiver<Packet>,
     pub packet_send: HashMap<NodeId, Sender<Packet>>,
     pub flood_cache:HashMap<NodeId, u64>,
@@ -31,15 +33,15 @@ pub struct Host<M: DroneSend + Send + 'static>{
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
 }
-impl<M: DroneSend + Send +'static> Host<M>{
+impl Host{
     pub fn new(id:NodeId,
                type_host:NodeType,
                controller_send:Sender<DroneEvent>,
-               controller_recv:Receiver<ClientCommand<M>>,
+               controller_recv:Receiver<ClientCommand>,
                packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>) ->Arc<Self>{
+               packet_send:HashMap<NodeId, Sender<Packet>>) -> Host {
 
-        let host = Arc::new(Self {
+        let host = Self {
             id,
             type_host,
             controller_send,
@@ -50,18 +52,13 @@ impl<M: DroneSend + Send +'static> Host<M>{
             network: Network::new(),
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
-        });
-
-        // Avvio della pulizia delle sessioni e ritrasmissione dei pacchetti (se presenti nel buffer) con un timeout e intervallo predefiniti
-        let cleanup_timeout = Duration::from_secs(300); // Esempio: 5 minuti
-        let cleanup_interval = Duration::from_secs(60); // Esempio: 1 minuto
-        let retransmission_interval = Duration::from_millis(200);
-        host.clone().start_session_cleanup(cleanup_timeout, cleanup_interval);
-        host.clone().start_retransmission_task(retransmission_interval);
-
+        };
+        let host_arc = Arc::new(host.clone());
+        host_arc.start_tasks();
         host
     }
 }
+
 struct RecSessionData {
     buffer: Vec<Option<Fragment>>,
     last_activity: Instant, // Timestamp dell'ultima attività
@@ -72,6 +69,7 @@ pub struct SentSessionData {
     destination: NodeId,        // Destinatario della sessione
     route: Vec<NodeId>,        // percorso pre-calcolato
 }
+#[derive(Clone)]
 pub struct Network {
     pub graph: DiGraph<NodeId, f64>,
     pub topology: HashMap<NodeId, (NodeIndex, Vec<NodeId>)>, // NodeId -> (Graph NodeIndex, Vec of neighbors)
@@ -175,7 +173,7 @@ impl Network {
 
 
 }
-pub trait Functionality<M: DroneSend + Send + 'static>{
+pub trait Functionality{
     fn log<S: AsRef<str>>(&self, message: S);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
@@ -184,15 +182,15 @@ pub trait Functionality<M: DroneSend + Send + 'static>{
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
     fn handle_ack(&self, ack: Ack, session_id: u64);
     fn handle_nack(&self, nack: Nack, session_id: u64);
-    fn handle_msg_fragment(&mut self, packet: Packet,fragment: Fragment) -> Option<Message<M>>;
+    fn handle_msg_fragment(&mut self, packet: Packet,fragment: Fragment) -> Option<Message>;
     fn cleanup_expired_sessions(&self, timeout: Duration);
     fn start_session_cleanup(self: Arc<Self>, timeout: Duration, interval: Duration);
-    fn build_msg_fragment(&mut self,destination: NodeId, content: Message<M>) -> Result<(), String>;
+    fn build_msg_fragment(&mut self,destination: NodeId, content: Message) -> Result<(), String>;
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment>;
     fn send_fragment(&self, session_id: u64, fragment: Fragment);
     fn start_retransmission_task(self: Arc<Self>, retransmission_interval: Duration);
-    fn build_packet_nack(&self,packet: Packet, nack_id: NackType, optional_fragment_index: Option<u64>) -> Packet;
     fn build_packet_ack(&self,packet: Packet, fragment_index: Option<u64>) -> Packet;
+    fn start_tasks(self: Arc<Self>);
 }
 fn generate_unique_flood_id() -> u64 {
     let mut rng: ThreadRng = rand::thread_rng();  // Usa il generatore di numeri casuali sicuro per il thread
@@ -202,7 +200,7 @@ pub fn generate_unique_session_id() -> u64 {
     let mut rng: ThreadRng = rand::rng();  // messo rng al posto di thread_rng pk quest'ultimo dalla prossima versione verrà rinominato in rng! [thread_rng --> rng]
     rng.random::<u64>()  // lo stesso qui, [gen  -->  random]
 }
-impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
+impl Functionality for Host {
     fn log<S: AsRef<str>>(&self, message: S) {
         println!("Host ID {} - {}", self.id, message.as_ref());
     }
@@ -429,7 +427,7 @@ impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
             }
         }
     }
-    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Message<M>> {
+    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Message> {
         // Ottieni o inizializza il buffer di frammenti per questa sessione
         let mut received_fragments = self.received_fragments.lock().unwrap();
 
@@ -488,11 +486,12 @@ impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
             received_fragments.remove(&packet.session_id);
 
             // Tenta di deserializzare il contenuto del messaggio
-            match M::from_string(String::from_utf8_lossy(&message).to_string()) {
+            let raw_message = String::from_utf8_lossy(&message).to_string();
+            match String::from_string(raw_message) {
                 Ok(content) => {
                     let message = Message {
                         session_id: packet.session_id,
-                        content,
+                        content: Box::new(content), // Boxa il contenuto in un trait object
                     };
                     return Some(message);
                 }
@@ -566,7 +565,7 @@ impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
             }
         });
     }
-    fn build_msg_fragment(&mut self, destination: NodeId, message: Message<M>) -> Result<(), String> {
+    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
         // Trova il miglior percorso per la destinazione
         let route = self.network.find_best_route(self.id, destination);
         if route.is_empty() {
@@ -667,23 +666,23 @@ impl<M: DroneSend + Send + 'static> Functionality<M> for Host<M> {
             }
         });
     }
-    fn build_packet_nack(&self, packet: Packet, nack_type: NackType, fragment_index: Option<u64>) -> Packet{
-        let mut routing_header = packet.routing_header;
-        routing_header.reverse();
-        Packet::new_nack(routing_header, packet.session_id, Nack{
-            fragment_index: fragment_index.unwrap_or(0),
-            nack_type
-        })
-    }
     fn build_packet_ack(&self, packet: Packet, fragment_index: Option<u64>) -> Packet{
         let mut routing_header = packet.routing_header;
         routing_header.reverse();
         Packet::new_ack(routing_header, packet.session_id, fragment_index.unwrap_or(0))
     }
+    fn start_tasks(self: Arc<Self>) {
+        let cleanup_timeout = Duration::from_secs(300);
+        let cleanup_interval = Duration::from_secs(60);
+        let retransmission_interval = Duration::from_millis(200);
+
+        self.clone().start_session_cleanup(cleanup_timeout, cleanup_interval);
+        self.clone().start_retransmission_task(retransmission_interval);
+    }
 }
 
 
-pub enum ClientCommand<M: DroneSend + Send + 'static>{
+pub enum ClientCommand{
     ServerType,
 
     //content-server
@@ -696,11 +695,11 @@ pub enum ClientCommand<M: DroneSend + Send + 'static>{
     //chat-server
     RegistrationToChat,
     ClientList,
-    MessageFor(ClientId, Message<M>),
+    MessageFor(ClientId, Message),
 
     ControllerShortcut(Packet)
 }
-pub enum ServerToClient<M: DroneSend + Send + 'static>{
+pub enum ServerToClient{
     ServerType(ServerTypes),
 
     FilesList(Vec<FileId>),
@@ -710,7 +709,7 @@ pub enum ServerToClient<M: DroneSend + Send + 'static>{
     Media,
 
     ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, Message<M>),
+    MessageFrom(ClientId, Message),
 
     ErrNotFound,
     ErrClientId
@@ -721,9 +720,10 @@ pub enum ServerTypes{
     Content
 }
 ///MESSAGES WG_2024
-pub struct Message<M: DroneSend + Send + 'static> {
+#[derive(Clone)]
+pub struct Message {
     pub session_id: u64,
-    pub content: M,
+    pub content: Box<dyn DroneSend + Send + 'static>,
 }
 // ReqServerType,
 pub trait DroneSend: Serialize + DeserializeOwned {
@@ -732,6 +732,15 @@ pub trait DroneSend: Serialize + DeserializeOwned {
     }
     fn from_string(raw: String) -> Result<Self, String> {
         serde_json::from_str(raw.as_str()).map_err(|e| e.to_string())
+    }
+}
+impl DroneSend for String {
+    fn stringify(&self) -> String {
+        self.clone() // Just returns the string itself (or you can choose to serialize it)
+    }
+
+    fn from_string(raw: String) -> Result<Self, String> {
+        Ok(raw)
     }
 }
 pub enum SendingCodes { // For performance and logic enhancements
