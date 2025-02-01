@@ -11,7 +11,7 @@ use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType};
 
-struct ChatServer{
+pub struct ChatServer{
     info:GenServer,
     client_list:Vec<NodeId>,
 }
@@ -39,7 +39,7 @@ impl ChatServer{
             fn find_best_route(&self,start:NodeId, destination: NodeId) -> Vec<NodeId>;
         }
     }
-    fn new(id:NodeId,
+    pub fn new(id:NodeId,
            type_host:NodeType,
            connected_drone_ids:Vec<NodeId>,
            controller_send:Sender<DroneEvent>,

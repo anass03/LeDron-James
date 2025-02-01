@@ -15,12 +15,12 @@ use image::{DynamicImage, ImageBuffer, Rgba};
 use wg_2024::controller::{ DroneEvent};
 use host::ServerTypes;
 
-struct COntentServer{
+pub struct ContentServer{
     info:GenServer,
     files:Vec<u8>,
     media:Vec<u8>,
 }
-pub trait ContentServer:MediaServer+ TextServer{
+pub trait COntentServer:MediaServer+ TextServer{
     fn handling_packets(&mut self, packet: Result<Packet,crossbeam_channel::RecvError>);
     fn create_vec_for_mess(&self, id:String,destination: NodeId);
     fn count_files(&mut self);
@@ -30,7 +30,7 @@ pub trait ContentServer:MediaServer+ TextServer{
     fn lists(&mut self, request:ClientCommand,destination: NodeId);
     fn for_message_from_vec(&self, v:Vec<u8>,destination: NodeId);
 }
-impl COntentServer {
+impl ContentServer {
     delegate!{
         to self.info.host {
             fn log<S: AsRef<str>>(&self, message: S);
@@ -54,7 +54,7 @@ impl COntentServer {
             fn find_best_route(&self,source:NodeId, destination: NodeId) -> Vec<NodeId>;
         }
     }
-    fn new(id:NodeId,
+    pub fn new(id:NodeId,
            type_host:NodeType,
            connected_drone_ids: Vec<NodeId>,
            controller_send:Sender<DroneEvent>,
@@ -74,7 +74,7 @@ impl COntentServer {
             media: Vec::new(),
         }
     }
-    fn run<M:host::DroneSend>(&mut self){
+    fn run(&mut self){
         self.log("Starting Content Server...");
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages
@@ -99,11 +99,11 @@ impl COntentServer {
     }
 }
 
-impl MediaServer for COntentServer {}
+impl MediaServer for ContentServer {}
 
-impl TextServer for COntentServer {}
+impl TextServer for ContentServer {}
 
-impl ContentServer for COntentServer {
+impl COntentServer for ContentServer {
     fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
