@@ -3,6 +3,7 @@ use reqwest;
 use std::io::{Cursor};
 use image::ImageReader;
 use image::{DynamicImage, ImageBuffer, Rgba};
+use host::Image;
 
 pub trait MediaServer {//: host
     fn load_image_from_url(url: &str) -> Result<DynamicImage, Box<dyn std::error::Error>> {
@@ -42,29 +43,4 @@ pub trait MediaServer {//: host
             data: raw_bytes,
         }
     }
-}
-pub struct Image{
-    pub width: u32,
-    pub height: u32,
-    pub data: Vec<u8>,
-}
-//client functions
-fn revert_image(image:Image) -> Result<DynamicImage, String> {
-    if image.data.len() != (image.width * image.height * 4) as usize {
-        return Err(format!(
-            "Byte vector size mismatch: expected {}, got {}",
-            image.width * image.height * 4,
-            image.data.len()
-        ));
-    }
-    // Try creating the image buffer
-    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(image.width, image.height, image.data)
-        .ok_or("Failed to create ImageBuffer from raw bytes")?;
-
-    Ok(DynamicImage::ImageRgba8(img_buffer))
-}
-fn revert_file(bytes: Vec<u8>) -> io::Result<()> {
-    // Write the bytes directly to a file
-    fs::write("output.txt", bytes)?;
-    Ok(())
 }

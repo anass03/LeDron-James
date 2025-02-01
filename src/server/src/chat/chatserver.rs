@@ -1,46 +1,48 @@
+use crate::{GenServeR, GenServer};
+use crossbeam_channel::{Receiver, Sender};
+use delegate::delegate;
+use host::{ClientCommand, Functionality, Message, SendingCodes, ServerTypes};
 use std::collections::HashMap;
+use std::fmt::Debug;
+use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use crossbeam_channel::{Receiver, Sender};
-use host::{ClientToServer, HosT, Message, SendingCodes, ServerTypes};
-use delegate::delegate;
-use petgraph::graph::DiGraph;
-use wg_2024::controller::{DroneCommand, DroneEvent};
-use wg_2024::network::{NodeId};
+use wg_2024::controller::DroneEvent;
+use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType};
-use crate::{GenServeR, GenServer};
 
 struct ChatServer{
     info:GenServer,
-    client_list:Vec<String>,
+    client_list:Vec<NodeId>,
 }
 impl ChatServer{
     delegate!{
-        to self.info {
+        to self.info.host {
             fn log<S: AsRef<str>>(&self, message: S);
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
-            fn create_graph(&mut self)->DiGraph<u8,f64>;
-            fn update_graph(&mut self);
-            fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64);
-            fn find_best_route(&self, destination: NodeId) -> Vec<NodeId>;
-            fn send_packet(&self, packet: Packet, channel: Option<&mut Sender<Packet>>) -> SendingCodes;
+            fn send_packet(&self, packet: Packet, channel: Option<& Sender<Packet>>) -> SendingCodes;
             fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
             fn handle_ack(&self, ack: Ack, session_id: u64);
             fn handle_nack(&self, nack: Nack, session_id: u64);
-            fn build_packet_flood_response(&self,floodrequest_header: FloodRequest, search_id:u64) -> Packet;
-            fn build_packet_nack(&self,packet: Packet, nack_id: NackType, optional_fragment_index: Option<u64>) -> Packet;
-            fn build_packet_ack(&self,packet: Packet, ack_id: Ack) -> Packet;
-            fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId);
+            fn build_packet_ack(&self,packet: Packet,fragment_index: Option<u64>) -> Packet;
+        }
+        to self.info {
+            fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
             fn any_string_to_message(&self,string:String,destination: NodeId);
-            fn servertype<M>(&self,request:ClientToServer<M>,destination:NodeId);
+            fn servertype<M: host::DroneSend>(&self,request:ClientCommand,destination:NodeId);
+        }
+        to self.info.host.network{
+            fn update_graph(&mut self);
+            // fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64);   dA fare
+            fn find_best_route(&self,start:NodeId, destination: NodeId) -> Vec<NodeId>;
         }
     }
     fn new(id:NodeId,
            type_host:NodeType,
            controller_send:Sender<DroneEvent>,
-           controller_recv:Receiver<DroneCommand>,
+           controller_recv:Receiver<ClientCommand>,
            packet_recv:Receiver<Packet>,
            packet_send:HashMap<NodeId, Sender<Packet>>,
            connected_drone_ids:Vec<NodeId>
@@ -48,17 +50,17 @@ impl ChatServer{
         Self{
             info: GenServer::new(id,
                                  type_host,
+                                 connected_drone_ids,
                                  controller_send,
                                  controller_recv,
                                  packet_recv,
                                  packet_send,
-                                 connected_drone_ids,
                                  ServerTypes::Chat
             ),
             client_list: vec![],
         }
     }
-    fn run(&mut self){
+    fn run<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self) where <M as FromStr>::Err: Debug{
         self.log("Starting Chat Server...");
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages
@@ -72,7 +74,7 @@ impl ChatServer{
                     }
                 }
                 recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets(packet);
+                    self.handling_packets::<M>(packet);
                 thread::sleep(Duration::from_millis(2000));
                 // default => {
                 //     println!("LeDron ID {:?} - Waiting for messages...", self.id)
@@ -81,7 +83,7 @@ impl ChatServer{
             }
         }
     }
-    fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
+    fn handling_packets<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) where <M as FromStr>::Err: Debug {
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 // Only Ack, Nack, FloodResponse already sent
@@ -89,7 +91,7 @@ impl ChatServer{
                 // during a crashing status.
                 match packet.clone().pack_type{
                     PacketType::Nack(_) |
-                    PacketType::Ack(_) |
+                    PacketType::Ack(_) =>{}
                     PacketType::FloodResponse(e) => {
                         self.process_flood_response(e);
                     },
@@ -98,7 +100,7 @@ impl ChatServer{
                         self.process_flood_request(e,packet);
                     },
                     PacketType::MsgFragment(fragment) => {
-                        self.checking_fragments(fragment, packet.routing_header.hops[0] as NodeId);
+                        self.checking_fragments::<M>(fragment, packet.routing_header.hops[0] as NodeId);
                     }
                 }
             }else{
@@ -106,57 +108,64 @@ impl ChatServer{
             }
         }
     }
-    fn checking_fragments<M>(&mut self, fragment: Fragment, mut destination:NodeId){
+    fn checking_fragments<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self, fragment: Fragment, mut destination:NodeId)where<M as FromStr>::Err: std::fmt::Debug{
         if fragment.fragment_index == 1 && 1== fragment.total_n_fragments{
-            let input = String::from_utf8(Vec::from(fragment.data)).map_err(|e| e.to_string()).ok().unwrap();
+            let input = String::from_utf8_lossy(&fragment.data).to_string();
             match input.as_str() {
-                "ServerType" => self.servertype(ClientToServer::ServerType, destination),
+                "ServerType" => self.servertype(ClientCommand::ServerType, destination),
                 s if s.starts_with("RegistrationToChat:") => {
-                    let client_id = s.strip_prefix("RegistrationToChat:").unwrap().to_string();
+                    let client_id = s.strip_prefix("RegistrationToChat:").unwrap().parse::<NodeId>().unwrap();
                     self.register_to_chat(client_id);
                 }
                 "ClientList" => self.send_list(destination),
-                s if s.starts_with("File:") => {
-                    let file_id = s.strip_prefix("File:").unwrap().to_string();
-                    self.create_vec_for_mess(file_id,destination);
-                }
                 s if s.starts_with("MessageFor:") => {
                     let parts: Vec<&str> = s.strip_prefix("MessageFor:").unwrap().splitn(2, ':').collect();
-                    destination = parts[0].to_string();
-                    let message_data = parts[1..].to_string(); // Simulating Message<M> parsing
-                    let mut source_id = None;
+                    let source=destination.clone();
+                    match parts[0].parse::<u8>() {
+                        Ok(number) => destination= number,
+                        Err(e) => println!("Failed to parse: {:?}", e),
+                    }
+                    let message_data = parts[1..].join(" ");// Simulating Message<M> parsing
                     let mut session_id = None;
                     let mut content = None;
                     let mut key_value = message_data.splitn(2, ':');
-                    let key = key_value.next().ok_or("Invalid format")?;
-                    let value = key_value.next().ok_or("Invalid format")?;
+                    let key = key_value.next().unwrap();
+                    let value = key_value.next().unwrap();
                     match key {
-                        "source_id" => source_id = Some(value.parse::<NodeId>().map_err(|e| e.to_string())?),
-                        "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string())?),
-                        "content" => content = Some(value.parse::<M>().map_err(|e| e.to_string())?),
+                        "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string()).unwrap()),
+                        "content" => content = Some(value.parse::<M>().map_err(|e| format!("{:?}", e)).unwrap()),
                         _ => self.any_string_to_message(format!("Unknown key: {}", key),destination),
                     }
                     let message = Message {
-                        source_id: source_id.ok_or("Invalid format")?,
-                        session_id: session_id.ok_or("Invalid format")?,
-                        content: content.ok_or("Invalid format")?,
+                        session_id: session_id.ok_or("Invalid format").unwrap(),
+                        content: content.ok_or("Invalid format").unwrap(),
                     };
-                    self.message_for_client(destination,message);
+                    self.message_for_client(destination,message,source);
                 }
                 _ => {self.any_string_to_message("ErrNotFound".to_string(),destination);},
             }
-        }else{}// message too long
+        }else{
+
+        }// message too long
     }
-    fn message_for_client<M>(&mut self,destination:NodeId,message:Message<M>){
-        let mut data=format!("MessageFrom:{} {} {}",message.source_id,message.session_id,message.content);
-        let mut n_packets=data.as_bytes().to_vec().len()/128+1;
-        let mut vtmp = [0;128];
-        vtmp[..1].copy_from_slice(&[data.len() as u8]);
-        if n_packets>=1{
-            self.create_message(n_packets, &vtmp,data.as_bytes().to_vec(),destination);
+    fn message_for_client<M: std::fmt::Display + host::DroneSend>(&mut self,destination:NodeId,message:Message,source:NodeId){
+        for i in self.client_list.iter(){
+            if source==*i{
+                let mut data=format!("MessageFrom:{} {} {}",source,message.session_id,message.content);
+                let mut n_packets=data.as_bytes().to_vec().len()/128+1;
+                let mut vtmp = [0;128];
+                vtmp[0]='c' as u8;
+                vtmp[1..2].copy_from_slice(&[data.len() as u8]);
+                if n_packets>=1{
+                    self.create_message(n_packets, &vtmp,data.as_bytes().to_vec(),destination,self.info.host.id);
+                }
+                break;
+            }else{
+                // Err you need to register before
+            }
         }
     }
-    fn register_to_chat(&mut self, id:String){
+    fn register_to_chat(&mut self, id:NodeId){
         self.client_list.push(id);
     }
     fn send_list(&mut self,destination:NodeId){
@@ -166,7 +175,7 @@ impl ChatServer{
         let mut vtmp = [0;128];
         vtmp[..1].copy_from_slice(&[data.len() as u8]);
         if n_packets>=1{
-            self.create_message(n_packets, &vtmp,data,destination);
+            self.create_message(n_packets, &vtmp,data,destination,self.info.host.id);
         }
     }
 }

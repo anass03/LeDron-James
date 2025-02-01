@@ -16,9 +16,11 @@ pub trait TextServer {
     }
     fn convert_file(id:String)->Vec<u8>{
         // This is the value you want to insert
-        let mut path = String::new();
-        path.push_str(r"C:\Users\leooo\RustroverProjects\LeDron-James\src\server\files");
-        path.push_str(format!("{}.txt", id).as_str());
+        let base_path = "https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/files/";
+        // Replace it with your actual ID
+        let file_name = format!("{}.pdf", id);
+        // Create the final path by appending the file name
+        let path = format!("{}{}", base_path, file_name);
         let bytes = Self::fetch_file_as_bytes(&path).unwrap();
         bytes
     }
