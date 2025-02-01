@@ -1,5 +1,4 @@
 use serde::{Serialize, Deserialize};
-
 #[derive(Serialize, Deserialize,Debug)]
 struct Example {
     id: u32,

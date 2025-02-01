@@ -7,6 +7,7 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use image::EncodableLayout;
 use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType, NodeType, Packet, PacketType};
@@ -23,9 +24,9 @@ impl ChatServer{
             fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
             fn send_packet(&self, packet: Packet, channel: Option<& Sender<Packet>>) -> SendingCodes;
-            fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
+            fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
             fn handle_ack(&self, ack: Ack, session_id: u64);
-            fn handle_nack(&self, nack: Nack, session_id: u64);
+            fn handle_nack(&mut self, nack: Nack,nack_generator:NodeId, session_id: u64);
             fn build_packet_ack(&self,packet: Packet,fragment_index: Option<u64>) -> Packet;
         }
         to self.info {
@@ -35,7 +36,6 @@ impl ChatServer{
         }
         to self.info.host.network{
             fn update_graph(&mut self);
-            // fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64);   dA fare
             fn find_best_route(&self,start:NodeId, destination: NodeId) -> Vec<NodeId>;
         }
     }
@@ -43,7 +43,6 @@ impl ChatServer{
            type_host:NodeType,
            connected_drone_ids:Vec<NodeId>,
            controller_send:Sender<DroneEvent>,
-           controller_recv:Receiver<ClientCommand>,
            packet_recv:Receiver<Packet>,
            packet_send:HashMap<NodeId, Sender<Packet>>,
     ) ->Self{
@@ -52,7 +51,6 @@ impl ChatServer{
                                  type_host,
                                  connected_drone_ids,
                                  controller_send,
-                                 controller_recv,
                                  packet_recv,
                                  packet_send,
                                  ServerTypes::Chat
@@ -60,19 +58,12 @@ impl ChatServer{
             client_list: vec![],
         }
     }
-    fn run(&mut self) {
+    pub fn run(&mut self) {
         self.log("Starting Chat Server...");
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages
                 // using select_biased!
                 // macro.
-                recv(self.info.host.controller_recv) -> command => {
-                    if let Ok(command) = command {
-                        // self.handle_command(command);
-                    }else{
-                        println!("ChatServer ID {:?} - Failed to parse command-packet [Crossbeam Error - Channel Closed / Empty]", self.info.host.id);
-                    }
-                }
                 recv(self.info.host.packet_recv) -> packet => {
                     self.handling_packets(packet);
                 thread::sleep(Duration::from_millis(2000));
@@ -133,7 +124,7 @@ impl ChatServer{
                     let value = key_value.next().unwrap();
                     match key {
                         "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string()).unwrap()),
-                        "content" => content = Some(value.as_bytes().to_vec().map_err(|e| format!("{:?}", e)).unwrap()),
+                        "content" => content = Some(value.as_bytes().to_vec()),
                         _ => self.any_string_to_message(format!("Unknown key: {}", key),destination),
                     }
                     let message = Message {
@@ -169,13 +160,16 @@ impl ChatServer{
         self.client_list.push(id);
     }
     fn send_list(&mut self,destination:NodeId){
-        let all= self.client_list.join(" ");
-        let mut data=all.as_bytes().to_vec();
-        let mut n_packets=all.as_bytes().to_vec().len()/128+1;
+        let mut data=self.client_list.clone();
+        let mut n_packets=data.as_bytes().to_vec().len()/128+1;
         let mut vtmp = [0;128];
         vtmp[..1].copy_from_slice(&[data.len() as u8]);
         if n_packets>=1{
             self.create_message(n_packets, &vtmp,data,destination,self.info.host.id);
         }
     }
+}
+#[test]
+fn main(){
+
 }

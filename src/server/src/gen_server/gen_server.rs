@@ -25,10 +25,9 @@ impl GenServer {
                type_host:NodeType,
                connected_drone_ids: Vec<NodeId>,
                controller_send:Sender<DroneEvent>,
-               controller_recv:Receiver<ClientCommand>,
                packet_recv:Receiver<Packet>,
                packet_send:HashMap<NodeId, Sender<Packet>>, server_type: ServerTypes)->GenServer {
-        let host = Host::new(id, type_host, controller_send, controller_recv, packet_recv, packet_send);
+        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send);
         GenServer{
             host,
             connected_drone_ids,

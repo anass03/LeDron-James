@@ -38,9 +38,9 @@ impl ContentServer {
             fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
             fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes;
-            fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
+            fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
             fn handle_ack(&self, ack: Ack, session_id: u64);
-            fn handle_nack(&self, nack: Nack, session_id: u64);
+            fn handle_nack(&mut self, nack: Nack,nack_generator:NodeId, session_id: u64);
             fn build_packet_ack(&self,packet: Packet,fragment_index: Option<u64>) -> Packet;
         }
         to self.info {
@@ -50,7 +50,6 @@ impl ContentServer {
         }
         to self.info.host.network{
             fn update_graph(&mut self);
-            // fn modify_pdr(&mut self, drone_id: NodeId, pdr: f64);
             fn find_best_route(&self,source:NodeId, destination: NodeId) -> Vec<NodeId>;
         }
     }
@@ -58,7 +57,6 @@ impl ContentServer {
            type_host:NodeType,
            connected_drone_ids: Vec<NodeId>,
            controller_send:Sender<DroneEvent>,
-           controller_recv:Receiver<ClientCommand>,
            packet_recv:Receiver<Packet>,
            packet_send:HashMap<NodeId, Sender<Packet>>)->Self{
         Self{
@@ -66,7 +64,6 @@ impl ContentServer {
                                  type_host,
                                  connected_drone_ids,
                                  controller_send,
-                                 controller_recv,
                                  packet_recv,
                                  packet_send,
                                  ServerTypes::Content),
@@ -74,19 +71,12 @@ impl ContentServer {
             media: Vec::new(),
         }
     }
-    fn run(&mut self){
+    pub fn run(&mut self){
         self.log("Starting Content Server...");
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages
                 // using select_biased!
                 // macro.
-                recv(self.info.host.controller_recv) -> command => {
-                    if let Ok(command) = command {
-                        // self.handle_command(command);
-                    }else{
-                        println!("Server ID {:?} - Failed to parse command-packet [Crossbeam Error - Channel Closed / Empty]", self.info.host.id);
-                    }
-                }
                 recv(self.info.host.packet_recv) -> packet => {
                     self.handling_packets(packet);
                 thread::sleep(Duration::from_millis(2000));
@@ -243,28 +233,7 @@ impl COntentServer for ContentServer {
         }
     }
 }
+#[test]
+fn main(){
 
-fn revert_image(data:Vec<u8>) -> Result<DynamicImage, String> {
-    let image= Image{
-        width: data[1] as u32,
-        height: data[2] as u32,
-        data: data[3..].to_vec(),
-    };
-    if image.data.len() != (image.width * image.height * 4) as usize {
-        return Err(format!(
-            "Byte vector size mismatch: expected {}, got {}",
-            image.width * image.height * 4,
-            image.data.len()
-        ));
-    }
-    // Try creating the image buffer
-    let img_buffer = ImageBuffer::<Rgba<u8>, Vec<u8>>::from_raw(image.width, image.height, image.data)
-        .ok_or("Failed to create ImageBuffer from raw bytes")?;
-
-    Ok(DynamicImage::ImageRgba8(img_buffer))
-}
-fn revert_file(bytes: Vec<u8>) -> io::Result<()> {
-    // Write the bytes directly to a file
-    fs::write("output.txt", bytes)?;
-    Ok(())
 }
