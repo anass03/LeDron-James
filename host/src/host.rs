@@ -2,7 +2,7 @@ use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::{DroneEvent};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE};
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -14,6 +14,8 @@ use petgraph::graph::{DiGraph, NodeIndex};
 use petgraph::visit::{EdgeRef, IntoEdgesDirected};
 use rand::Rng;
 use rand::rngs::ThreadRng;
+use serde::__private::de::IdentifierDeserializer;
+use serde_json::to_string;
 use wg_2024::controller::DroneEvent::{PacketSent};
 type FileId = usize;
 type MediaId = usize;
@@ -64,25 +66,25 @@ struct RecSessionData {
     last_activity: Instant, // Timestamp dell'ultima attività
 }
 pub struct SentSessionData {
-    buffer: Vec<Option<Fragment>>, // Buffer dei frammenti inviati
-    last_activity: Instant,        // Timestamp dell'ultima attività
-    destination: NodeId,        // Destinatario della sessione
-    route: Vec<NodeId>,        // percorso pre-calcolato
+    pub buffer: Vec<Option<Fragment>>, // Buffer dei frammenti inviati
+    pub last_activity: Instant,        // Timestamp dell'ultima attività
+    pub destination: NodeId,        // Destinatario della sessione
+    pub route: Vec<NodeId>,        // percorso pre-calcolato
 }
 #[derive(Clone)]
 pub struct Network {
     pub graph: DiGraph<NodeId, f64>,
     pub topology: HashMap<NodeId, (NodeIndex, Vec<NodeId>)>, // NodeId -> (Graph NodeIndex, Vec of neighbors)
+    pub servers: HashSet<NodeId>,
 }
 impl Network {
     pub fn new() -> Self {
         Self {
             graph: DiGraph::new(),
             topology: HashMap::new(),
+            servers: HashSet::new()
         }
     }
-
-
     /// Aggiorna il grafo basandosi sulla topologia attuale
     pub fn update_graph(&mut self) {
         // Rimuovi tutti gli archi esistenti
@@ -182,10 +184,9 @@ pub trait Functionality{
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
     fn handle_ack(&self, ack: Ack, session_id: u64);
     fn handle_nack(&self, nack: Nack, session_id: u64);
-    fn handle_msg_fragment(&mut self, packet: Packet,fragment: Fragment) -> Option<Message>;
+    fn handle_msg_fragment(&mut self, packet: Packet,fragment: Fragment) -> Option<Vec<u8>>;
     fn cleanup_expired_sessions(&self, timeout: Duration);
     fn start_session_cleanup(self: Arc<Self>, timeout: Duration, interval: Duration);
-    fn build_msg_fragment(&mut self,destination: NodeId, content: Message) -> Result<(), String>;
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment>;
     fn send_fragment(&self, session_id: u64, fragment: Fragment);
     fn start_retransmission_task(self: Arc<Self>, retransmission_interval: Duration);
@@ -283,18 +284,43 @@ impl Functionality for Host {
 
         for window in path.windows(2) {
             if let [current, next] = window {
-                self.network
+                let entry = self.network
                     .topology
                     .entry(current.0)
-                    .or_insert_with(|| (self.network.graph.add_node(current.0), vec![]))
-                    .1
-                    .push(next.0);
+                    .or_insert_with(|| (self.network.graph.add_node(current.0), vec![]));
+
+                if !entry.1.contains(&next.0) {
+                    entry.1.push(next.0);
+                }
+
+                // Se il nodo è un server, salvalo
+                if current.1 == NodeType::Server {
+                    self.network.servers.insert(current.0);
+                }
             }
         }
 
-        // aggiorno il grafo
+        // Aggiorno il grafo
         self.network.update_graph();
     }
+
+    // fn process_flood_response(&mut self, response: FloodResponse) {
+    //     let path = &response.path_trace;
+    //
+    //     for window in path.windows(2) {
+    //         if let [current, next] = window {
+    //             self.network
+    //                 .topology
+    //                 .entry(current.0)
+    //                 .or_insert_with(|| (self.network.graph.add_node(current.0), vec![]))
+    //                 .1
+    //                 .push(next.0);
+    //         }
+    //     }
+    //
+    //     // aggiorno il grafo
+    //     self.network.update_graph();
+    // }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         self.log("Sending packet...");
         let result = match channel.or_else(|| {
@@ -427,7 +453,7 @@ impl Functionality for Host {
             }
         }
     }
-    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Message> {
+    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
         // Ottieni o inizializza il buffer di frammenti per questa sessione
         let mut received_fragments = self.received_fragments.lock().unwrap();
 
@@ -476,7 +502,7 @@ impl Functionality for Host {
             ));
 
             // Ricostruisce il messaggio
-            let message = buffer
+            let content = buffer
                 .iter()
                 .filter_map(|f| f.as_ref())
                 .flat_map(|frag| frag.data[..frag.length as usize].to_vec())
@@ -484,24 +510,7 @@ impl Functionality for Host {
 
             // Rimuove il buffer per questa sessione
             received_fragments.remove(&packet.session_id);
-
-            // Tenta di deserializzare il contenuto del messaggio
-            let raw_message = String::from_utf8_lossy(&message).to_string();
-            match String::from_string(raw_message) {
-                Ok(content) => {
-                    let message = Message {
-                        session_id: packet.session_id,
-                        content: Box::new(content), // Boxa il contenuto in un trait object
-                    };
-                    return Some(message);
-                }
-                Err(err) => {
-                    self.log(format!(
-                        "Failed to deserialize message for session ID {}: {}",
-                        packet.session_id, err
-                    ));
-                }
-            }
+            return Some(content)
         }
 
         None
@@ -564,57 +573,6 @@ impl Functionality for Host {
                 host_ref.cleanup_expired_sessions(timeout);
             }
         });
-    }
-    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
-        // Trova il miglior percorso per la destinazione
-        let route = self.network.find_best_route(self.id, destination);
-        if route.is_empty() {
-            return Err("No route found to destination".into());
-        }
-
-        // Serializza il contenuto del messaggio
-        let content = message.content.stringify();
-        let content_bytes = content.as_bytes();
-        let total_n_fragments = (content_bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
-
-        // Aggiungi o aggiorna l'entry nella mappa dei frammenti inviati
-        let mut sent_fragments = self.sent_fragments.lock().unwrap();
-        let session_data = sent_fragments.entry(message.session_id).or_insert_with(|| SentSessionData {
-            buffer: vec![None; total_n_fragments],
-            last_activity: Instant::now(),
-            route: route.clone(), // Salva il percorso pre-calcolato
-            destination,          // Salva il destinatario
-        });
-
-        // Aggiorna `last_activity` e assicura che il buffer sia grande abbastanza
-        session_data.last_activity = Instant::now();
-        if session_data.buffer.len() < total_n_fragments {
-            session_data.buffer.resize(total_n_fragments, None);
-        }
-
-        // Invia i frammenti
-        for (i, chunk) in content_bytes.chunks(FRAGMENT_DSIZE).enumerate() {
-            let fragment = Fragment {
-                fragment_index: i as u64,
-                total_n_fragments: total_n_fragments as u64,
-                length: chunk.len() as u8,
-                data: {
-                    let mut data = [0; FRAGMENT_DSIZE];
-                    data[..chunk.len()].copy_from_slice(chunk);
-                    data
-                },
-            };
-
-            // Aggiungi il frammento al buffer
-            session_data.buffer[i] = Some(fragment.clone());
-
-            // Costruisci e invia il pacchetto
-            let routing_header = SourceRoutingHeader::new(route.clone(), 0);
-            let packet = Packet::new_fragment(routing_header, message.session_id, fragment);
-            self.send_packet(packet, None);
-        }
-
-        Ok(())
     }
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment> {
         let sent_fragments = self.sent_fragments.lock().unwrap();
@@ -695,7 +653,7 @@ pub enum ClientCommand{
     //chat-server
     RegistrationToChat,
     ClientList,
-    MessageFor(ClientId, Message),
+    MessageFor(ClientId, String),
 
     ControllerShortcut(Packet)
 }
@@ -709,7 +667,7 @@ pub enum ServerToClient{
     Media,
 
     ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, Message),
+    MessageFrom(ClientId, String),
 
     ErrNotFound,
     ErrClientId
@@ -723,26 +681,21 @@ pub enum ServerTypes{
 #[derive(Clone)]
 pub struct Message {
     pub session_id: u64,
-    pub content: Box<dyn DroneSend + Send + 'static>,
+    pub content: Vec<u8>,
 }
-// ReqServerType,
-pub trait DroneSend: Serialize + DeserializeOwned {
-    fn stringify(&self) -> String {
-        serde_json::to_string(self).unwrap()
-    }
-    fn from_string(raw: String) -> Result<Self, String> {
-        serde_json::from_str(raw.as_str()).map_err(|e| e.to_string())
-    }
+pub struct Image{
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>,
 }
-impl DroneSend for String {
-    fn stringify(&self) -> String {
-        self.clone() // Just returns the string itself (or you can choose to serialize it)
-    }
-
-    fn from_string(raw: String) -> Result<Self, String> {
-        Ok(raw)
-    }
-}
+// pub trait DroneSend: Serialize + DeserializeOwned {
+//     fn stringify(&self) -> String {
+//         serde_json::to_string(self).unwrap()
+//     }
+//     fn from_string(raw: String) -> Result<Self, String> {
+//         serde_json::from_str(raw.as_str()).map_err(|e| e.to_string())
+//     }
+// }
 pub enum SendingCodes { // For performance and logic enhancements
     SuccessfullySent(u64),
     ErrorSending(String),
@@ -762,5 +715,5 @@ impl Display for SendingCodes {
         Debug::fmt(self, f)
     }
 }
-pub trait Request: DroneSend {}
-pub trait Response: DroneSend {}
+// pub trait Request: DroneSend {}
+// pub trait Response: DroneSend {}
