@@ -745,7 +745,7 @@ pub enum ServerTypes{
 #[derive(Clone)]
 pub struct Message {
     pub session_id: u64,
-    pub content: Box<dyn DroneSend + Send + 'static>,
+    pub content:Vec<u8>,
 }
 // ReqServerType,
 pub trait DroneSend: Serialize + DeserializeOwned {

@@ -133,7 +133,7 @@ impl ChatServer{
                     let value = key_value.next().unwrap();
                     match key {
                         "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string()).unwrap()),
-                        "content" => content = Some(value.parse().map_err(|e| format!("{:?}", e)).unwrap()),
+                        "content" => content = Some(value.as_bytes().to_vec().map_err(|e| format!("{:?}", e)).unwrap()),
                         _ => self.any_string_to_message(format!("Unknown key: {}", key),destination),
                     }
                     let message = Message {
@@ -151,7 +151,7 @@ impl ChatServer{
     fn message_for_client(&mut self,destination:NodeId,message:Message,source:NodeId){
         for i in self.client_list.iter(){
             if source==*i{
-                let mut data=format!("MessageFrom:{} {} {}",source,message.session_id,message.content);
+                let mut data=format!("MessageFrom:{} {} {:?}",source,message.session_id,message.content);
                 let mut n_packets=data.as_bytes().to_vec().len()/128+1;
                 let mut vtmp = [0;128];
                 vtmp[0]='c' as u8;
