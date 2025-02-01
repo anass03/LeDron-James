@@ -114,3 +114,15 @@ pub struct MediaNameInputText {
 
 #[derive(Component)]
 pub struct ConfirmMediaNameButton;
+#[derive(Component)]
+pub struct ChooseMessageForMenu;
+#[derive(Component)]
+pub struct ClientIdInputText {
+    pub(crate) value: String
+}
+#[derive(Component)]
+pub struct ConfirmMessageForButton;
+#[derive(Component)]
+pub struct ClientMessageInputText {
+    pub(crate) value: String
+}

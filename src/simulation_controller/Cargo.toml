@@ -16,3 +16,4 @@ toml = "0.8.19"
 drone = { path = "/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/drone"}
 client = { path = "../client" }
 host = { path = "../host" }
+server = { path = "../server" }

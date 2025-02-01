@@ -4,7 +4,6 @@ use crate::drone::components::*;
 use rand::Rng;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
-use host::DroneSend;
 use crate::drone::style::*;
 use crate::simulation_controller::{SelectedDrone, SimulationController};
 
@@ -152,7 +151,7 @@ pub fn set_pdr(
 
 }
 
-pub fn handle_packet_sent (
+pub fn handle_drone_packet_sent(
     simulation_controller: Res<SimulationController>,
     drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
 ) {

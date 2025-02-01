@@ -39,11 +39,19 @@ impl Plugin for OptionMenuPlugin {
                 interact_with_file_button,
                 interact_with_media_list_button,
                 interact_with_media_button,
-                handle_pdr_input,
-                handle_file_name_input,
-                handle_media_name_input,
-                update_client_text
+                interact_with_registration_to_chat_button,
+                interact_with_client_list_button,
+                interact_with_message_for_button,
+                interact_with_confirm_message_for_button,
                 ))
+            .add_systems(Update, (
+                    handle_pdr_input,
+                    handle_file_name_input,
+                    handle_media_name_input,
+                    handle_client_message_for_input,
+                    handle_message_for_input,
+                    update_client_text
+            ))
             .add_systems(OnExit(OptionMenu::On), despawn_pause_menu)
         ;
     }

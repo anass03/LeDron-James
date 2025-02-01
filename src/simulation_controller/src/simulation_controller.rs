@@ -17,7 +17,10 @@ use wg_2024::drone::Drone;
 use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
 use client::Client as LeClient;
-use host::{ClientCommand, DroneSend};
+use host::ClientCommand;
+use server::COntentServer as LeContentServer;
+use server::chatserver::ChatServer as LeChatServer;
+
 
 
 /// Simulation Controller struct contains:
@@ -34,6 +37,8 @@ pub struct SimulationController {
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone
     pub drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,   //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+    pub client_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
+    pub server_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
     pub packet_receiver: HashMap<NodeId, Receiver<Packet>>,     //packet receiver of each node
 }
@@ -45,7 +50,8 @@ impl SimulationController{
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
         drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
         client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
-        //client_event_receiver: HashMap<NodeId, Receiver<ClientEvent>>,
+        client_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
+        server_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
         packet_receiver: HashMap<NodeId, Receiver<Packet>>,
     ) -> Self {
@@ -68,6 +74,8 @@ impl SimulationController{
             drone_command_sender,
             drone_event_receiver,
             client_command_sender,
+            client_event_receiver,
+            server_event_receiver,
             packet_sender,
             packet_receiver,
         }
@@ -171,13 +179,73 @@ pub fn main() {
             client.run();
         }));
     }
+    // - event_receiver contains the channels receiver to receive events from clients
+    let mut server_event_receiver = HashMap::new();
+    let mut curr_server = 0;
+    for server in config.clone().server.iter() {  // ✅ Use `iter()` instead of `into_iter()`
+
+        let server_id = server.id;  // ✅ Copy primitive value
+        let connected_drone_ids = server.connected_drone_ids.clone(); // ✅ Clone so it can be moved later
+        let server_clone = server.clone(); // ✅ Clone full `client` if needed
+
+        // Client event channel
+        let (controller_server_send, controller_server_recv) = unbounded();
+        let (server_event_sender, server_event_recv) = unbounded();
+
+        // Insert into HashMaps
+        server_event_receiver.insert(server_id, server_event_recv);
+
+        // Packet channels
+        let packet_recv = packet_channels[&server_id].1.clone(); // ✅ Clone before move
+        let packet_send: HashMap<_, _> = connected_drone_ids
+            .iter()
+            .map(|&id| (id, packet_channels[&id].0.clone())) // ✅ Clone values, avoid move
+            .collect();
+
+        // Spawn the thread with only the necessary cloned values
+        if curr_server == 0 {
+            handles.push(thread::spawn(move || {
+                let mut server = LeChatServer::new(
+                    server_id,
+                    NodeType::Server,
+                    connected_drone_ids,
+                    server_event_sender,
+                    //temporarly there would be the server command receiver
+                    controller_server_recv,
+                    packet_recv,
+                    packet_send,
+                );
+                server.run();
+            }));
+            curr_server = curr_server + 1;
+        } else if curr_server == 1 {
+            handles.push(thread::spawn(move || {
+                let mut server = LeContentServer::new(
+                    server_id,
+                    NodeType::Server,
+                    connected_drone_ids, // ✅ Uses cloned values
+                    server_event_sender,
+                    //temporarly there would be the server command receiver
+                    controller_server_recv,
+                    packet_recv,
+                    packet_send,
+                );
+                server.run();
+            }));
+            curr_server = curr_server + 1;
+        } else {
+            println!("Error running servers")
+        }
+
+    }
+
     let mut packet_senders = HashMap::new();
     let mut packet_receivers = HashMap::new();
     for (node_id, (sender, receiver)) in packet_channels.iter() {
         packet_senders.insert(*node_id, sender.clone());
         packet_receivers.insert(*node_id, receiver.clone());
     }
-    let controller = SimulationController::new(config, drone_command_sender, drone_event_receiver, client_command_sender, packet_senders, packet_receivers);
+    let controller = SimulationController::new(config, drone_command_sender, drone_event_receiver, client_command_sender, client_event_receiver, server_event_receiver, packet_senders, packet_receivers);
 
     // controller.crash_all();
 

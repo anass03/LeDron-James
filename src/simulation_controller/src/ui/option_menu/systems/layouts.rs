@@ -781,3 +781,126 @@ pub fn spawn_choose_media_menu(
         });
     });
 }
+
+pub fn spawn_message_for_menu(
+    commands: &mut Commands,
+    asset_server: &Res<AssetServer>,
+    window_query: &Query<&Window, With<PrimaryWindow>>,
+) {
+    let window = window_query.get_single().unwrap();
+
+    commands.spawn((
+        NodeBundle {
+            style: Style {
+                width: Val::Px(250.0),
+                height: Val::Px(150.0),
+                position_type: PositionType::Absolute,
+                left: Val::Px(window.width() / 2.0 - 125.0),
+                top: Val::Px(window.height() / 2.0 - 75.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Column,
+                row_gap: Val::Px(10.0), // Space between rows
+                ..default()
+            },
+            background_color: Color::srgb(0.5, 0.5, 0.5).into(),
+            ..default()
+        },
+        ChooseMessageForMenu,
+    )).with_children(|parent| {
+
+        // First row: "Message for" label + Input Text
+        parent.spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Px(30.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(10.0),
+                ..default()
+            },
+            ..default()
+        }).with_children(|row| {
+            row.spawn(TextBundle::from_section(
+                "Message for",
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            ));
+            row.spawn((
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 20.0,
+                        color: Color::WHITE,
+                    },
+                ),
+                ClientIdInputText { value: String::new() },
+            ));
+        });
+
+        // Second row: "Message" label + Input Text
+        parent.spawn(NodeBundle {
+            style: Style {
+                width: Val::Percent(100.0),
+                height: Val::Px(30.0),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                flex_direction: FlexDirection::Row,
+                column_gap: Val::Px(10.0),
+                ..default()
+            },
+            ..default()
+        }).with_children(|row| {
+            row.spawn(TextBundle::from_section(
+                "Message",
+                TextStyle {
+                    font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                },
+            ));
+            row.spawn((
+                TextBundle::from_section(
+                    "",
+                    TextStyle {
+                        font: asset_server.load("fonts/FiraSans-Bold.ttf"),
+                        font_size: 20.0,
+                        color: Color::WHITE,
+                    },
+                ),
+                ClientMessageInputText { value: String::new() },
+            ));
+        });
+
+        // Third row: Confirm Button
+        parent.spawn((
+            ButtonBundle {
+                style: Style {
+                    width: Val::Px(100.0),
+                    height: Val::Px(30.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
+                    margin: UiRect::top(Val::Px(10.0)), // Space above the button
+                    ..default()
+                },
+                background_color: Color::srgb(0.4, 0.4, 0.4).into(),
+                ..default()
+            },
+            ConfirmMessageForButton,
+        )).with_children(|button| {
+            button.spawn(TextBundle::from_section(
+                "Confirm",
+                TextStyle {
+                    font_size: 16.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+        });
+    });
+}

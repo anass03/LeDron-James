@@ -1,8 +1,9 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
 use wg_internal::packet::Packet;
-use host::{ClientCommand, ClientId, DroneSend, FileId, MediaId, Message};
+use host::{ClientCommand, ClientId, FileId, MediaId, Message};
 use crate::client::components::Client;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
@@ -169,8 +170,8 @@ pub fn client_list(
 pub fn message_for(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
-    recipient_client: &ClientId,
-    message: Message
+    recipient_client: usize,
+    message: String
 ) {
     let current_client = match selected_client.clone().client_id {
         Some(client_id) => client_id,
@@ -179,7 +180,7 @@ pub fn message_for(
             return;
         }
     };
-    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::MessageFor(*recipient_client, message)).expect("failed to send Message request");
+    simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::MessageFor(recipient_client as ClientId, message)).expect("failed to send Message request");
 }
 
 pub fn controller_shortcut(
@@ -195,4 +196,25 @@ pub fn controller_shortcut(
         }
     };
     simulation_controller.client_command_sender.get(&current_client).unwrap().send(ClientCommand::ControllerShortcut(packet)).expect("failed to send Controller Shortcut Packet");
+}
+
+pub fn handle_client_packet_sent (
+    simulation_controller: Res<SimulationController>,
+    client_query: Query<(&Client, &Transform), With<Client>>,
+) {
+    for reciever in simulation_controller.client_event_receiver.iter() {
+        for recieved in reciever.1.iter() {
+            match recieved {
+                DroneEvent::PacketSent(packet) => {
+                    println!("Packet sent: {:?}", packet);
+                },
+                DroneEvent::PacketDropped(packet) => {
+                    println!("Packet dropped: {:?}", packet);
+                },
+                DroneEvent::ControllerShortcut(packet) => {
+                    println!("Controller shortcut: {:?}", packet);
+                }
+            }
+        }
+    }
 }

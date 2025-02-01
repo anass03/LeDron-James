@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use host::DroneSend;
 use crate::client::systems::*;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::*;
@@ -661,4 +660,116 @@ pub fn interact_with_client_list_button(
 
 ///IMPLEMENTARE MESSAGE FOR
 
+pub fn interact_with_message_for_button(
+    mut commands: Commands,
+    mut button_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<MessageForButton>)>,
+    asset_server: Res<AssetServer>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    selected_client: Res<SelectedClient>
+) {
+    if let Ok((interaction, mut background_color)) = button_query.get_single_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                *background_color = PRESSED_BUTTON_COLOR.into();
+                let node_id = match selected_client.client_id {
+                    Some(id) => Some(id),
+                    None => None
+                };
+                spawn_message_for_menu(&mut commands, &asset_server, &window_query)
+            }
+            Interaction::Hovered => {
+                *background_color = HOVERED_BUTTON_COLOR.into();
+            }
+            Interaction::None => {
+                *background_color = NORMAL_BUTTON_COLOR.into();
+            }
+        }
+    }
+}
 
+pub fn handle_client_message_for_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&mut ClientIdInputText, &mut Text)>,
+) {
+    for (mut input, mut text) in query.iter_mut() {
+        // Handle backspace
+        if keys.just_pressed(KeyCode::Backspace) {
+            input.value.pop();
+        }
+
+        // Convert pressed keys into characters
+        for key in keys.get_just_pressed() {
+            if let Some(character) = key_to_char(*key, &keys) {
+                input.value.push(character);
+            }
+        }
+
+        // Update displayed text
+        text.sections[0].value = input.value.clone();
+    }
+}
+
+pub fn handle_message_for_input(
+    keys: Res<ButtonInput<KeyCode>>,
+    mut query: Query<(&mut ClientMessageInputText, &mut Text)>,
+) {
+    for (mut input, mut text) in query.iter_mut() {
+        // Handle backspace
+        if keys.just_pressed(KeyCode::Backspace) {
+            input.value.pop();
+        }
+
+        // Convert pressed keys into characters
+        for key in keys.get_just_pressed() {
+            if let Some(character) = key_to_char(*key, &keys) {
+                input.value.push(character);
+            }
+        }
+
+        // Update displayed text
+        text.sections[0].value = input.value.clone();
+    }
+}
+
+pub fn interact_with_confirm_message_for_button(
+    mut commands: Commands,
+    mut button_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<ConfirmMessageForButton>)>,
+    menu_query: Query<Entity, With<ChooseMessageForMenu>>,
+    mut client_text_query: Query<&mut ClientIdInputText, With<Text>>,
+    mut message_text_query: Query<&mut ClientMessageInputText, With<Text>>,
+    selected_client: Res<SelectedClient>,
+    simulation_controller: Res<SimulationController>,
+) {
+    for (interaction,  mut bg_color) in button_query.iter_mut() {
+        match *interaction {
+            Interaction::Pressed => {
+                *bg_color = Color::srgb(0.7, 0.7, 0.7).into();
+                if let Ok(menu_entity) = menu_query.get_single() {
+                    // Try to fetch the text input
+                    if let Ok(mut client_input) = client_text_query.get_single_mut() {
+                        if let Ok(mut message) = message_text_query.get_single_mut() {
+                            if let Ok(client_id) = client_input.value.parse::<usize>() {
+                                if client_id == 6 || client_id == 7 {
+                                    message_for(&selected_client, &simulation_controller, client_id, message.value.clone());
+                                    // Despawn menu
+                                    commands.entity(menu_entity).despawn_recursive();
+                                } else {
+                                    println!("No such client!");
+                                    client_input.value = "".to_string();
+                                }
+                            } else {
+                                client_input.value = "".to_string();
+                            }
+                        }
+                    }
+                }
+            },
+            Interaction::Hovered => {
+                *bg_color = Color::srgb(0.6, 0.6, 0.6).into();
+            },
+            Interaction::None => {
+                *bg_color = Color::srgb(0.4, 0.4, 0.4).into();
+            }
+        }
+    }
+}

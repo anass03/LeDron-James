@@ -10,7 +10,10 @@ impl Plugin for ClientPlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(Startup, spawn_clients)
-            .add_systems(Update, join)
+            .add_systems(Update, (
+                join,
+                handle_client_packet_sent
+            ))
         ;
     }
 }

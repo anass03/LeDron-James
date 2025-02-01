@@ -10,7 +10,10 @@ impl Plugin for DronePlugin {
     fn build(&self, app: &mut App) {
         app
             .add_systems(Startup, spawn_drone)
-            .add_systems(Update, join)
+            .add_systems(Update, (
+                join,
+                handle_drone_packet_sent
+            ))
         ;
     }
 }

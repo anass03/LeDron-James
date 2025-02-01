@@ -1,7 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
-use host::DroneSend;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
 use crate::server::components::Server;
@@ -13,8 +12,10 @@ pub fn spawn_server(
     window_query: Query<&Window, With<PrimaryWindow>>,
     simulation_controller: Res<SimulationController>,
 ) {
+    let mut i = 0;
     for server in simulation_controller.servers.iter() {
-        spawn(&mut commands, &asset_server, &window_query, &server.id)
+        spawn(&mut commands, &asset_server, &window_query, &server.id, i);
+        i += 1;
     }
 }
 
@@ -22,18 +23,24 @@ pub fn spawn(
     commands: &mut Commands,
     asset_server: &Res<AssetServer>,
     window_query: &Query<&Window, With<PrimaryWindow>>,
-    id: &NodeId
+    id: &NodeId,
+    i: u8
 ) {
     let window = window_query.get_single().unwrap();
     commands.spawn((
         SpriteBundle {
-            transform: Transform::from_xyz(window.width() / 6.0 * 5.0, window.height() / 2.0, 0.0),
+            transform: match i {
+                0 => Transform::from_xyz(window.width() / 6.0 * 5.0, window.height() / 3.0, 0.0),
+                1 => Transform::from_xyz(window.width() / 6.0 * 5.0, window.height() / 3.0 * 2.0, 0.0),
+                _ => Transform::from_xyz(0.0, 0.0, 0.0),
+            },
             texture: asset_server.load("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/assets/sprites/server.png"),
             ..default()
         },
-        Server { id: id.clone()}
+        Server { id: id.clone() },
     ));
 }
+
 
 pub fn join(
     mut gizmos: Gizmos,

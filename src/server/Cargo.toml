@@ -5,5 +5,12 @@ edition = "2021"
 
 [dependencies]
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
-serde = { version = "1.0.215", features = ["derive"] }
-serde_json = "1.0.133"
+image = "0.25.5"
+rand = "0.9.0-beta.1"
+crossbeam-channel = "0.5.13"
+host = {path = "../host" }
+petgraph = "0.6.5"
+delegate = "0.13.1"
+url = "2.5.4"
+reqwest = { version = "0.11", features = ["blocking"] }
+tokio = { version = "1", features = ["full"] }

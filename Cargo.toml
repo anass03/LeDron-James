@@ -17,6 +17,7 @@ crossbeam-channel = "0.5.13"
 members = [
     "src/client",
     "src/host",
+    "src/server",
     "src/drone",
     "src/initializer",
     "src/server",
