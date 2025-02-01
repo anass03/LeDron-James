@@ -7,14 +7,9 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use petgraph::algo::dijkstra;
-use petgraph::Direction;
-use serde::{Deserialize, Serialize};
-use serde::de::DeserializeOwned;
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::{EdgeRef, IntoEdgesDirected};
 use rand::Rng;
 use rand::rngs::ThreadRng;
-use serde::__private::de::IdentifierDeserializer;
 use serde_json::to_string;
 use wg_2024::controller::DroneEvent::{PacketSent};
 pub type FileId = usize;
@@ -204,7 +199,7 @@ pub trait Functionality{
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, response: FloodResponse);
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes;
-    fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
+    fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
     fn handle_ack(&self, ack: Ack, session_id: u64);
     fn handle_nack(&mut self, nack: Nack,nack_generator: NodeId, session_id: u64);
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
@@ -217,8 +212,8 @@ pub trait Functionality{
     fn start_tasks(self: Arc<Self>);
 }
 fn generate_unique_flood_id() -> u64 {
-    let mut rng: ThreadRng = rand::thread_rng();  // Usa il generatore di numeri casuali sicuro per il thread
-    rng.gen::<u64>()  // Genera un numero casuale di tipo u64
+    let mut rng: ThreadRng = rand::rng();  // Usa il generatore di numeri casuali sicuro per il thread
+    rng.random::<u64>()  // Genera un numero casuale di tipo u64
 }
 pub fn generate_unique_session_id() -> u64 {
     let mut rng: ThreadRng = rand::rng();  // messo rng al posto di thread_rng pk quest'ultimo dalla prossima versione verrà rinominato in rng! [thread_rng --> rng]
@@ -359,13 +354,13 @@ impl Functionality for Host {
         {
             Some(ch) => match ch.send(packet.clone()) {
                 Ok(_) => {
-                    if let Err(err) = self.sendto_controller(packet.clone(), false) {
+                    if let Err(err) = self.sendto_controller(packet.clone()) {
                         self.log(&format!("Error notifying controller: {}", err));
                     }
                     SendingCodes::SuccessfullySent(packet.session_id)
                 }
                 Err(err) => {
-                    if let Err(err) = self.sendto_controller(packet, false) {
+                    if let Err(err) = self.sendto_controller(packet) {
                         self.log(&format!("Error notifying controller: {}", err));
                     }
                     SendingCodes::ErrorSending(err.to_string())
@@ -373,7 +368,7 @@ impl Functionality for Host {
             },
             None => {
                 self.log("No valid channel found for sending packet.");
-                if let Err(err) = self.sendto_controller(packet, true) {
+                if let Err(err) = self.sendto_controller(packet) {
                     self.log(&format!("Error notifying controller: {}", err));
                 }
                 SendingCodes::NoNextHop("Neighbour not found".to_string())
@@ -383,7 +378,7 @@ impl Functionality for Host {
         self.log(&format!("{:?}", result));
         result
     }
-    fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>{
+    fn sendto_controller(&self, packet: Packet) -> Result<(),String>{
         self.log("Sending to controller...");
         match self.controller_send.send(PacketSent(packet)){
             Ok(_) => { self.log("Successfully sent to controller."); Ok(()) },
@@ -640,7 +635,7 @@ impl Functionality for Host {
             .and_then(|session_data| session_data.buffer.get(fragment_index as usize).cloned().flatten())
     }
     fn send_fragment(&self, session_id: u64, fragment: Fragment) {
-        let mut sent_fragments = self.sent_fragments.lock().unwrap();
+        let sent_fragments = self.sent_fragments.lock().unwrap();
         self.log(&format!(
             "Attempting to send fragment {} for session {}",
             fragment.fragment_index, session_id

@@ -1,23 +1,18 @@
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::{DroneEvent};
-use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Packet, PacketType, NodeType, FRAGMENT_DSIZE, Fragment};
+use wg_2024::network::{NodeId};
+use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
-use std::fmt::Display;
 use std::{fs, io};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, Image, SentSessionData, RecSessionData};
+use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData};
 use host::ServerTypes::Content;
 use host::ServerTypes::Chat;
-use image::{DynamicImage, ImageBuffer, Rgba};
-use serde_json::to_string;
+use image::{DynamicImage, ImageBuffer};
 
 pub struct Client {
     host: Host,
     controller_recv:Receiver<ClientCommand>,
-    connected_drone_ids: Vec<NodeId>,
-    messages: Vec<Message>,
     servers: HashMap<ServerTypes, NodeId>
 }
 impl Client {
@@ -36,7 +31,7 @@ impl Client {
 
         let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send);
         Self{
-            host,controller_recv, connected_drone_ids, messages: Vec::new(), servers: HashMap::new()
+            host,controller_recv, servers: HashMap::new()
         }
     }
     pub fn run(&mut self) {
