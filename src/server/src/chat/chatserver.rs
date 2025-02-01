@@ -31,7 +31,7 @@ impl ChatServer{
         to self.info {
             fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
             fn any_string_to_message(&self,string:String,destination: NodeId);
-            fn servertype<M: host::DroneSend>(&self,request:ClientCommand,destination:NodeId);
+            fn servertype(&self,request:ClientCommand,destination:NodeId);
         }
         to self.info.host.network{
             fn update_graph(&mut self);
@@ -41,12 +41,12 @@ impl ChatServer{
     }
     fn new(id:NodeId,
            type_host:NodeType,
+           connected_drone_ids:Vec<NodeId>,
            controller_send:Sender<DroneEvent>,
            controller_recv:Receiver<ClientCommand>,
            packet_recv:Receiver<Packet>,
            packet_send:HashMap<NodeId, Sender<Packet>>,
-           connected_drone_ids:Vec<NodeId>
-    )->Self{
+    ) ->Self{
         Self{
             info: GenServer::new(id,
                                  type_host,
@@ -60,7 +60,7 @@ impl ChatServer{
             client_list: vec![],
         }
     }
-    fn run<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self) where <M as FromStr>::Err: Debug{
+    fn run(&mut self) {
         self.log("Starting Chat Server...");
         loop {      // Listen for packets and commands
             crossbeam_channel::select_biased! { // Prioritizing Controller messages
@@ -74,7 +74,7 @@ impl ChatServer{
                     }
                 }
                 recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets::<M>(packet);
+                    self.handling_packets(packet);
                 thread::sleep(Duration::from_millis(2000));
                 // default => {
                 //     println!("LeDron ID {:?} - Waiting for messages...", self.id)
@@ -83,7 +83,7 @@ impl ChatServer{
             }
         }
     }
-    fn handling_packets<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) where <M as FromStr>::Err: Debug {
+    fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>){
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 // Only Ack, Nack, FloodResponse already sent
@@ -100,7 +100,7 @@ impl ChatServer{
                         self.process_flood_request(e,packet);
                     },
                     PacketType::MsgFragment(fragment) => {
-                        self.checking_fragments::<M>(fragment, packet.routing_header.hops[0] as NodeId);
+                        self.checking_fragments(fragment, packet.routing_header.hops[0] as NodeId);
                     }
                 }
             }else{
@@ -108,7 +108,7 @@ impl ChatServer{
             }
         }
     }
-    fn checking_fragments<M:host::DroneSend + std::str::FromStr + std::fmt::Display>(&mut self, fragment: Fragment, mut destination:NodeId)where<M as FromStr>::Err: std::fmt::Debug{
+    fn checking_fragments(&mut self, fragment: Fragment, mut destination:NodeId){
         if fragment.fragment_index == 1 && 1== fragment.total_n_fragments{
             let input = String::from_utf8_lossy(&fragment.data).to_string();
             match input.as_str() {
@@ -133,7 +133,7 @@ impl ChatServer{
                     let value = key_value.next().unwrap();
                     match key {
                         "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string()).unwrap()),
-                        "content" => content = Some(value.parse::<M>().map_err(|e| format!("{:?}", e)).unwrap()),
+                        "content" => content = Some(value.parse().map_err(|e| format!("{:?}", e)).unwrap()),
                         _ => self.any_string_to_message(format!("Unknown key: {}", key),destination),
                     }
                     let message = Message {
@@ -148,7 +148,7 @@ impl ChatServer{
 
         }// message too long
     }
-    fn message_for_client<M: std::fmt::Display + host::DroneSend>(&mut self,destination:NodeId,message:Message,source:NodeId){
+    fn message_for_client(&mut self,destination:NodeId,message:Message,source:NodeId){
         for i in self.client_list.iter(){
             if source==*i{
                 let mut data=format!("MessageFrom:{} {} {}",source,message.session_id,message.content);

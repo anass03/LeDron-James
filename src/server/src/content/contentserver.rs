@@ -21,13 +21,13 @@ struct COntentServer{
     media:Vec<u8>,
 }
 pub trait ContentServer:MediaServer+ TextServer{
-    fn handling_packets<M:host::DroneSend>(&mut self, packet: Result<Packet,crossbeam_channel::RecvError>);
+    fn handling_packets(&mut self, packet: Result<Packet,crossbeam_channel::RecvError>);
     fn create_vec_for_mess(&self, id:String,destination: NodeId);
     fn count_files(&mut self);
     fn count_media(&self,folder_path:String)->Vec<u8>;
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
-    fn checking_fragments<M: host::DroneSend>(&mut self, fragment: Fragment,destination: NodeId);
-    fn lists<M: host::DroneSend>(&mut self, request:ClientCommand,destination: NodeId);
+    fn checking_fragments(&mut self, fragment: Fragment,destination: NodeId);
+    fn lists(&mut self, request:ClientCommand,destination: NodeId);
     fn for_message_from_vec(&self, v:Vec<u8>,destination: NodeId);
 }
 impl COntentServer {
@@ -46,7 +46,7 @@ impl COntentServer {
         to self.info {
             fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
             fn any_string_to_message(&self,string:String,destination: NodeId);
-            fn servertype<M: host::DroneSend>(&self,request:ClientCommand,destination:NodeId);
+            fn servertype(&self,request:ClientCommand,destination:NodeId);
         }
         to self.info.host.network{
             fn update_graph(&mut self);
@@ -88,7 +88,7 @@ impl COntentServer {
                     }
                 }
                 recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets::<M>(packet);
+                    self.handling_packets(packet);
                 thread::sleep(Duration::from_millis(2000));
                 // default => {
                 //     println!("LeDron ID {:?} - Waiting for messages...", self.id)
@@ -104,7 +104,7 @@ impl MediaServer for COntentServer {}
 impl TextServer for COntentServer {}
 
 impl ContentServer for COntentServer {
-    fn handling_packets<M: host::DroneSend>(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
+    fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 // Only Ack, Nack, FloodResponse already sent
@@ -121,7 +121,7 @@ impl ContentServer for COntentServer {
                         self.process_flood_request(e,packet);
                     },
                     PacketType::MsgFragment(fragment) => {
-                        self.checking_fragments::<M>(fragment,packet.routing_header.hops[0]);
+                        self.checking_fragments(fragment,packet.routing_header.hops[0]);
                     }
                 }
             }else{
@@ -201,7 +201,7 @@ impl ContentServer for COntentServer {
             }
         }
     }
-    fn checking_fragments<M: host::DroneSend>(&mut self, fragment: Fragment,destination: NodeId){
+    fn checking_fragments(&mut self, fragment: Fragment,destination: NodeId){
         if fragment.fragment_index == 1 && 1== fragment.total_n_fragments{
             // Convert Vec<u8> to String
             let input = String::from_utf8(Vec::from(fragment.data)).map_err(|e| e.to_string()).ok().unwrap();
@@ -222,7 +222,7 @@ impl ContentServer for COntentServer {
             }
         }else{}
     }
-    fn lists<M: host::DroneSend>(&mut self, request: ClientCommand, destination: NodeId){
+    fn lists(&mut self, request: ClientCommand, destination: NodeId){
         match request {
             ClientCommand::FilesList => {self.count_files();self.for_message_from_vec(self.files.clone(),destination)}
             ClientCommand::MediaList => {self.count_files();self.for_message_from_vec(self.media.clone(),destination)}

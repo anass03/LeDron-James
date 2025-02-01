@@ -5,7 +5,6 @@ use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NackType
 use wg_2024::packet::PacketType::MsgFragment;
 use host::{ClientCommand, Network, Functionality, Host, SendingCodes};
 use host::ServerTypes;
-use host::Host::*;
 use delegate::delegate;
 use petgraph::graph::DiGraph;
 use wg_2024::controller::{DroneCommand, DroneEvent};
@@ -18,7 +17,7 @@ pub struct GenServer{
 }
 pub trait GenServeR{
     fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
-    fn servertype<M: host::DroneSend>(&self,request:ClientCommand,destination:NodeId);
+    fn servertype(&self,request:ClientCommand,destination:NodeId);
     fn any_string_to_message(&self, string:String, destination: NodeId);
 }
 impl GenServer {
@@ -79,13 +78,13 @@ impl GenServeR for GenServer {
             self.host.send_packet(i, None);
         }
     }
-    fn servertype<M: host::DroneSend>(&self,request:ClientCommand,destination:NodeId){
+    fn servertype(&self,request:ClientCommand,destination:NodeId){
         match request {
             ServerType => {match self.host.type_host {
                 NodeType::Server=>{
                     self.any_string_to_message(match self.server_type {
-                        ServerTypes::Chat => {"Chat".to_string()}
-                        ServerTypes::Content => {"Content".to_string()}
+                        ServerTypes::Chat => {"ServerType:Chat".to_string()}
+                        ServerTypes::Content => {"ServerType:Content".to_string()}
                     }, destination)
                 }
                 _ => {}

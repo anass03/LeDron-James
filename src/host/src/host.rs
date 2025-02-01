@@ -7,11 +7,11 @@ use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use petgraph::algo::dijkstra;
-use petgraph::Direction;
+use petgraph::data::DataMap;
 use serde::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
 use petgraph::graph::{DiGraph, NodeIndex};
-use petgraph::visit::{EdgeRef, IntoEdgesDirected};
+use petgraph::visit::{EdgeRef};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use wg_2024::controller::DroneEvent::{PacketSent};
@@ -33,8 +33,6 @@ pub struct Host{
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
 }
-
-
 impl Host{
     pub fn new(id:NodeId,
                type_host:NodeType,
@@ -75,16 +73,16 @@ pub struct SentSessionData {
 pub struct Network {
     pub graph: DiGraph<NodeId, f64>,
     pub topology: HashMap<NodeId, (NodeIndex, Vec<NodeId>)>, // NodeId -> (Graph NodeIndex, Vec of neighbors)
+    pub drones_packet_sent: HashMap<NodeId,(i32,i32)>
 }
 impl Network {
     pub fn new() -> Self {
         Self {
             graph: DiGraph::new(),
             topology: HashMap::new(),
+            drones_packet_sent: HashMap::new(),
         }
     }
-
-
     /// Aggiorna il grafo basandosi sulla topologia attuale
     pub fn update_graph(&mut self) {
         // Rimuovi tutti gli archi esistenti
@@ -172,8 +170,27 @@ impl Network {
         path.reverse();
         Some(path.iter().map(|&n| self.graph[n]).collect())
     }
-
-
+    pub fn modify_pdr(&mut self){
+        for i in self.topology.keys(){
+            for j in self.topology.get(i).unwrap().1.iter(){
+                let Some(a)= self.graph.find_edge(self.topology.get(i).unwrap().0, self.topology.get(j).unwrap().0) ;
+                    if let Some(weight) = self.graph.edge_weight_mut(a) {
+                        *weight = match self.drones_packet_sent.get(i).unwrap().1 {
+                            0 => 0.0,
+                            _ => {self.drones_packet_sent.get(i).unwrap().1.clone() as f64 /self.drones_packet_sent.get(i).unwrap().0 as f64}
+                        };
+                }
+            }
+        }
+    }
+    pub fn pdr_helper(&mut self,source_routing_header: SourceRoutingHeader){
+        for i in source_routing_header.hops{
+            self.drones_packet_sent.entry(i).and_modify(|s| *s.0 += 1).or_insert((0,0));
+        }
+    }
+    pub fn pdr_from_nack(&mut self,id:NodeId){
+        self.drones_packet_sent.entry(id).and_modify(|s| *s.1 += 1).or_insert((0,0));
+    }
 }
 pub trait Functionality{
     fn log<S: AsRef<str>>(&self, message: S);
@@ -342,9 +359,7 @@ impl Functionality for Host {
             "Host {}: Ack ricevuto per il frammento {} (sessione {}).",
             self.id, ack.fragment_index, session_id
         ));
-
         let mut sent_fragments = self.sent_fragments.lock().unwrap();
-
         // Controlla se la sessione esiste
         if let Some(session_data) = sent_fragments.get_mut(&session_id) {
             let buffer = &mut session_data.buffer;
@@ -386,6 +401,7 @@ impl Functionality for Host {
                 match nack.nack_type {
                     NackType::Dropped => {
                         self.log(&format!("Host {}: Retrying fragment due to drop.", self.id));
+                            // pdr _ from nack
                         self.send_fragment(session_id, fragment.clone());
                     }
                     NackType::ErrorInRouting(node_id) => {
@@ -614,8 +630,10 @@ impl Functionality for Host {
 
             // Costruisci e invia il pacchetto
             let routing_header = SourceRoutingHeader::new(route.clone(), 0);
-            let packet = Packet::new_fragment(routing_header, message.session_id, fragment);
+            let packet = Packet::new_fragment(routing_header.clone(), message.session_id, fragment);
             self.send_packet(packet, None);
+            //helper
+            self.network.pdr_helper(routing_header);
         }
 
         Ok(())
