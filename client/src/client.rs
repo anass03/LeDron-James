@@ -7,7 +7,7 @@ use std::fmt::Display;
 use std::{fs, io};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, Image, SentSessionData};
+use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, Image, SentSessionData, RecSessionData};
 use host::ServerTypes::Content;
 use host::ServerTypes::Chat;
 use image::{DynamicImage, ImageBuffer, Rgba};
@@ -15,6 +15,7 @@ use serde_json::to_string;
 
 pub struct Client {
     host: Host,
+    controller_recv:Receiver<ClientCommand>,
     connected_drone_ids: Vec<NodeId>,
     messages: Vec<Message>,
     servers: HashMap<ServerTypes, NodeId>
@@ -33,16 +34,16 @@ impl Client {
             "Client must be connected to at least one and at most two drones!"
         );
 
-        let host = Host::new(id, type_host, controller_send, controller_recv, packet_recv, packet_send);
+        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send);
         Self{
-            host, connected_drone_ids, messages: Vec::new(), servers: HashMap::new()
+            host,controller_recv, connected_drone_ids, messages: Vec::new(), servers: HashMap::new()
         }
     }
     pub fn run(&mut self) {
         self.host.initiate_flood();
         loop {
             crossbeam_channel::select_biased! {
-                recv(self.host.controller_recv) -> command => {
+                recv(self.controller_recv) -> command => {
                     if let Ok(command) = command {
                         self.handle_command(command);
                     }
@@ -70,7 +71,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from("FilesList?".as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -84,7 +85,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from(content.as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -97,7 +98,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from("MediaList?".as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -111,7 +112,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from(content.as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -125,7 +126,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from(content.as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -138,7 +139,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from("ClientList?".as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -152,7 +153,7 @@ impl Client {
                         session_id: generate_unique_session_id(),
                         content: Vec::from(content.as_bytes()),
                     };
-                    if let Err(err) = self.build_msg_fragment(server_id, message) {
+                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                         self.host.log(&format!("Failed to send message: {}", err));
                     }
                 } else {
@@ -172,7 +173,7 @@ impl Client {
                 self.host.process_flood_response(response.clone());
             }
             PacketType::MsgFragment(fragment) => {
-                 if let Some(message) = self.host.handle_msg_fragment(packet.clone(),fragment){
+                 if let Some(message) = self.handle_msg_fragment(packet.clone(),fragment){
                      if let Ok(msg_str) = String::from_utf8(message.clone()) {
                          if msg_str.starts_with("ServerType") {
                              self.register_server_type(msg_str, packet.routing_header.source().unwrap());
@@ -191,7 +192,7 @@ impl Client {
                 self.host.handle_ack(ack, packet.session_id);
             }
             PacketType::Nack(nack) => {
-                self.host.handle_nack(nack, packet.session_id);
+                self.host.handle_nack(nack,packet.routing_header.source().unwrap(), packet.session_id);
             }
         }
     }
@@ -202,7 +203,7 @@ impl Client {
                 content: Vec::from("ServerType".as_bytes()), // Richiesta del tipo di server
             };
 
-            if let Err(err) = self.build_msg_fragment(server_id, message) {
+            if let Err(err) = self.host.build_msg_fragment(server_id, message) {
                 self.host.log(&format!("Failed to request server type from {}: {}", server_id, err));
             }
         }
@@ -218,56 +219,67 @@ impl Client {
             self.host.log(&format!("Unknown server type from {}", server_id));
         }
     }
-    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
-        // Trova il miglior percorso per la destinazione
-        let route = self.host.network.find_best_route(self.host.id, destination);
-        if route.is_empty() {
-            return Err("No route found to destination".into());
+    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
+        // Ottieni o inizializza il buffer di frammenti per questa sessione
+        let mut received_fragments = self.host.received_fragments.lock().unwrap();
+
+        let session_data = received_fragments
+            .entry(packet.session_id.clone())
+            .or_insert_with(|| RecSessionData {
+                buffer: vec![None; fragment.total_n_fragments as usize],
+                last_activity: Instant::now(),
+            });
+
+        let buffer = &mut session_data.buffer;
+        session_data.last_activity = Instant::now(); // Aggiorna il timestamp
+
+        let index = fragment.fragment_index as usize;
+
+        // Verifica l'indice del frammento
+        if index >= buffer.len() {
+            self.host.log(format!(
+                "Invalid fragment index: {} (session ID: {})",
+                fragment.fragment_index, packet.session_id
+            ));
+            return None;
         }
 
-        // Serializza il contenuto del messaggio
-        let content = to_string(&message.content).unwrap();
-        let content_bytes = content.as_bytes();
-        let total_n_fragments = (content_bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
-
-        // Aggiungi o aggiorna l'entry nella mappa dei frammenti inviati
-        let mut sent_fragments = self.host.sent_fragments.lock().unwrap();
-        let session_data = sent_fragments.entry(message.session_id).or_insert_with(|| SentSessionData {
-            buffer: vec![None; total_n_fragments],
-            last_activity: Instant::now(),
-            route: route.clone(), // Salva il percorso pre-calcolato
-            destination,          // Salva il destinatario
-        });
-
-        // Aggiorna `last_activity` e assicura che il buffer sia grande abbastanza
-        session_data.last_activity = Instant::now();
-        if session_data.buffer.len() < total_n_fragments {
-            session_data.buffer.resize(total_n_fragments, None);
+        // Controlla se il frammento è duplicato
+        if buffer[index].is_some() {
+            self.host.log(format!(
+                "Duplicate fragment received: {} (session ID: {})",
+                fragment.fragment_index, packet.session_id
+            ));
+            return None;
         }
 
-        // Invia i frammenti
-        for (i, chunk) in content_bytes.chunks(FRAGMENT_DSIZE).enumerate() {
-            let fragment = Fragment {
-                fragment_index: i as u64,
-                total_n_fragments: total_n_fragments as u64,
-                length: chunk.len() as u8,
-                data: {
-                    let mut data = [0; FRAGMENT_DSIZE];
-                    data[..chunk.len()].copy_from_slice(chunk);
-                    data
-                },
-            };
+        // Memorizza il frammento
+        buffer[index] = Some(fragment.clone());
 
-            // Aggiungi il frammento al buffer
-            session_data.buffer[i] = Some(fragment.clone());
+        // Invia un ACK per il frammento ricevuto
+        let ack_packet = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        self.host.send_packet(ack_packet, None);
 
-            // Costruisci e invia il pacchetto
-            let routing_header = SourceRoutingHeader::new(route.clone(), 0);
-            let packet = Packet::new_fragment(routing_header, message.session_id, fragment);
-            self.host.send_packet(packet, None);
+        // Verifica se tutti i frammenti sono stati ricevuti
+        if buffer.iter().all(|f| f.is_some()) {
+            self.host.log(format!(
+                "All fragments received for session ID: {}",
+                packet.session_id
+            ));
+
+            // Ricostruisce il messaggio
+            let content = buffer
+                .iter()
+                .filter_map(|f| f.as_ref())
+                .flat_map(|frag| frag.data[..frag.length as usize].to_vec())
+                .collect::<Vec<u8>>();
+
+            // Rimuove il buffer per questa sessione
+            received_fragments.remove(&packet.session_id);
+            return Some(content)
         }
 
-        Ok(())
+        None
     }
 }
 
