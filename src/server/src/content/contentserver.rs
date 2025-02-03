@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::{fs, io, thread};
+use std::{fs,thread};
 use std::fmt::{Debug, Display};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
@@ -9,9 +9,8 @@ use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType
 use crate::{GenServeR, MediaServer};
 use crate::TextServer;
 use crate::GenServer;
-use host::{ SendingCodes, ClientCommand, Functionality, Image};
+use host::{ SendingCodes, ClientCommand, Functionality};
 use delegate::delegate;
-use image::{DynamicImage, ImageBuffer, Rgba};
 use wg_2024::controller::{ DroneEvent};
 use host::ServerTypes;
 
@@ -97,9 +96,6 @@ impl COntentServer for ContentServer {
     fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
-                // Only Ack, Nack, FloodResponse already sent
-                // before the drone-crash will be forwarded
-                // during a crashing status.
                 match packet.clone().pack_type{
                     PacketType::Nack(_) |
                     PacketType::Ack(_) =>{},
@@ -111,7 +107,14 @@ impl COntentServer for ContentServer {
                         self.process_flood_request(e,packet);
                     },
                     PacketType::MsgFragment(fragment) => {
-                        self.checking_fragments(fragment,packet.routing_header.hops[0]);
+                        // self.checking_fragments(fragment,packet.routing_header.hops[0]);
+                        if let Some(message) = self.handle_msg_fragment(packet.clone(),fragment){
+                            if let Ok(msg_str) = String::from_utf8(message.clone()) {
+                                self.checking_fragments(msg_str,packet.routing_header.hops[0]);
+                            }
+                        }else {
+                            self.log("Failed to reassemble message fragment."); // ancora non ricevuto tutti i frammenti di quella sessione
+                        }
                     }
                 }
             }else{
@@ -187,10 +190,7 @@ impl COntentServer for ContentServer {
             }
         }
     }
-    fn checking_fragments(&mut self, fragment: Fragment,destination: NodeId){
-        if fragment.fragment_index == 1 && 1== fragment.total_n_fragments{
-            // Convert Vec<u8> to String
-            let input = String::from_utf8(Vec::from(fragment.data)).map_err(|e| e.to_string()).ok().unwrap();
+    fn checking_fragments(&mut self, input:String,destination: NodeId){
             // Match the string to enum variants
             match input.as_str() {
                 "ServerType" => self.servertype(ClientCommand::ServerType,destination),
@@ -206,7 +206,6 @@ impl COntentServer for ContentServer {
                 }
                 _ => { self.any_string_to_message("ErrNotFound".to_string(),destination)}
             }
-        }else{}
     }
     fn lists(&mut self, request: ClientCommand, destination: NodeId){
         match request {
