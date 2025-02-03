@@ -3,7 +3,7 @@ use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use host::{ClientCommand, Functionality, Message, SendingCodes, ServerTypes};
 use std::collections::HashMap;
-use std::fmt::Debug;
+use std::fmt::{format, Debug};
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
@@ -30,9 +30,9 @@ impl ChatServer{
             fn build_packet_ack(&self,packet: Packet,fragment_index: Option<u64>) -> Packet;
         }
         to self.info {
-            fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
-            fn any_string_to_message(&self,string:String,destination: NodeId);
-            fn servertype(&self,request:ClientCommand,destination:NodeId);
+            fn create_message(&mut self,data:Vec<u8>,destination:NodeId);
+            fn any_string_to_message(&mut self,string:String,destination: NodeId);
+            fn servertype(&mut self,request:ClientCommand,destination:NodeId);
         }
         to self.info.host.network{
             fn update_graph(&mut self);
@@ -142,31 +142,36 @@ impl ChatServer{
     fn message_for_client(&mut self,destination:NodeId,message:Message,source:NodeId){
         for i in self.client_list.iter(){
             if source==*i{
-                let mut data=format!("MessageFrom:{} {} {:?}",source,message.session_id,message.content);
-                let mut n_packets=data.as_bytes().to_vec().len()/128+1;
-                let mut vtmp = [0;128];
-                vtmp[0]='c' as u8;
-                vtmp[1..2].copy_from_slice(&[data.len() as u8]);
-                if n_packets>=1{
-                    self.create_message(n_packets, &vtmp,data.as_bytes().to_vec(),destination,self.info.host.id);
-                }
+                let data=self.message_for_client_helper(message,source);
+                self.create_message(data,destination);
                 break;
             }else{
+                self.register_to_chat(source);
+                let data1= ("Client was not registered but now it is and the message went through").to_string();
+                self.any_string_to_message(data1,destination);
+                let data=self.message_for_client_helper(message,source);
+                self.create_message(data,destination);
+                break;
                 // Err you need to register before
             }
         }
+    }
+    fn message_for_client_helper(&mut self,message:Message,source:NodeId)->Vec<u8>{
+        let mut data=format!("MessageFrom:{} {} {:?}",source,message.session_id,message.content);
+        let mut data =data.as_bytes().to_vec();
+        let tmp=data.len();
+        data.insert(0,'c' as u8);
+        data.insert(1, tmp as u8);
+        data
     }
     fn register_to_chat(&mut self, id:NodeId){
         self.client_list.push(id);
     }
     fn send_list(&mut self,destination:NodeId){
         let mut data=self.client_list.clone();
-        let mut n_packets=data.as_bytes().to_vec().len()/128+1;
-        let mut vtmp = [0;128];
-        vtmp[..1].copy_from_slice(&[data.len() as u8]);
-        if n_packets>=1{
-            self.create_message(n_packets, &vtmp,data,destination,self.info.host.id);
-        }
+        let tmp=data.len();
+        data.insert(0,tmp as u8);
+        self.create_message(data,destination);
     }
 }
 #[test]

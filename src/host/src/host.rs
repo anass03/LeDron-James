@@ -480,7 +480,6 @@ impl Functionality for Host {
             "Starting message fragmentation: session_id={}, destination={}",
             message.session_id, destination
         ));
-
         // Trova il miglior percorso per la destinazione
         let route = self.network.find_best_route(self.id, destination);
         if route.is_empty() {

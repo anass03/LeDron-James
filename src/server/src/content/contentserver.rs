@@ -44,9 +44,9 @@ impl ContentServer {
             fn build_packet_ack(&self,packet: Packet,fragment_index: Option<u64>) -> Packet;
         }
         to self.info {
-            fn create_message(&self,n_packets:usize,vtmp:&[u8],data:Vec<u8>,destination:NodeId,source:NodeId);
-            fn any_string_to_message(&self,string:String,destination: NodeId);
-            fn servertype(&self,request:ClientCommand,destination:NodeId);
+            fn create_message(&mut self,data:Vec<u8>,destination:NodeId);
+            fn any_string_to_message(&mut self,string:String,destination: NodeId);
+            fn servertype(&mut self,request:ClientCommand,destination:NodeId);
         }
         to self.info.host.network{
             fn update_graph(&mut self);
@@ -119,26 +119,22 @@ impl COntentServer for ContentServer {
             }
         }
     }
-    fn create_vec_for_mess(&self,id:String,destination: NodeId){
-        let mut n_packets=0;
-        let mut vtmp = [0;128];
+    fn create_vec_for_mess(&mut self, id:String, destination: NodeId){
         let mut data=vec![];
         if self.media.contains(&(id.parse().unwrap())) {
             let file=Self::process_image(id.clone());
-            n_packets= file.data.len()/128+1;
-            vtmp[0]='m' as u8;
-            vtmp[1..3].copy_from_slice(&[file.width as u8, file.height as u8]);
-            data=file.data;
+            data.push('m' as u8);
+            data.push(file.width as u8);
+            data.push(file.height as u8);
+            data.extend(file.data);
         }else if self.files.contains(&id.parse().unwrap()) {
             let file=Self::convert_file(id.clone());
-            n_packets= file.len()/128+1;
-            vtmp[0]='f' as u8;
-            vtmp[1..2].copy_from_slice(&[file.len() as u8]);
-            data=file;
+            let tmp= file.len();
+            data.push('f' as u8);
+            data.push(tmp as u8);
+            data.extend(file);
         }
-        if n_packets>=1{
-            self.create_message(n_packets, &vtmp,data,destination,self.info.host.id);
-        }
+            self.create_message(data,destination);
     }
     fn count_files(&mut self) {
         self.media=self.count_media(r"https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/".parse().unwrap());
@@ -219,18 +215,15 @@ impl COntentServer for ContentServer {
             _ =>{}
         }
     }
-    fn for_message_from_vec(&self, v: Vec<u8>,destination: NodeId){
+    fn for_message_from_vec(&mut self, v: Vec<u8>, destination: NodeId){
         let all = v.iter()
             .map(|&byte| byte.to_string()) // Convert each `u8` to a string
             .collect::<Vec<String>>() // Collect into a Vec<String>
             .join(" ");
         let mut data=all.as_bytes().to_vec();
-        let mut n_packets=all.as_bytes().to_vec().len()/128+1;
-        let mut vtmp = [0;128];
-        vtmp[..1].copy_from_slice(&[data.len() as u8]);
-        if n_packets>=1{
-            self.create_message(n_packets, &vtmp,data,destination,self.info.host.id);
-        }
+        let tmp=data.len();
+        data.insert(0,tmp as u8);
+        self.create_message(data,destination);
     }
 }
 #[test]
