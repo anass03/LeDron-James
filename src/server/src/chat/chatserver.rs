@@ -1,7 +1,7 @@
 use crate::{GenServeR, GenServer};
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
-use host::{ClientCommand, Functionality, Message, SendingCodes, ServerTypes};
+use host::{ClientCommand, Functionality, SendingCodes, ServerTypes};
 use std::collections::HashMap;
 use std::fmt::{Debug};
 use std::thread;
@@ -108,40 +108,32 @@ impl ChatServer{
     }
     fn checking_fragments(&mut self, input:String, mut destination:NodeId){
         match input.as_str() {
-            "ServerType" => self.servertype(ClientCommand::ServerType, destination),
-            s if s.starts_with("RegistrationToChat:") => {
-                let client_id = s.strip_prefix("RegistrationToChat:").unwrap().parse::<NodeId>().unwrap();
+            "ServerType?" => self.servertype(ClientCommand::ServerType, destination),
+            s if s.starts_with("RegistrationToChat id:") => {
+                let client_id = s.strip_prefix("RegistrationToChat id:").unwrap().parse::<NodeId>().unwrap();
                 self.register_to_chat(client_id);
             }
-            "ClientList" => self.send_list(destination),
-            s if s.starts_with("MessageFor:") => {
-                let parts: Vec<&str> = s.strip_prefix("MessageFor:").unwrap().splitn(2, ':').collect();
+            "ClientList?" => self.send_list(destination),
+            s if s.starts_with("MessageFor id:") => {
+                let parts= s.strip_prefix("MessageFor id:").unwrap();
+                let parts=parts.split(',').collect::<Vec<&str>>();
                 let source = destination.clone();
-                match parts[0].parse::<u8>() {
-                    Ok(number) => destination = number,
-                    Err(e) => println!("Failed to parse: {:?}", e),
+                // match parts[0].parse::<u8>() {
+                //     Ok(number) => destination = number,
+                //     Err(e) => println!("Failed to parse: {:?}", e),
+                // }
+                if let Ok(number)= parts[0].parse::<u8>(){
+                    let destination=number;
+                    let content= parts[1].strip_prefix("message:").unwrap().to_string();
+                    self.message_for_client(destination, content, source);
+                }else{
+                    println!("Failed to parse");
                 }
-                let message_data = parts[1..].join(" "); // Simulating Message<M> parsing
-                let mut session_id = None;
-                let mut content = None;
-                let mut key_value = message_data.splitn(2, ':');
-                let key = key_value.next().unwrap();
-                let value = key_value.next().unwrap();
-                match key {
-                    "session_id" => session_id = Some(value.parse::<u64>().map_err(|e| e.to_string()).unwrap()),
-                    "content" => content = Some(value.as_bytes().to_vec()),
-                    _ => self.any_string_to_message(format!("Unknown key: {}", key), destination),
-                }
-                let message = Message {
-                    session_id: session_id.ok_or("Invalid format").unwrap(),
-                    content: content.ok_or("Invalid format").unwrap(),
-                };
-                self.message_for_client(destination, message, source);
             }
             _ => { self.any_string_to_message("ErrNotFound".to_string(), destination); },
         }
     }
-    fn message_for_client(&mut self,destination:NodeId,message:Message,source:NodeId){
+    fn message_for_client(&mut self,destination:NodeId,message:String,source:NodeId){
         for i in self.client_list.iter(){
             if source==*i{
                 let data=self.message_for_client_helper(message,source);
@@ -158,8 +150,8 @@ impl ChatServer{
             }
         }
     }
-    fn message_for_client_helper(&mut self,message:Message,source:NodeId)->Vec<u8>{
-        let mut data=format!("MessageFrom:{} {} {:?}",source,message.session_id,message.content);
+    fn message_for_client_helper(&mut self,message:String,source:NodeId)->Vec<u8>{
+        let mut data=format!("MessageFrom: id:{}, message:{:?}",source,message);
         let mut data =data.as_bytes().to_vec();
         let tmp=data.len();
         data.insert(0,'c' as u8);

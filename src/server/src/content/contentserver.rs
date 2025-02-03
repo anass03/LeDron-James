@@ -194,14 +194,14 @@ impl COntentServer for ContentServer {
             // Match the string to enum variants
             match input.as_str() {
                 "ServerType" => self.servertype(ClientCommand::ServerType,destination),
-                "FilesList" => self.lists(ClientCommand::FilesList,destination),
-                "MediaList" => self.lists(ClientCommand::MediaList,destination),
-                s if s.starts_with("File:") => {
-                    let file_id = s.strip_prefix("File:").unwrap().to_string();
+                "FilesList?" => self.lists(ClientCommand::FilesList,destination),
+                "MediaList?" => self.lists(ClientCommand::MediaList,destination),
+                s if s.starts_with("File? id:") => {
+                    let file_id = s.strip_prefix("File? id:").unwrap().to_string();
                     self.create_vec_for_mess(file_id,destination);
                 }
-                s if s.starts_with("Media:") => {
-                    let media_id = s.strip_prefix("Media:").unwrap().to_string();
+                s if s.starts_with("Media? id:") => {
+                    let media_id = s.strip_prefix("Media? id:").unwrap().to_string();
                     self.create_vec_for_mess(media_id,destination);
                 }
                 _ => { self.any_string_to_message("ErrNotFound".to_string(),destination)}
