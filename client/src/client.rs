@@ -4,6 +4,7 @@ use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
 use std::{fs, io};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData};
 use host::ServerTypes::Content;
@@ -35,6 +36,8 @@ impl Client {
         }
     }
     pub fn run(&mut self) {
+        let host_arc = Arc::new(self.host.clone());
+        host_arc.start_tasks();
         self.host.initiate_flood();
         loop {
             crossbeam_channel::select_biased! {
