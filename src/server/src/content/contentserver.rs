@@ -5,11 +5,11 @@ use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::DroneEvent::{PacketDropped, PacketSent};
 use wg_2024::network::{NodeId};
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
-use crate::{GenServeR, MediaServer};
+use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Nack, NodeType, Packet, PacketType};
+use crate::{GenServerBehavior, MediaServer};
 use crate::TextServer;
 use crate::GenServer;
-use host::{ SendingCodes, ClientCommand, Functionality};
+use host::{SendingCodes, ClientCommand, Functionality};
 use delegate::delegate;
 use wg_2024::controller::{ DroneEvent};
 use host::ServerTypes;
@@ -19,15 +19,15 @@ pub struct ContentServer{
     files:Vec<u8>,
     media:Vec<u8>,
 }
-pub trait COntentServer:MediaServer+ TextServer{
+pub trait ContentServerBehavior:MediaServer+ TextServer{
     fn handling_packets(&mut self, packet: Result<Packet,crossbeam_channel::RecvError>);
-    fn create_vec_for_mess(&self, id:String,destination: NodeId);
+    fn create_vec_for_mess(&mut self, id:String,destination: NodeId);
     fn count_files(&mut self);
     fn count_media(&self,folder_path:String)->Vec<u8>;
     fn sendto_controller(&self, packet: Packet, sent: bool) -> Result<(),String>;
-    fn checking_fragments(&mut self, fragment: Fragment,destination: NodeId);
+    fn checking_fragments(&mut self, input:String,destination: NodeId);
     fn lists(&mut self, request:ClientCommand,destination: NodeId);
-    fn for_message_from_vec(&self, v:Vec<u8>,destination: NodeId);
+    fn for_message_from_vec(&mut self, v:Vec<u8>,destination: NodeId);
 }
 impl ContentServer {
     delegate!{
@@ -92,13 +92,13 @@ impl MediaServer for ContentServer {}
 
 impl TextServer for ContentServer {}
 
-impl COntentServer for ContentServer {
+impl ContentServerBehavior for ContentServer {
     fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>) {
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 match packet.clone().pack_type{
-                    PacketType::Nack(_) |
-                    PacketType::Ack(_) =>{},
+                    PacketType::Nack(nack) => {self.handle_nack(nack,packet.routing_header.hops[0],packet.session_id)},
+                    PacketType::Ack(ack) =>{self.handle_ack(ack,packet.session_id)},
                     PacketType::FloodResponse(e) => {
                         self.process_flood_response(e);
                     },
@@ -107,8 +107,7 @@ impl COntentServer for ContentServer {
                         self.process_flood_request(e,packet);
                     },
                     PacketType::MsgFragment(fragment) => {
-                        // self.checking_fragments(fragment,packet.routing_header.hops[0]);
-                        if let Some(message) = self.handle_msg_fragment(packet.clone(),fragment){
+                        if let Some(message) = self.info.handle_msg_fragment(packet.clone(),fragment){
                             if let Ok(msg_str) = String::from_utf8(message.clone()) {
                                 self.checking_fragments(msg_str,packet.routing_header.hops[0]);
                             }
@@ -123,21 +122,26 @@ impl COntentServer for ContentServer {
         }
     }
     fn create_vec_for_mess(&mut self, id:String, destination: NodeId){
-        let mut data=vec![];
+        let mut data=Vec::new();
         if self.media.contains(&(id.parse().unwrap())) {
-            let file=Self::process_image(id.clone());
-            data.push('m' as u8);
-            data.push(file.width as u8);
-            data.push(file.height as u8);
-            data.extend(file.data);
+            if let Ok(file)=Self::process_image(id.clone()){
+                data.push('m' as u8);
+                data.push(file.width as u8);
+                data.push(file.height as u8);
+                data.extend(file.data);
+            }
         }else if self.files.contains(&id.parse().unwrap()) {
-            let file=Self::convert_file(id.clone());
-            let tmp= file.len();
-            data.push('f' as u8);
-            data.push(tmp as u8);
-            data.extend(file);
+            if let Ok(file)=Self::convert_file(id.clone()){
+                let tmp= file.len();
+                data.push('f' as u8);
+                data.push(tmp as u8);
+                data.extend(file);
+            }
         }
-            self.create_message(data,destination);
+            if !data.is_empty(){
+                // everything went well so we can create the message
+                self.create_message(data,destination);
+            }
     }
     fn count_files(&mut self) {
         self.media=self.count_media(r"https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/".parse().unwrap());
@@ -158,7 +162,7 @@ impl COntentServer for ContentServer {
                 }
             })
             .collect();
-        let mut j:Vec<u8> = Vec::new();
+        let mut j = Vec::new();
         for i in file_names{
             j.push(i.parse::<u8>().unwrap())
         }

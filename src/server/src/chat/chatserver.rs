@@ -1,4 +1,4 @@
-use crate::{GenServeR, GenServer};
+use crate::{GenServer, GenServerBehavior};
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use host::{ClientCommand, Functionality, SendingCodes, ServerTypes};
@@ -61,7 +61,7 @@ impl ChatServer{
     pub fn run(&mut self) {
         self.log("Starting Chat Server...");
         loop {      // Listen for packets and commands
-            crossbeam_channel::select_biased! { // Prioritizing Controller messages
+            crossbeam_channel::select_biased! {
                 // using select_biased!
                 // macro.
                 recv(self.info.host.packet_recv) -> packet => {
@@ -77,12 +77,9 @@ impl ChatServer{
     fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>){
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
-                // Only Ack, Nack, FloodResponse already sent
-                // before the drone-crash will be forwarded
-                // during a crashing status.
                 match packet.clone().pack_type{
-                    PacketType::Nack(_) |
-                    PacketType::Ack(_) =>{}
+                    PacketType::Nack(nack) =>{self.handle_nack(nack,packet.routing_header.hops[0],packet.session_id)},
+                    PacketType::Ack(ack) =>{self.handle_ack(ack,packet.session_id)}
                     PacketType::FloodResponse(e) => {
                         self.process_flood_response(e);
                     },
@@ -108,7 +105,7 @@ impl ChatServer{
     }
     fn checking_fragments(&mut self, input:String, mut destination:NodeId){
         match input.as_str() {
-            "ServerType?" => self.servertype(ClientCommand::ServerType, destination),
+            "ServerType" => self.servertype(ClientCommand::ServerType, destination),
             s if s.starts_with("RegistrationToChat id:") => {
                 let client_id = s.strip_prefix("RegistrationToChat id:").unwrap().parse::<NodeId>().unwrap();
                 self.register_to_chat(client_id);
@@ -118,10 +115,6 @@ impl ChatServer{
                 let parts= s.strip_prefix("MessageFor id:").unwrap();
                 let parts=parts.split(',').collect::<Vec<&str>>();
                 let source = destination.clone();
-                // match parts[0].parse::<u8>() {
-                //     Ok(number) => destination = number,
-                //     Err(e) => println!("Failed to parse: {:?}", e),
-                // }
                 if let Ok(number)= parts[0].parse::<u8>(){
                     let destination=number;
                     let content= parts[1].strip_prefix("message:").unwrap().to_string();
@@ -134,21 +127,16 @@ impl ChatServer{
         }
     }
     fn message_for_client(&mut self,destination:NodeId,message:String,source:NodeId){
-        for i in self.client_list.iter(){
-            if source==*i{
+            if self.client_list.contains(&source){
                 let data=self.message_for_client_helper(message,source);
                 self.create_message(data,destination);
-                break;
             }else{
                 self.register_to_chat(source);
                 let data1= "Client was not registered but now it is and the message went through".to_string();
                 self.any_string_to_message(data1,destination);
                 let data=self.message_for_client_helper(message,source);
                 self.create_message(data,destination);
-                break;
-                // Err you need to register before
             }
-        }
     }
     fn message_for_client_helper(&mut self,message:String,source:NodeId)->Vec<u8>{
         let mut data=format!("MessageFrom: id:{}, message:{:?}",source,message);

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
+use delegate::delegate;
 use wg_2024::network::{NodeId};
-use wg_2024::packet::{ Fragment, NodeType, Packet};
+use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
 use host::{ClientCommand, Functionality, Host, Message, generate_unique_session_id, RecSessionData};
 use host::ServerTypes;
 use wg_2024::controller::{DroneEvent};
@@ -13,13 +14,19 @@ pub struct GenServer{
     pub connected_drone_ids:Vec<NodeId>,
     pub server_type:ServerTypes,
 }
-pub trait GenServeR{
+pub trait GenServerBehavior{
     fn create_message(&mut self,data:Vec<u8>,destination:NodeId);
     fn servertype(&mut self,request:ClientCommand,destination:NodeId);
     fn any_string_to_message(&mut self, string:String, destination: NodeId);
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
 }
 impl GenServer {
+    delegate!{
+        to self.host{
+            fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
+            fn log<S: AsRef<str>>(&self, message: S);
+        }
+    }
     pub fn new(id:NodeId,
                type_host:NodeType,
                connected_drone_ids: Vec<NodeId>,
@@ -34,13 +41,17 @@ impl GenServer {
         }
     }
 }
-impl GenServeR for GenServer {
+impl GenServerBehavior for GenServer {
     fn create_message(&mut self, data:Vec<u8>, destination:NodeId) {
         let message=Message{
             session_id: generate_unique_session_id(),
             content: data
         };
-        self.host.build_msg_fragment(destination, message).expect("TODO: panic message");
+        if let Ok(_)=self.host.build_msg_fragment(destination, message){
+            let out= format!("Server ID {} - message build successfully", self.host.id);
+            self.log(out);
+        }
+
     }
     fn servertype(&mut self, request:ClientCommand, destination:NodeId){
         match request {
@@ -63,7 +74,7 @@ impl GenServeR for GenServer {
             self.create_message(data,destination);
     }
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
-        // Ottieni o inizializza il buffer di frammenti per questa sessione
+        // Acquisisce il lock e ottiene (o inizializza) il buffer della sessione
         let mut received_fragments = self.host.received_fragments.lock().unwrap();
         let session_data = received_fragments
             .entry(packet.session_id.clone())
@@ -76,7 +87,10 @@ impl GenServeR for GenServer {
 
         let index = fragment.fragment_index as usize;
 
-        // Verifica l'indice del frammento
+        // // Rilascia il lock il prima possibile connected to
+        // drop(received_fragments); connected to line 116 decomment insieme
+
+        // Verifica se l'indice è valido
         if index >= buffer.len() {
             self.host.log(format!(
                 "Invalid fragment index: {} (session ID: {})",
@@ -94,11 +108,11 @@ impl GenServeR for GenServer {
             return None;
         }
 
-        // Memorizza il frammento
+        // Memorizza il frammento (senza clonare inutilmente)
         buffer[index] = Some(fragment.clone());
 
-        // Invia un ACK per il frammento ricevuto
-        let ack_packet = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        // Invia un ACK (ora senza mantenere il lock)
+        let ack_packet = self.host.build_packet_ack(*packet, Some(fragment.fragment_index));
         self.host.send_packet(ack_packet, None);
 
         // Verifica se tutti i frammenti sono stati ricevuti
@@ -108,18 +122,17 @@ impl GenServeR for GenServer {
                 packet.session_id
             ));
 
-            // Ricostruisce il messaggio
-            let content = buffer
-                .iter()
-                .filter_map(|f| f.as_ref())
-                .flat_map(|frag| frag.data[..frag.length as usize].to_vec())
-                .collect::<Vec<u8>>();
+            // Ottieni nuovamente il lock per rimuovere la sessione
+            // let mut received_fragments = self.host.received_fragments.lock().unwrap(); to activate decomment line 80/81
+            // let session_data = received_fragments.remove(&packet.session_id).unwrap();
 
-            // Rimuove il buffer per questa sessione
-            received_fragments.remove(&packet.session_id);
-            return Some(content)
+            // Ricostruisce il messaggio ottimizzando l'allocazione
+            let mut content = Vec::with_capacity(fragment.total_n_fragments as usize * FRAGMENT_DSIZE);
+            for frag in session_data.buffer.iter().filter_map(|f| f.as_ref()) {
+                content.extend_from_slice(&frag.data[..frag.length as usize]);
+            }
+            return Some(content);
         }
-
         None
     }
 }
