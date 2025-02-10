@@ -508,7 +508,7 @@ pub fn interact_with_media_list_button(
         match *interaction {
             Interaction::Pressed => {
                 *background_color = PRESSED_BUTTON_COLOR.into();
-                let node_id = match selected_client.client_id {
+                match selected_client.client_id {
                     Some(id) => Some(id),
                     None => None
                 };
@@ -535,7 +535,7 @@ pub fn interact_with_media_button(
         match *interaction {
             Interaction::Pressed => {
                 *background_color = PRESSED_BUTTON_COLOR.into();
-                let node_id = match selected_client.client_id {
+                match selected_client.client_id {
                     Some(id) => Some(id),
                     None => None
                 };
@@ -617,7 +617,7 @@ pub fn interact_with_registration_to_chat_button(
         match *interaction {
             Interaction::Pressed => {
                 *background_color = PRESSED_BUTTON_COLOR.into();
-                let node_id = match selected_client.client_id {
+                match selected_client.client_id {
                     Some(id) => Some(id),
                     None => None
                 };
@@ -642,7 +642,7 @@ pub fn interact_with_client_list_button(
         match *interaction {
             Interaction::Pressed => {
                 *background_color = PRESSED_BUTTON_COLOR.into();
-                let node_id = match selected_client.client_id {
+                match selected_client.client_id {
                     Some(id) => Some(id),
                     None => None
                 };
@@ -658,8 +658,6 @@ pub fn interact_with_client_list_button(
     }
 }
 
-///IMPLEMENTARE MESSAGE FOR
-
 pub fn interact_with_message_for_button(
     mut commands: Commands,
     mut button_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<MessageForButton>)>,
@@ -671,7 +669,7 @@ pub fn interact_with_message_for_button(
         match *interaction {
             Interaction::Pressed => {
                 *background_color = PRESSED_BUTTON_COLOR.into();
-                let node_id = match selected_client.client_id {
+                match selected_client.client_id {
                     Some(id) => Some(id),
                     None => None
                 };

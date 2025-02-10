@@ -3,6 +3,7 @@ mod systems;
 
 use bevy::prelude::*;
 use crate::server::systems::*;
+
 pub struct ServerPlugin;
 
 impl Plugin for ServerPlugin {

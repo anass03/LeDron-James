@@ -1,7 +1,7 @@
 use bevy::asset::AssetServer;
 use bevy::color::Color;
 use bevy::prelude::*;
-use crate::simulation_controller::SelectedDrone;
+use crate::simulation_controller::{log, SelectedDrone};
 use crate::ui::option_menu::components::DroneIdText;
 
 pub const NORMAL_BUTTON_COLOR: Color = Color::srgb(0.15, 0.15, 0.15);

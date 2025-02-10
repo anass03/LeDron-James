@@ -4,6 +4,7 @@ pub mod style;
 
 use bevy::prelude::*;
 use crate::drone::systems::*;
+
 pub struct DronePlugin;
 
 impl Plugin for DronePlugin {
@@ -12,7 +13,8 @@ impl Plugin for DronePlugin {
             .add_systems(Startup, spawn_drone)
             .add_systems(Update, (
                 join,
-                handle_drone_packet_sent
+                handle_drone_packet_sent,
+                neighbours
             ))
         ;
     }

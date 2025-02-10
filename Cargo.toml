@@ -9,6 +9,7 @@ serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 simulation_controller = { path = "src/simulation_controller"}
 drone = { path = "src/drone"}
+initializer = { path = "src/initializer"}
 toml = "0.8.19"
 crossbeam-channel = "0.5.13"
 

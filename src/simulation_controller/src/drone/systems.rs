@@ -5,7 +5,7 @@ use rand::Rng;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use crate::drone::style::*;
-use crate::simulation_controller::{SelectedDrone, SimulationController};
+use crate::simulation_controller::{log, SelectedDrone, SimulationController};
 
 pub fn spawn_drone(     //this bevy system spawns each drone that has been inserted in the SimContr
     mut commands: Commands,
@@ -159,16 +159,24 @@ pub fn handle_drone_packet_sent(
         for recieved in reciever.1.iter() {
             match recieved {
                 DroneEvent::PacketSent(packet) => {
-                    println!("Packet sent: {:?}", packet);
+                    log(format!("Packet sent: {:?}", packet).as_str());
                 },
                 DroneEvent::PacketDropped(packet) => {
-                    println!("Packet dropped: {:?}", packet);
+                    log(format!("Packet dropped: {:?}", packet).as_str());
                 },
                 DroneEvent::ControllerShortcut(packet) => {
-                    println!("Controller shortcut: {:?}", packet);
+                    log(format!("Controller shortcut: {:?}", packet).as_str());
                 }
             }
         }
+    }
+}
+
+pub fn neighbours(
+    simulation_controller: Res<SimulationController>
+) {
+    for (neighbour, _) in simulation_controller.drone_command_sender.iter() {
+        log(format!("Channel for drone {:?}", neighbour).as_str());
     }
 }
 

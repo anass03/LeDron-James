@@ -7,7 +7,7 @@ use host::{ClientCommand, ClientId, FileId, MediaId, Message};
 use crate::client::components::Client;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::{get_drone_crashed_form_id, get_drone_transform_from_id};
-use crate::simulation_controller::{SelectedClient, SimulationController};
+use crate::simulation_controller::{log, SelectedClient, SimulationController};
 
 pub fn spawn_clients(
     mut commands: Commands,
@@ -51,6 +51,7 @@ pub fn join(
     drone_query: Query<(&ScDrone, &Transform), With<ScDrone>>,
     simulation_controller: Res<SimulationController>,
 ) {
+    log("joining clients");
     for (client1, transform) in client_query.iter() {
         let start = transform.translation.truncate(); // Convert to Vec2
 
@@ -71,7 +72,7 @@ pub fn server_type(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -85,7 +86,7 @@ pub fn file_list(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -100,7 +101,7 @@ pub fn file(
     simulation_controller: &Res<SimulationController>,
     file_id: usize,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -114,7 +115,7 @@ pub fn media_list(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -129,7 +130,7 @@ pub fn media(
     simulation_controller: &Res<SimulationController>,
     media: MediaId,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -143,7 +144,7 @@ pub fn registration_to_chat(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -157,7 +158,7 @@ pub fn client_list(
     selected_client: &Res<SelectedClient>,
     simulation_controller: &Res<SimulationController>,
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -173,7 +174,7 @@ pub fn message_for(
     recipient_client: usize,
     message: String
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");
@@ -188,7 +189,7 @@ pub fn controller_shortcut(
     simulation_controller: &Res<SimulationController>,
     packet: Packet
 ) {
-    let current_client = match selected_client.clone().client_id {
+    let current_client = match selected_client.client_id {
         Some(client_id) => client_id,
         None => {
             println!("No client selected!");

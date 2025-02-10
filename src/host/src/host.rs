@@ -5,12 +5,14 @@ use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, 
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
+use std::thread;
 use std::time::{Duration, Instant};
 use petgraph::algo::dijkstra;
 use petgraph::graph::{DiGraph, NodeIndex};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde_json::to_string;
+use tokio::runtime::Runtime;
 use wg_2024::controller::DroneEvent::{PacketSent};
 pub type FileId = usize;
 pub type MediaId = usize;
@@ -617,17 +619,30 @@ impl Functionality for Host {
 
         self.log("Pulizia delle sessioni completata.");
     }
-    fn start_session_cleanup(self: Arc<Self>, timeout: Duration, interval: Duration) {
+    /*fn start_session_cleanup(self: Arc<Self>, timeout: Duration, interval: Duration) {
         let host_ref = Arc::clone(&self);
+        let rt = Runtime::new().expect("Failed to create Tokio runtime"); // Crea un runtime
 
-        tokio::spawn(async move {
+        rt.spawn(async move {
             let mut interval_timer = tokio::time::interval(interval);
             loop {
                 interval_timer.tick().await;
                 host_ref.cleanup_expired_sessions(timeout);
             }
         });
+    }*/
+
+    fn start_session_cleanup(self: Arc<Self>, timeout: Duration, interval: Duration) {
+        let host_ref = Arc::clone(&self);
+
+        thread::spawn(move || {
+            loop {
+                thread::sleep(interval);
+                host_ref.cleanup_expired_sessions(timeout);
+            }
+        });
     }
+
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment> {
         let sent_fragments = self.sent_fragments.lock().unwrap();
         sent_fragments
@@ -655,7 +670,7 @@ impl Functionality for Host {
             ));
         }
     }
-    fn start_retransmission_task(self: Arc<Self>, retransmission_interval: Duration) {
+    /*fn start_retransmission_task(self: Arc<Self>, retransmission_interval: Duration) {
         let sent_fragments = Arc::clone(&self.sent_fragments);
 
         self.log(&format!(
@@ -663,7 +678,9 @@ impl Functionality for Host {
             retransmission_interval.as_millis()
         ));
 
-        tokio::spawn(async move {
+        let rt = Runtime::new().expect("Failed to create Tokio runtime"); // Crea un Tokio runtime
+
+        rt.spawn(async move {
             let mut interval_timer = tokio::time::interval(retransmission_interval);
             let mut retry_count = 0;
 
@@ -671,29 +688,63 @@ impl Functionality for Host {
                 interval_timer.tick().await;
                 retry_count += 1;
 
-                self.log(&format!(
-                    "Retransmission cycle #{} started",
-                    retry_count
-                ));
+                println!("Retransmission cycle #{} started", retry_count);
                 let now = Instant::now();
                 let mut fragments = sent_fragments.lock().unwrap();
 
                 for (session_id, session) in fragments.iter_mut() {
                     let fragments_count = session.buffer.iter().filter(|f| f.is_some()).count();
-                    self.log(&format!(
+                    println!(
                         "Checking session {} ({} pending fragments)",
                         session_id, fragments_count
-                    ));
+                    );
 
                     for (i, fragment) in session.buffer.iter_mut().enumerate() {
                         if let Some(fragment) = fragment {
                             let elapsed = now.duration_since(session.last_activity);
                             if elapsed > retransmission_interval {
-                                self.log(&format!(
+                                println!(
                                     "Retransmitting fragment {} for session {} (elapsed: {:?})",
                                     i, session_id, elapsed
-                                ));
-                                self.send_fragment(*session_id, fragment.clone());
+                                );
+                                session.last_activity = Instant::now();
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }*/
+
+    fn start_retransmission_task(self: Arc<Self>, retransmission_interval: Duration) {
+        let sent_fragments = Arc::clone(&self.sent_fragments);
+
+        thread::spawn(move || {
+            let mut retry_count = 0;
+
+            loop {
+                thread::sleep(retransmission_interval);
+                retry_count += 1;
+
+                //println!("Retransmission cycle #{} started", retry_count);
+                let now = Instant::now();
+                let mut fragments = sent_fragments.lock().unwrap();
+
+                for (session_id, session) in fragments.iter_mut() {
+                    let fragments_count = session.buffer.iter().filter(|f| f.is_some()).count();
+                    /*println!(
+                        "Checking session {} ({} pending fragments)",
+                        session_id, fragments_count
+                    );*/
+
+                    for (i, fragment) in session.buffer.iter_mut().enumerate() {
+                        if let Some(fragment) = fragment {
+                            let elapsed = now.duration_since(session.last_activity);
+                            if elapsed > retransmission_interval {
+                                println!(
+                                    "Retransmitting fragment {} for session {} (elapsed: {:?})",
+                                    i, session_id, elapsed
+                                );
                                 session.last_activity = Instant::now();
                             }
                         }

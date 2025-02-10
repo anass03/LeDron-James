@@ -17,3 +17,4 @@ drone = { path = "/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/Le
 client = { path = "../client" }
 host = { path = "../host" }
 server = { path = "../server" }
+colored = "2.0"
