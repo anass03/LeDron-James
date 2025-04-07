@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
-use crate::client::systems::*;
+//use crate::client::systems::*;
 use crate::drone::components::ScDrone;
 use crate::drone::systems::*;
 use crate::simulation_controller::{SimulationController, SelectedDrone, SelectedClient};
@@ -301,7 +301,7 @@ pub fn interact_with_confirm_set_pdr_button(
     }
 }
 
-
+/*
 pub fn interact_with_server_type_button(
     mut button_query: Query<(&Interaction, &mut BackgroundColor), (Changed<Interaction>, With<ServerTypeButton>)>,
     simulation_controller: Res<SimulationController>,
@@ -771,3 +771,4 @@ pub fn interact_with_confirm_message_for_button(
         }
     }
 }
+*/

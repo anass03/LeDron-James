@@ -18,3 +18,5 @@ client = { path = "../client" }
 host = { path = "../host" }
 server = { path = "../server" }
 colored = "2.0"
+ratatui = "0.30.0-alpha.2"
+crossterm = "0.29.0"

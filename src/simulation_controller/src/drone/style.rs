@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 
 pub fn get_drone_area_x(
     window: &Window
@@ -10,4 +10,4 @@ pub fn get_drone_area_y(
     window: &Window
 ) -> std::ops::Range<f32> {
     (window.height() / 4.0)..(window.height() / 4.0 * 3.0)
-}
+}*/

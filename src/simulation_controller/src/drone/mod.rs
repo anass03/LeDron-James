@@ -1,4 +1,4 @@
-pub mod systems;
+/*pub mod systems;
 pub mod components;
 pub mod style;
 
@@ -18,4 +18,4 @@ impl Plugin for DronePlugin {
             ))
         ;
     }
-}
+}*/

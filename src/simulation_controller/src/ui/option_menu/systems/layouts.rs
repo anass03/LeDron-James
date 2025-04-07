@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 use bevy::ui::NodeType::Rect;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
@@ -903,4 +903,4 @@ pub fn spawn_message_for_menu(
             ));
         });
     });
-}
+}*/

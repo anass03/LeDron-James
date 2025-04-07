@@ -1,4 +1,4 @@
-pub mod components;
+/*pub mod components;
 pub mod systems;
 
 use bevy::prelude::*;
@@ -16,4 +16,4 @@ impl Plugin for ClientPlugin {
             ))
         ;
     }
-}
+}*/

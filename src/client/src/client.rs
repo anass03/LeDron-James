@@ -41,11 +41,15 @@ impl Client {
                 recv(self.controller_recv) -> command => {
                     if let Ok(command) = command {
                         self.handle_command(command);
+                    }else{
+                        return;
                     }
                 }
                 recv(self.host.packet_recv) -> packet => {
                     if let Ok(packet) = packet {
                         self.handle_packet(packet);
+                    }else{
+                        return;
                     }
                 }
                 default => {

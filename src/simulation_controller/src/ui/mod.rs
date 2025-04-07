@@ -1,4 +1,4 @@
-use bevy::app::*;
+/*use bevy::app::*;
 use crate::ui::option_menu::OptionMenuPlugin;
 use crate::ui::systems::layouts::*;
 
@@ -16,9 +16,9 @@ impl Plugin for UiPlugin {
             .add_systems(Startup, spawn_camera)
             .add_systems(Update, (
                 drone_clicked,
-                client_clicked,
+                //client_clicked,
             ))
 
         ;
     }
-}
+}*/

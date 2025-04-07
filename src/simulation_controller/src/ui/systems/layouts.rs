@@ -1,7 +1,7 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 use bevy::window::{PrimaryWindow};
 use crate::drone::components::ScDrone;
-use crate::client::components::Client;
+//use crate::client::components::Client;
 use crate::simulation_controller::{OptionMenu, SelectedClient, SelectedDrone};
 
 pub fn spawn_camera(
@@ -46,7 +46,7 @@ pub fn drone_clicked(
     }
 }
 
-pub fn client_clicked(
+/*pub fn client_clicked(
     client_query: Query<(&Client, &Transform), With<Client>>,
     mouse: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window, With<PrimaryWindow>>,
@@ -67,4 +67,4 @@ pub fn client_clicked(
             }
         }
     }
-}
+}*/*/

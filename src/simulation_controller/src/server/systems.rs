@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::network::NodeId;
 use crate::drone::components::ScDrone;
@@ -62,4 +62,4 @@ pub fn join(
             }
         }
     }
-}
+}*/

@@ -1,4 +1,4 @@
-//here we implement the Simulation Controller's commands
+/*//here we implement the Simulation Controller's commands
 use wg_2024::controller::DroneCommand;
 use crate::simulation_controller::SimulationController;
 
@@ -10,3 +10,4 @@ impl SimulationController {
         }
     }
 }
+*/

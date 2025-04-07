@@ -1,4 +1,4 @@
-mod components;
+/*mod components;
 mod systems;
 
 use bevy::prelude::*;
@@ -13,4 +13,4 @@ impl Plugin for ServerPlugin {
             .add_systems(Update, join)
         ;
     }
-}
+}*/

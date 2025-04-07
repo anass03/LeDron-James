@@ -66,8 +66,13 @@ impl ChatServer{
                 // using select_biased!
                 // macro.
                 recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets(packet);
-                thread::sleep(Duration::from_millis(2000));
+                    match self.handling_packets(packet){
+                        Ok(_) => (),
+                        Err(_) => {
+                            return;
+                        }
+                    };
+                //thread::sleep(Duration::from_millis(2000));
                 // default => {
                 //     println!("LeDron ID {:?} - Waiting for messages...", self.id)
                 // }
@@ -75,7 +80,7 @@ impl ChatServer{
             }
         }
     }
-    fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>){
+    fn handling_packets(&mut self, packet:Result<Packet, crossbeam_channel::RecvError>)->Result<(),()>{
         if !self.info.host.packet_recv.is_empty(){
             if let Ok(packet) = packet {
                 // Only Ack, Nack, FloodResponse already sent
@@ -104,8 +109,10 @@ impl ChatServer{
                 }
             }else{
                 println!("Failed to parse packet [Crossbeam Error]");
+                return Err(())
             }
         }
+        Ok(())
     }
     fn checking_fragments(&mut self, input:String, mut destination:NodeId){
         match input.as_str() {

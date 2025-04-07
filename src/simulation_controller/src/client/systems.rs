@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
@@ -218,4 +218,4 @@ pub fn handle_client_packet_sent (
             }
         }
     }
-}
+}*/

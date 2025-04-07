@@ -1,4 +1,4 @@
-use bevy::asset::AssetServer;
+/*use bevy::asset::AssetServer;
 use bevy::color::Color;
 use bevy::prelude::*;
 use crate::simulation_controller::{log, SelectedDrone};
@@ -63,3 +63,4 @@ pub fn update_node_id_text(
         text.sections[0].value = format!("Drone: {}", node_id.drone_id.unwrap());
     }
 }
+*/

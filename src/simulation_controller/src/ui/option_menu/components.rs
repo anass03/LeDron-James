@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+/*use bevy::prelude::*;
 use wg_2024::network::NodeId;
 
 #[derive(Component)]
@@ -126,3 +126,4 @@ pub struct ConfirmMessageForButton;
 pub struct ClientMessageInputText {
     pub(crate) value: String
 }
+*/
