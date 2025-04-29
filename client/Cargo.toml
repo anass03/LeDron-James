@@ -11,3 +11,5 @@ crossbeam-channel = "0.5.13"
 rand = "0.9.0-beta.1"
 host = { path = "../host"}
 image = "0.25.5" # Aggiungi `host` come dipendenza
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
