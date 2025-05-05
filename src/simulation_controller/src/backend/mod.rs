@@ -1,2 +1,2 @@
 mod commands;
-pub mod simulation_controller;
+pub (crate) mod simulation_controller;
