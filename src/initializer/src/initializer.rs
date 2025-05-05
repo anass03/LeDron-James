@@ -10,9 +10,15 @@ use drone::Drone as LeDron;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
 use server::chatserver::ChatServer as LeChatServer;
-use simulation_controller::simulation_controller::{log, SimulationController};
+use simulation_controller::backend::simulation_controller::{log, SimulationController};
 
-pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServerType {
+    Chat,
+    Content,
+}
+
+pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
     /// - Parsing the network configuration
     let config = parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
     // config contains {
@@ -20,6 +26,7 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
     //  vector of clients
     //  vector of servers
     // }
+    let _config_check = check_config(&config);
 
     /// - Creating and assigning the packet channels to each node
     let mut packet_senders = HashMap::new();
@@ -33,7 +40,7 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
         packet_senders.insert(drone.id, s);
         packet_receivers.insert(drone.id, r);
     }
-/*
+
     for client in config.client.iter() {
         // for each client in the config we create the packet sender and receiver and we insert them
         // in the related hashmap
@@ -48,16 +55,16 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
         packet_senders.insert(server.id, s);
         packet_receivers.insert(server.id, r);
     }
-*/
-    /// - handles contains all the node's threads handles
-    let mut handles = Vec::new();
+
+    /// - handles contains all the node's threads handles with NodeId as key
+    let mut handles = HashMap::new();
 
     /// - preparing command and event channels hashmaps
     let mut drone_command_sender = HashMap::new();
     let mut drone_event_receiver = HashMap::new();
-    /*let mut client_command_sender = HashMap::new();
+    let mut client_command_sender = HashMap::new();
     let mut client_event_receiver = HashMap::new();
-    let mut server_event_receiver = HashMap::new();*/
+    let mut server_event_receiver = HashMap::new();
     // these hashmaps will contain the senders and receivers paired with each NodeId
 
     /// - Initializing the drones
@@ -79,10 +86,9 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
 
 
         let drone_clone = drone.clone();
-        println!("Drone {} -> Sender {:?}, Receiver {:?}", drone_clone.id, drone_packet_send, drone_packet_recv);
 
         /// - spawning the thread of the drone and collecting the handle in a vector
-        handles.push(thread::spawn(move || {
+        handles.insert(drone.id, thread::spawn(move || {
             let mut drone = LeDron::new(
                 drone_clone.id,
                 drone_event_sender,
@@ -91,11 +97,11 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
                 drone_packet_send,
                 drone_clone.pdr,
             );
-        // /// - running the drone
-            //drone.run();
+            /// - running the drone
+            drone.run();
         }));
     }
-/*
+
     /// - Initializing the clients
     for client in config.client.iter() {
         let client_id = client.id;
@@ -117,10 +123,8 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
             .map(|&id| (id, packet_senders[&id].clone()))
             .collect();
 
-        println!("Client {} -> Sender {:?}, Receiver {:?}", client_id, packet_send, packet_recv);
-
         /// - spawning the thread of the client and collecting the handle in a vector
-        handles.push(thread::spawn(move || {
+        handles.insert(client.id, thread::spawn(move || {
             let mut client = LeClient::new(
                 client_id,
                 NodeType::Client,
@@ -136,32 +140,30 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
     }
 
     /// - Initializing the servers
-    let mut curr_server = 0;
-    for server in config.server.iter() {
+    for (i, server) in config.server.iter().enumerate() {
+        let server_type = match i {
+            0 => ServerType::Chat,
+            1 => ServerType::Content,
+            _ => {
+                println!("Too many servers ({}). Ignoring extra server with id {}", i, server.id);
+                continue;
+            }
+        };
 
         let server_id = server.id;
         let connected_drone_ids = server.connected_drone_ids.clone();
 
-        // creating the actual server channel for events
         let (server_event_sender, server_event_recv) = unbounded();
-
-
-        // inserting channel in related hashmap
         server_event_receiver.insert(server_id, server_event_recv);
 
-        // taking the unique server packet receiver that can't be cloned
         let packet_recv = packet_receivers.remove(&server_id).unwrap();
-        // gathering all the senders for the connected nodes cloning them
         let packet_send: HashMap<_, _> = connected_drone_ids
             .iter()
             .map(|&id| (id, packet_senders[&id].clone()))
             .collect();
 
-        println!("Server {} -> Sender {:?}, Receiver {:?}", server_id, packet_send, packet_recv);
-
-        /// - spawning the thread of the Chat server and collecting the handle in a vector
-        if curr_server == 0 {
-            handles.push(thread::spawn(move || {
+        let handle = match server_type {
+            ServerType::Chat => thread::spawn(move || {
                 let mut server = LeChatServer::new(
                     server_id,
                     NodeType::Server,
@@ -170,13 +172,9 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
                     packet_recv,
                     packet_send,
                 );
-                /// - running the Chat server
                 server.run();
-            }));
-            curr_server = curr_server + 1;
-        } else if curr_server == 1 {
-            /// - spawning the thread of the Content server and collecting the handle in a vector
-            handles.push(thread::spawn(move || {
+            }),
+            ServerType::Content => thread::spawn(move || {
                 let mut server = LeContentServer::new(
                     server_id,
                     NodeType::Server,
@@ -185,21 +183,15 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
                     packet_recv,
                     packet_send,
                 );
-                /// - running the Content server
                 server.run();
-            }));
-            curr_server = curr_server + 1;
-        } else {
-            println!("Error running servers")
-        }
+            }),
+        };
 
+        handles.insert(server_id, handle);
     }
-*/
-    println!("Packet senders: {:?}", packet_senders);
-    println!("Packet receivers: {:?}", packet_receivers);
 
     /// - Connecting the Simulation Controller to all the channels and nodes
-    /*let controller = SimulationController::new(
+    let controller = SimulationController::new(
         config.clone(),
         drone_command_sender,
         drone_event_receiver,
@@ -207,18 +199,9 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
         client_event_receiver,
         server_event_receiver,
         packet_senders,
-    );*/
-    let controller = SimulationController::new(
-        config.clone(),
-        drone_command_sender,
-        drone_event_receiver,
-        //client_command_sender,
-        //client_event_receiver,
-        //server_event_receiver,
-        packet_senders,
     );
 
-    log("All the threads have been initialized correctly");
+    log("Exiting initialization");
 
     (controller, handles)
 }
@@ -226,4 +209,86 @@ pub fn initialize() -> (SimulationController, Vec<JoinHandle<()>>) {
 pub fn parse_config(file: &str) -> Config {
     let file_str = fs::read_to_string(file).unwrap();
     toml::from_str(&file_str).unwrap()
+}
+
+// err pdr > 1
+pub fn check_config(config: &Config) -> Result<(), String> {
+    use std::collections::HashSet;
+
+    let drone_map: HashMap<_, _> = config.drone.iter().map(|d| (d.id, d)).collect();
+    let client_map: HashMap<_, _> = config.client.iter().map(|c| (c.id, c)).collect();
+    let server_map: HashMap<_, _> = config.server.iter().map(|s| (s.id, s)).collect();
+
+    let mut errors = Vec::new();
+
+    // === Unique ID check across all node types ===
+    let mut id_set = HashSet::new();
+    for drone in &config.drone {
+        if !id_set.insert(drone.id) {
+            errors.push(format!("Duplicate NodeId found: {}", drone.id));
+        }
+    }
+    for client in &config.client {
+        if !id_set.insert(client.id) {
+            errors.push(format!("Duplicate NodeId found: {}", client.id));
+        }
+    }
+    for server in &config.server {
+        if !id_set.insert(server.id) {
+            errors.push(format!("Duplicate NodeId found: {}", server.id));
+        }
+    }
+
+    // === Existing check: drone -> node ===
+    for drone in &config.drone {
+        for node_id in &drone.connected_node_ids {
+            if let Some(client) = client_map.get(node_id) {
+                if !client.connected_drone_ids.contains(&drone.id) {
+                    errors.push(format!("Client {} does not link back to Drone {}", client.id, drone.id));
+                }
+            } else if let Some(server) = server_map.get(node_id) {
+                if !server.connected_drone_ids.contains(&drone.id) {
+                    errors.push(format!("Server {} does not link back to Drone {}", server.id, drone.id));
+                }
+            } else if let Some(conn_drone) = drone_map.get(node_id) {
+                if !conn_drone.connected_node_ids.contains(&drone.id) {
+                    errors.push(format!("Drone {} does not link back to Drone {}", conn_drone.id, drone.id));
+                }
+            } else {
+                errors.push(format!("Node {} connected to Drone {} does not exist", node_id, drone.id));
+            }
+        }
+    }
+
+    // === Existing check: client -> drone ===
+    for client in &config.client {
+        for drone_id in &client.connected_drone_ids {
+            if let Some(drone) = drone_map.get(drone_id) {
+                if !drone.connected_node_ids.contains(&client.id) {
+                    errors.push(format!("Drone {} does not link back to Client {}", drone.id, client.id));
+                }
+            } else {
+                errors.push(format!("Client {} refers to unknown Drone {}", client.id, drone_id));
+            }
+        }
+    }
+
+    // === Existing check: server -> drone ===
+    for server in &config.server {
+        for drone_id in &server.connected_drone_ids {
+            if let Some(drone) = drone_map.get(drone_id) {
+                if !drone.connected_node_ids.contains(&server.id) {
+                    errors.push(format!("Drone {} does not link back to Server {}", drone.id, server.id));
+                }
+            } else {
+                errors.push(format!("Server {} refers to unknown Drone {}", server.id, drone_id));
+            }
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors.join("\n"))
+    }
 }
