@@ -238,7 +238,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
- "host",
+ "host 0.1.0",
  "image",
  "rand 0.9.0",
  "serde",
@@ -757,6 +757,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "host"
+version = "0.1.0"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#afefc372143dc99d303f036e2b4e0014a1119f21"
+dependencies = [
+ "crossbeam-channel",
+ "image",
+ "petgraph 0.7.1",
+ "rand 0.9.0",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wg_2024",
+]
+
+[[package]]
+name = "host"
+version = "0.1.0"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#56905a148ef3f5f8e6a5b47af2662d474a54149f"
+dependencies = [
+ "crossbeam-channel",
+ "petgraph 0.6.5",
+ "rand 0.9.0",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "wg_2024",
+]
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1034,10 +1065,10 @@ dependencies = [
  "client",
  "crossbeam-channel",
  "drone",
- "host",
+ "host 0.1.0",
  "serde",
  "serde_json",
- "server",
+ "server 0.1.0",
  "simulation_controller",
  "toml",
  "wg_2024",
@@ -1911,7 +1942,24 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "delegate",
- "host",
+ "host 0.1.0",
+ "image",
+ "petgraph 0.6.5",
+ "rand 0.9.0",
+ "reqwest",
+ "tokio",
+ "url",
+ "wg_2024",
+]
+
+[[package]]
+name = "server"
+version = "0.1.0"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#56905a148ef3f5f8e6a5b47af2662d474a54149f"
+dependencies = [
+ "crossbeam-channel",
+ "delegate",
+ "host 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=server)",
  "image",
  "petgraph 0.6.5",
  "rand 0.9.0",
@@ -1977,19 +2025,18 @@ name = "simulation_controller"
 version = "0.1.0"
 dependencies = [
  "LeDron_James",
- "client",
  "colored",
  "crossbeam-channel",
  "crossterm 0.29.0",
  "drone",
- "host",
+ "host 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=client)",
  "log",
  "petgraph 0.7.1",
  "rand 0.8.5",
  "ratatui",
  "serde",
  "serde_json",
- "server",
+ "server 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=server)",
  "toml",
  "tui-textarea",
  "wg_2024",
@@ -2283,7 +2330,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "784e0ac535deb450455cbfa28a6f0df145ea1bb7ae51b821cf5e7927fdcfbdd0"
 dependencies = [
  "pin-project-lite",
+ "tracing-attributes",
  "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.28"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "395ae124c09f9e6918a2310af6038fba074bcf474ac352496d5910dd59a2226d"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]

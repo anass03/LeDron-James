@@ -1,7 +1,8 @@
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientCommand, ClientId, FileId, MediaId, Message, ServerToClient};
+use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
+use host::HostEvent::PacketSent;
 use crate::backend::simulation_controller::{log, SimulationController};
 
 impl SimulationController {

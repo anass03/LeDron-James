@@ -21,6 +21,5 @@ wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
 LeDron_James = { git = "https://github.com/anass03/LeDron_James.git",default-features = false}
 
 drone = { path = "../drone"}
-client = { path = "../client" }
-host = { path = "../host" }
-server = { path = "../server" }
+host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client"}
+server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
