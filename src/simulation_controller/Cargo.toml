@@ -3,17 +3,22 @@ name = "simulation_controller"
 version = "0.1.0"
 edition = "2021"
 
-
 [dependencies]
 rand = "0.8.5"
-wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
-wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 crossbeam-channel = "0.5.13"
 toml = "0.8.19"
 colored = "2.0"
 crossterm = "0.29.0"
+ratatui = "0.29.0"
+tui-textarea = "0.7.0"
+log = "0.4.27"
+petgraph = "0.7.1"
+
+wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
+wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
+LeDron_James = { git = "https://github.com/anass03/LeDron_James.git",default-features = false}
 
 drone = { path = "../drone"}
 client = { path = "../client" }
