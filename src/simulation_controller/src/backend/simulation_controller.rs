@@ -11,7 +11,7 @@ use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
-use host::{ClientCommand, NetCommand};
+use host::{ClientCommand, HostEvent, NetCommand};
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -27,7 +27,7 @@ pub struct SimulationController {
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone
     pub drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,   //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-    pub client_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
+    pub client_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
     pub server_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
     //pub packet_receiver: HashMap<NodeId, Receiver<Packet>>,     //packet receiver of each node
@@ -39,7 +39,7 @@ impl SimulationController {
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
         drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
         client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-        client_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
+        client_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
         server_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
         //packet_receiver: HashMap<NodeId, Receiver<Packet>>,
