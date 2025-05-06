@@ -1,4 +1,4 @@
-use crossbeam_channel::{Receiver, Sender};
+/*use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::{DroneEvent};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
@@ -345,4 +345,4 @@ fn revert_image(data: Vec<u8>) -> Result<DynamicImage, String> {
 //         .ok_or("Failed to create ImageBuffer from raw bytes")?;
 //
 //     Ok(DynamicImage::ImageRgba8(img_buffer))
-// }
+// }*/

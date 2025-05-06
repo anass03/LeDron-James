@@ -6,9 +6,13 @@ version = 4
 name = "LeDron-James"
 version = "0.1.0"
 dependencies = [
+ "client",
  "crossbeam-channel",
+ "host 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=client)",
+ "initializer",
  "serde",
  "serde_json",
+ "server",
  "toml",
  "wg_2024",
 ]
@@ -241,19 +245,6 @@ name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
-
-[[package]]
-name = "client"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "host 0.1.0",
- "image",
- "rand 0.9.1",
- "serde",
- "serde_json",
- "wg_2024",
-]
 
 [[package]]
 name = "client"
@@ -771,19 +762,6 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "petgraph 0.7.1",
- "rand 0.9.1",
- "serde",
- "serde_json",
- "tokio",
- "wg_2024",
-]
-
-[[package]]
-name = "host"
-version = "0.1.0"
 source = "git+https://github.com/anass03/LeDron-James.git?branch=client#afefc372143dc99d303f036e2b4e0014a1119f21"
 dependencies = [
  "crossbeam-channel",
@@ -1087,13 +1065,13 @@ checksum = "f4c7245a08504955605670dbf141fceab975f15ca21570696aebe9d2e71576bd"
 name = "initializer"
 version = "0.1.0"
 dependencies = [
- "client 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=client)",
+ "client",
  "crossbeam-channel",
  "drone",
  "host 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=client)",
  "serde",
  "serde_json",
- "server 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=server)",
+ "server",
  "simulation_controller",
  "toml",
  "wg_2024",
@@ -2032,22 +2010,6 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "delegate",
- "host 0.1.0",
- "image",
- "petgraph 0.6.5",
- "rand 0.9.1",
- "reqwest",
- "tokio",
- "url",
- "wg_2024",
-]
-
-[[package]]
-name = "server"
-version = "0.1.0"
 source = "git+https://github.com/anass03/LeDron-James.git?branch=server#56905a148ef3f5f8e6a5b47af2662d474a54149f"
 dependencies = [
  "crossbeam-channel",
@@ -2127,7 +2089,7 @@ name = "simulation_controller"
 version = "0.1.0"
 dependencies = [
  "LeDron_James",
- "client 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=client)",
+ "client",
  "colored",
  "crossbeam-channel",
  "crossterm 0.29.0",
@@ -2139,7 +2101,7 @@ dependencies = [
  "ratatui",
  "serde",
  "serde_json",
- "server 0.1.0 (git+https://github.com/anass03/LeDron-James.git?branch=server)",
+ "server",
  "toml",
  "tui-textarea",
  "wg_2024",

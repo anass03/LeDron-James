@@ -86,4 +86,3 @@ pub fn simulate(mut controller: SimulationController, mut handles: HashMap<NodeI
 pub fn log(txt: &str) {
     println!("{} - {}",Colorize::on_green("SimulationController"), colored::Colorize::on_green(txt))
 }
-

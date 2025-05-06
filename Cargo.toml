@@ -9,15 +9,16 @@ serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 toml = "0.8.19"
 crossbeam-channel = "0.5.13"
+initializer = { path = "src/initializer"}
+
+client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
+host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
+server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
 
 # Specify local libraries in the project
 [workspace]
 members = [
-    "src/client",
-    "src/host",
-    "src/server",
     "src/drone",
     "src/initializer",
-    "src/server",
     "src/simulation_controller"
 ]
