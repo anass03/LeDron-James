@@ -18,6 +18,7 @@
       <sourceFolder url="file://$MODULE_DIR$/src/server/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/simulation_controller/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/src/host/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/src/initializer_utils/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/wg_2024/target" />
     </content>

@@ -7,7 +7,7 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 use ratatui::text::Text;
 use tui_textarea::TextArea;
-use crate::frontend::app::app_methods::temp::{check_config, parse_config};
+use initializer_utils::utils::{check_config, parse_config};
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 
@@ -52,14 +52,14 @@ impl App<'_> {
         self.cache.cursor = 0;
         self.selected_tab = self.selected_tab.prev()
     }
-    /// Early version of the compiler, just calls parse_config from the ledron git
-    /// branch and pushes it directly to the compiler
-    pub(crate) fn compiler_beta(file_path: &str) -> Result<(), String> {
+    // Early version of the compiler, just calls parse_config from the ledron git
+    // branch and pushes it directly to the compiler
+    /*pub(crate) fn compiler_beta(file_path: &str) -> Result<(), String> {
         match parse_config(file_path) {
             Ok(config) => { check_config(&config) }
             Err(e) => {
                 Err(e.to_string())
             }
         }
-    }
+    }*/
 }

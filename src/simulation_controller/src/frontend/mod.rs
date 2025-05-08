@@ -1,2 +1,1 @@
-mod app;
-mod test;
+pub mod app;

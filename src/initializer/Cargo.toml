@@ -12,7 +12,9 @@ crossbeam-channel = "0.5.13"
 toml = "0.8.19"
 
 drone = { path = "../drone"}
+simulation_controller = { path = "../simulation_controller"}
+initializer_utils = {path = "../initializer_utils"}
+
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
 server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
-simulation_controller = { path = "../simulation_controller"}
