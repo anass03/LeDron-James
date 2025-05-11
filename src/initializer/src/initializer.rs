@@ -11,7 +11,7 @@ use host::NetCommand;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
 use server::ChatServer as LeChatServer;
-use simulation_controller::backend::simulation_controller::{log, SimulationController};
+use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerType {
@@ -19,15 +19,30 @@ pub enum ServerType {
     Content,
 }
 
-pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
+pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHandle<()>>), String> {
     /// - Parsing the network configuration
-    let config = initializer_utils::utils::parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
+    // let config = initializer_utils::utils::parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
+
+    let config;
+    match initializer_utils::utils::parse_and_check_config(&"../config.toml".to_string()){
+        Ok(temp) => {
+            config = temp;
+        },
+        Err(e) => {
+            // Possibilità di recupero generando una nuova toml oppure inizializzando solo
+            // il simulation_controller che poi si preouccuperà di rifar
+            // partire la simulazione
+            return Err(e.to_string());
+        }
+    }
+
     // config contains {
     //  vector of drones
     //  vector of clients
     //  vector of servers
     // }
-    let _config_check = initializer_utils::utils::check_config(&config);
+
+    //let _config_check = initializer_utils::utils::check_config(&config);
 
     /// - Creating and assigning the packet channels to each node
     let mut packet_senders = HashMap::new();
@@ -192,7 +207,7 @@ pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
     }
 
     /// - Connecting the Simulation Controller to all the channels and nodes
-    let controller = SimulationController::new(
+    let controller = SimulationControllerData::new(
         config.clone(),
         drone_command_sender,
         drone_event_receiver,
@@ -204,7 +219,7 @@ pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
 
     log("Exiting initialization");
 
-    (controller, handles)
+    Ok((controller, handles))
 }
 /*
 pub fn parse_config(file: &str) -> Config {

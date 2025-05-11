@@ -17,8 +17,11 @@ use ratatui::{
 use std::{io, time};
 use std::time::Duration;
 use time::Instant;
+use host::HostEvent;
 use rand::Rng;
-use initializer_utils::utils::{check_config, parse_config};
+use wg_2024::packet::PacketType;
+use initializer_utils::utils::parse_and_check_config;
+use crate::backend::simulation_controller::SimulationControllerData;
 use crate::frontend::app::model::{Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*
@@ -37,6 +40,7 @@ IDEE:
  essendo l'SC l'intermediario che eseguirà le operazioni on-network.
  */
 pub struct App<'a> {
+    simulation_controller_data: SimulationControllerData,
     stay: bool,
     input_mode: bool,
     tick_rate: Duration, // Moving inside settings?
@@ -46,8 +50,9 @@ pub struct App<'a> {
     pub selected_tab: SelectedTab,
 }
 impl App<'_>{
-    pub fn default() -> Self {
+    pub fn default(simulation_controller_data: SimulationControllerData) -> Self {
         Self{
+            simulation_controller_data,
             stay:true,
             input_mode:false,
             tick_rate:Duration::from_millis(100),
@@ -58,8 +63,35 @@ impl App<'_>{
         }
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()>{
-        let mut instant = Instant::now();
+
         while self.stay {
+            let mut instant = Instant::now();
+
+            // Ascoltare i canali e passare al backend
+            // i pacchetti necessari
+            crossbeam_channel::select_biased! {
+                recv(self.simulation_controller_data.client_event_receiver.get(&0).unwrap()) -> command => {
+                    if let Ok(command) = command {
+                        match command {
+                            HostEvent::PacketReconstructed(pck) => {
+
+                            },
+                            HostEvent::PacketSent(pck) => {
+                                match pck.pack_type{
+                                    PacketType::MsgFragment(_) => {}
+                                    PacketType::Ack(_) => {}
+                                    PacketType::Nack(_) => {}
+                                    PacketType::FloodRequest(_) => {}
+                                    PacketType::FloodResponse(_) => {}
+                                }
+                            }
+                        }
+                    }else{
+                        // Closed Channel
+                    }
+                },
+            }
+
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
             self.handle_events()?;
@@ -120,12 +152,13 @@ impl App<'_>{
             self.cache.tab0_data.charts_data.sentmessages.insert(0,rand::rng().random_range(0..230));
         }else{ self.cache.tab0_data.charts_data.sentmessages.insert(0,rand::rng().random_range(0..230)); }
 
+        // We initialize the TOML buffer with the file indicated in the settings
         match self.cache.tab2_data.compiler_buf{
             TOMLmessages::FirstInizialized => {
 
                 self.reload_file_to_buf();
 
-                match check_config(&parse_config(self.settings.toml_path.as_str())){
+                match parse_and_check_config(&self.settings.toml_path){
                     Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
                     Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                 }

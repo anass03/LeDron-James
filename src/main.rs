@@ -10,9 +10,10 @@ fn main() -> std::io::Result<()> {
      */
 
     let mut terminal = ratatui::init();
-    let mut app = simulation_controller::frontend::app::App::default();
-    let app_result = app.run(&mut terminal);
-    terminal.clear()?;
-    ratatui::restore();
-    app_result
+    //let mut app = simulation_controller::frontend::app::App::default();
+    //let app_result = app.run(&mut terminal);
+    //terminal.clear()?;
+    //ratatui::restore();
+    //app_result
+    Ok(())
 }

@@ -78,7 +78,6 @@ impl ChartsData {
 impl Tab0 {
     fn default() -> Tab0 {
         Tab0 {
-
             charts_data:ChartsData::default(),
             selected_chart:0,
             logs_memory: vec![

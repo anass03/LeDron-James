@@ -1,8 +1,24 @@
 use std::collections::HashMap;
 use wg_2024::config::Config;
 
-pub fn check_config(config: &Config) -> Result<(), String> {
+pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     use std::collections::HashSet;
+
+    let config;
+    match std::fs::read_to_string(path) {
+        Ok(file_str) => {
+            match toml::from_str::<Config>(file_str.as_str()) {
+                Ok(temp) => {
+                    config = temp;
+                },
+                Err(error) => {
+                    return Err(format!("Error parsing string file: {}", error.to_string()));
+                }
+            }
+        },
+        Err(e) => return Err(format!("Error reading config file: {}", e)),
+    }
+    // Passed all parsing
 
     let drone_map: HashMap<_, _> = config.drone.iter().map(|d| (d.id, d)).collect();
     let client_map: HashMap<_, _> = config.client.iter().map(|c| (c.id, c)).collect();
@@ -81,16 +97,17 @@ pub fn check_config(config: &Config) -> Result<(), String> {
     }
 
     if errors.is_empty() {
-        Ok(())
+        Ok(config)
     } else {
         Err(errors.join("\n"))
     }
 }
 
-pub fn parse_config(file: &str) -> Result<(), String> {
+/// Deprecated
+fn parse_config(file: &str) -> Result<(), String> {
     match std::fs::read_to_string(file){
         Ok(file_str) => {
-            match toml::from_str(&file_str){
+            match toml::from_str::<Config>(&file_str){
                 Ok(_) => {
                     Ok(()) // Vediamo come sistemare il parse config, e collegare la funziine
 
