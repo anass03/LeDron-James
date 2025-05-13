@@ -1,3 +1,40 @@
-[source]
-"LeDron-James" = { git = "https://github.com/anass03/LeDron-James.git" }
- 
+[[drone]]
+id = 1
+connected_node_ids = [2, 7]
+pdr = 0.05
+
+[[drone]]
+id = 2
+connected_node_ids = [1]
+pdr = 0.03
+
+[[drone]]
+id = 3
+connected_node_ids = [4]
+pdr = 0.14
+
+[[drone]]
+id = 4
+connected_node_ids = [3, 9]
+pdr = 0.14
+
+[[drone]]
+id = 5
+connected_node_ids = [6, 8]
+pdr = 0.14
+
+[[client]]
+id = 6
+connected_drone_ids = [5]
+
+[[client]]
+id = 7
+connected_drone_ids = [1]
+
+[[server]]
+id = 8
+connected_drone_ids = [5]
+
+[[server]]
+id = 9
+connected_drone_ids = [4]

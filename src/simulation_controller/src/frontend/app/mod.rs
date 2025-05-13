@@ -22,7 +22,7 @@ use rand::Rng;
 use wg_2024::packet::PacketType;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
-use crate::frontend::app::model::{Settings, TOMLmessages};
+use crate::frontend::app::model::{AppMode, Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -42,7 +42,7 @@ IDEE:
 pub struct App<'a> {
     simulation_controller_data: SimulationControllerData,
     stay: bool,
-    input_mode: bool,
+    app_mode: AppMode,
     tick_rate: Duration, // Moving inside settings?
 
     pub cache: Cache<'a>, // Contains data required by the app to work
@@ -54,7 +54,7 @@ impl App<'_>{
         Self{
             simulation_controller_data,
             stay:true,
-            input_mode:false,
+            app_mode:AppMode::Normal,
             tick_rate:Duration::from_millis(100),
 
             settings: Settings::load(),
@@ -63,13 +63,14 @@ impl App<'_>{
         }
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()>{
+        let mut instant = Instant::now();
 
         while self.stay {
-            let mut instant = Instant::now();
 
             // Ascoltare i canali e passare al backend
             // i pacchetti necessari
-            crossbeam_channel::select_biased! {
+
+            /*crossbeam_channel::select_biased! {
                 recv(self.simulation_controller_data.client_event_receiver.get(&0).unwrap()) -> command => {
                     if let Ok(command) = command {
                         match command {
@@ -90,7 +91,7 @@ impl App<'_>{
                         // Closed Channel
                     }
                 },
-            }
+            }*/
 
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
@@ -123,10 +124,19 @@ impl App<'_>{
             let event = ratatui::crossterm::event::read()?;
             match event {
                 Event::Key(key) => {
-                    if self.input_mode{
-                        self.handle_event_inputmode(event);
-                    }else{
-                        self.handle_event_normalmode(key);
+                    match self.app_mode{
+                        AppMode::Normal => {
+                            self.handle_event_normalmode(key);
+                        },
+                        AppMode::Input => {
+                            self.handle_event_inputmode(event);
+                        },
+                        AppMode::Scrolling => {
+                          self.handle_event_scrollingmode(key);
+                        },
+                        _ => {
+                            self.handle_event_normalmode(key);
+                        }
                     }
                 },
                 _ => {}
@@ -162,10 +172,15 @@ impl App<'_>{
                     Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
                     Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                 }
-
             }
             _ => ()
         }
+
+        if self.cache.tab1_data.nodelist.items.is_empty(){
+            self.cache.tab1_data.nodelist.initialize(self.simulation_controller_data.drones.clone(), self.simulation_controller_data.servers.clone(), self.simulation_controller_data.clients.clone());
+        }
+
+
         //self.refresh_cache();
     }
 }

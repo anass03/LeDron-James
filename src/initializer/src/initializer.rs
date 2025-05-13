@@ -24,7 +24,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     // let config = initializer_utils::utils::parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
 
     let config;
-    match initializer_utils::utils::parse_and_check_config(&"../config.toml".to_string()){
+    match initializer_utils::utils::parse_and_check_config(&"../simulationconfig.toml".to_string()){
         Ok(temp) => {
             config = temp;
         },

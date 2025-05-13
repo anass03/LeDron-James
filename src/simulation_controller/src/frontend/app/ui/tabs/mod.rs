@@ -9,7 +9,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Tabs, Widget, Wrap};
 use crate::frontend::app::App;
-
+use crate::frontend::app::model::AppMode;
 
 #[derive(Default, Clone, Copy)]
 pub(crate) enum SelectedTab {
@@ -102,7 +102,7 @@ pub(crate) fn render_inner(app:&App, area: Rect, buf : &mut Buffer){
 
     match app.selected_tab{
         SelectedTab::Overview => tab0::render_tab0(app, inner_block, buf),
-        SelectedTab::Topology => tab1::render_tab1(app, inner_block, buf),
+        SelectedTab::Topology => tab1::demo_render_tab1(app, inner_block, buf),
         SelectedTab::TOMLEditor => tab2::render_tab2(app, inner_block, buf),
         SelectedTab::Settings => tab3::render_tab3(app, inner_block, buf),
     }
@@ -119,10 +119,16 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
             let temp = app.cache.colors_vec.1.get(app.cache.counter as usize % app.cache.colors_vec.0).unwrap();
             Color::Rgb(temp.0, temp.1, temp.2)
         }));
-    if app.input_mode{
-        block = block.title(" [INPUT MODE] ESC to quit input-mode & save the text | F11 to quit input-mode without saving ")
-    }else{
-        block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
+    match app.app_mode{
+        AppMode::Normal => {
+            block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
+        }
+        AppMode::Input => {
+            block = block.title(" [INPUT MODE] ESC to quit input-mode & save the text | F1 to quit input-mode without saving ")
+        }
+        AppMode::Scrolling => {
+            block = block.title(" [SCROLLING MODE] ESC to quit scrolling-mode | ↑ - ↓ to scroll ")
+        }
     }
 
     // Render block and get inner space
