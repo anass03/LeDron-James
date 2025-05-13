@@ -19,7 +19,7 @@ pub struct ChatServer {
 impl ChatServer {
     delegate! {
         to self.info.host {
-            fn log<S: AsRef<str>>(&self, message: S);
+            //fn log<S: AsRef<str>>(&self, message: S);
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
@@ -59,14 +59,15 @@ impl ChatServer {
 
     pub fn run(&mut self) {
         self.initiate_flood();
-        self.log("Starting Chat Server...");
+        //self.log("Starting Chat Server...");
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.host.packet_recv) -> packet => {
                     self.handling_packets(packet);
                 }
                 default(Duration::from_millis(100)) => {
-                    handle_server_control_loop(&self.info.controller_recv, |cmd| {
+                    let controller_recv = self.info.controller_recv.clone();
+                    handle_server_control_loop(&controller_recv, |cmd| {
                         if let NetCommand::ControllerShortcut(_) = cmd {
                             self.initiate_flood();
                         }
@@ -130,7 +131,7 @@ impl ChatServer {
                             Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
                         }
                     } else {
-                        self.log("Failed to reassemble message fragment.");
+                        //self.log("Failed to reassemble message fragment.");
                     }
                 }
             }

@@ -26,7 +26,7 @@ impl GenServer {
     delegate! {
         to self.host {
             pub fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
-            fn log<S: AsRef<str>>(&self, message: S);
+            //fn log<S: AsRef<str>>(&self, message: S);
         }
     }
 
@@ -100,18 +100,18 @@ impl GenServerBehavior for GenServer {
         session_data.last_activity = Instant::now();
 
         if index >= session_data.buffer.len() {
-            self.host.log(format!(
+            /*self.host.log(format!(
                 "Invalid fragment index: {} (session ID: {})",
                 fragment.fragment_index, packet.session_id
-            ));
+            ));*/
             return None;
         }
 
         if session_data.buffer[index].is_some() {
-            self.host.log(format!(
+            /*self.host.log(format!(
                 "Duplicate fragment received: {} (session ID: {})",
                 fragment.fragment_index, packet.session_id
-            ));
+            ));*/
             return None;
         }
 
@@ -122,7 +122,7 @@ impl GenServerBehavior for GenServer {
         self.host.send_packet(ack_packet, None);
 
         if session_data.pending == 0 {
-            self.host.log(format!("All fragments received for session ID: {}", packet.session_id));
+            //self.host.log(format!("All fragments received for session ID: {}", packet.session_id));
             let mut content = Vec::with_capacity(fragment.total_n_fragments as usize * FRAGMENT_DSIZE);
             for frag in session_data.buffer.iter().filter_map(|f| f.as_ref()) {
                 content.extend_from_slice(&frag.data[..frag.length as usize]);

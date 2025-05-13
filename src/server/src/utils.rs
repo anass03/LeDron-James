@@ -10,7 +10,7 @@ pub fn handle_server_control_loop(
     if let Ok(cmd) = controller_recv.try_recv() {
         match &cmd {
             NetCommand::Net(_) | NetCommand::ControllerShortcut(_) => {
-                info!("Server received control command: {:?}", cmd);
+                //info!("Server received control command: {:?}", cmd);
                 handler(cmd);
             }
         }
