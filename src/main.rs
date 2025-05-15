@@ -1,16 +1,28 @@
 use initializer::initializer::initialize;
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
 
 fn main() -> std::io::Result<()> {
-    /*let (mut controller, handles) = initialize();
-    controller.crash(2);
-    for (node_id, handle) in handles {
+    //let (mut controller, handles) = initialize();
+    //controller.crash(2);
+    /*for (node_id, handle) in handles {
         handle.join().unwrap();
         println!("Closing thread of node: {:?}", node_id);
     }
      */
-    let (controller, handles) = initialize();
+    let temp_sc = SimulationControllerData {
+        drones: vec![],
+        clients: vec![],
+        servers: vec![],
+        drone_command_sender: Default::default(),
+        drone_event_receiver: Default::default(),
+        client_command_sender: Default::default(),
+        client_event_receiver: Default::default(),
+        server_event_receiver: Default::default(),
+        packet_sender: Default::default(),
+    };
+
     let mut terminal = ratatui::init();
-    let mut app = simulation_controller::frontend::app::App::default();
+    let mut app = simulation_controller::frontend::app::App::default(temp_sc);
     let app_result = app.run(&mut terminal);
     terminal.clear()?;
     ratatui::restore();

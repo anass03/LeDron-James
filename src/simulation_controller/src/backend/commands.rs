@@ -3,9 +3,9 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
 use host::HostEvent::PacketSent;
-use crate::backend::simulation_controller::{log, SimulationController};
+use crate::backend::simulation_controller::{log, SimulationControllerData};
 
-impl SimulationController {
+impl SimulationControllerData {
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) {

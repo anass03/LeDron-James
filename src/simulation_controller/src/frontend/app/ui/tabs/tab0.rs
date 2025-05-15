@@ -47,24 +47,32 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         }
              )
         .collect();
-    let log_block = Paragraph::new(lines)
+    let mut log_block = Block::default()
+        .title("Logs")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+
+    if app.cache.cursor == 1{
+        log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+
+    let log_paragraph = Paragraph::new(lines)
         .block(
-            Block::default()
-                .title("Logs")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::White))
-                .border_type(BorderType::Rounded),
+            log_block
         )
         .wrap(Wrap { trim: true })
         .scroll((app.cache.tab0_data.log_scroll_offset as u16, 0)); // vertical scroll only
-    log_block.render(inner_columns[1], buf);
+    log_paragraph.render(inner_columns[1], buf);
 
     // Statistic Block
     use super::super::utils::chart_rendering;
 
     let mut chart_block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::White));
+        .borders(Borders::ALL);
+
+    if app.cache.cursor == 0 {
+        chart_block = chart_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
 
     // Shitty performance, gotta improve it with a Tick Rate
     match app.cache.tab0_data.selected_chart{

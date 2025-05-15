@@ -1,9 +1,19 @@
+use ratatui::widgets::ListItem;
 use tui_textarea::Key::Tab;
 use tui_textarea::TextArea;
 use crate::frontend::app::ui::tabs::SelectedTab;
 
+use wg_2024::config::Drone as DroneConfig;
+use wg_2024::config::Client as ClientConfig;
+use wg_2024::config::Server as ServerConfig;
+
+use super::super::app::App;
+
 pub(super) struct Settings{
     pub toml_path: String,
+}
+pub(super) enum AppMode{
+    Normal, Input, Scrolling
 }
 pub(super) struct Cache<'a> {
     pub cursor: u8, // Cursor to know which menu on-tab is selected.
@@ -32,10 +42,90 @@ pub(super) struct Tab0{
 pub (super) enum LogType{
     WARN, ERROR, INFO, DEBUG, FATAL
 }
-/// Tab n.01 data
-pub(super) struct Tab1{
+/// Temp
+mod _tab1{
 
 }
+
+/// Tab n.01 data
+pub(super) struct Tab1{
+    pub nodelist: NodeList,
+}
+pub(super) struct NodeList{
+    pub(super) items: Vec<Node>,
+    selected: u8, // 256 Nodes MAX
+}
+struct FnList {
+    fns: Vec<Fns>
+}
+enum Fns{
+
+}
+impl NodeList {
+    fn default()->Self{
+        Self{
+            items: vec![],
+            selected: 0,
+        }
+    }
+    pub(super) fn initialize(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>)->Self{
+        Self{
+            items: {
+                let mut nodes:Vec<Node> = Vec::new();
+
+                for d in drones{
+                    nodes.push(Node::Drone(d))
+                }
+                for s in servers{
+                    nodes.push(Node::Server(s))
+                }
+                for c in clients{
+                    nodes.push(Node::Client(c))
+                }
+
+                nodes
+            },
+            selected: 0,
+        }
+    }
+    fn retrieve_nodes(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
+        self.selected = 0;
+        let mut nodes:Vec<Node> = Vec::new();
+
+        for d in drones{
+            nodes.push(Node::Drone(d))
+        }
+        for s in servers{
+            nodes.push(Node::Server(s))
+        }
+        for c in clients{
+            nodes.push(Node::Client(c))
+        }
+
+        self.items = nodes
+    }
+    pub(super) fn select_next(&mut self){
+        if self.selected < self.items.len() as u8{
+            self.selected += 1;
+        }
+    }
+    pub(super) fn select_prev(&mut self){
+        if self.selected > 0 {
+            self.selected -= 1;
+        }
+    }
+    fn select_first(&mut self){
+        self.selected = 0;
+    }
+    fn select_last(&mut self){
+        self.selected = self.items.len() as u8;
+    }
+}
+pub(super) enum Node{
+    Client(ClientConfig), Server(ServerConfig), Drone(DroneConfig)
+}
+
+
 /// Tab n.02 data
 pub(super) struct Tab2{
     pub compiler_buf: TOMLmessages,
@@ -75,10 +165,12 @@ impl ChartsData {
     fn plussentmessages(){}
     fn reset(){}
 }
+
+// TAB IMPLS
+/// Tab0 Impl fns
 impl Tab0 {
     fn default() -> Tab0 {
         Tab0 {
-
             charts_data:ChartsData::default(),
             selected_chart:0,
             logs_memory: vec![
@@ -120,11 +212,16 @@ impl Tab0 {
         }
     }
 }
+
+/// Tab1 Impl fns
 impl Tab1{
     fn default()->Self{
-        Self{}
+        Self{
+            nodelist: NodeList::default(),
+        }
     }
 }
+/// Tab2 Impl fns
 impl Tab2{
     fn default()->Self{
         Self{

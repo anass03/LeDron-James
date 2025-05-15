@@ -20,7 +20,7 @@ use host::{ClientCommand, HostEvent, NetCommand};
 /// - the command sender channels
 /// - the event receiver channels
 
-pub struct SimulationController {
+pub struct SimulationControllerData {
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
@@ -30,10 +30,9 @@ pub struct SimulationController {
     pub client_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
     pub server_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
-    //pub packet_receiver: HashMap<NodeId, Receiver<Packet>>,     //packet receiver of each node
 }
 
-impl SimulationController {
+impl SimulationControllerData {
     pub fn new(
         config: Config,
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
@@ -71,7 +70,7 @@ impl SimulationController {
     }
 }
 
-pub fn simulate(mut controller: SimulationController, mut handles: HashMap<NodeId, JoinHandle<()>>) {
+pub fn simulate(mut controller: SimulationControllerData, mut handles: HashMap<NodeId, JoinHandle<()>>) {
 
     log("Starting simulation controller");
 

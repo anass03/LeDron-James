@@ -11,8 +11,8 @@ impl App<'_>{
                 "q" => self.stay = false,
                 _ => {
                     match self.selected_tab {
-                        ui::tabs::SelectedTab::Overview => (),
-                        ui::tabs::SelectedTab::Topology => (),
+                        ui::tabs::SelectedTab::Overview => (self.handle_event_tab0(key.code)),
+                        ui::tabs::SelectedTab::Topology => self.handle_event_tab1(key.code),
                         ui::tabs::SelectedTab::TOMLEditor => self.handle_event_tab2(key.code),
                         ui::tabs::SelectedTab::Settings => (),
                     }
