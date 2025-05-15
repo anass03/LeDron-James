@@ -7,7 +7,7 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 use ratatui::text::Text;
 use tui_textarea::TextArea;
-use initializer_utils::utils::{check_config, parse_config};
+use initializer_utils::utils::{parse_config};
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 

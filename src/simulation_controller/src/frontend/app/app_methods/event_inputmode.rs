@@ -3,7 +3,7 @@ Each input-mode related method is found here
 */
 use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyCode, Event};
 use tui_textarea::{Input, TextArea};
-use initializer_utils::utils::{check_config, parse_config};
+use initializer_utils::utils::{parse_config};
 use crate::frontend::app::model::TOMLmessages;
 use super::super::App;
 impl App<'_>{
@@ -20,7 +20,7 @@ impl App<'_>{
                             self.save_text_buffer();
                             self.input_mode = false;
                             // Aggiorno il buffer_del_compiler
-                            match check_config(&parse_config(self.settings.toml_path.as_str())){
+                            match parse_config(self.settings.toml_path.as_str()){
                                 Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
                                 Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                             }
@@ -29,7 +29,7 @@ impl App<'_>{
                             // Esco senza salvare
                             self.input_mode = false;
                             // Aggiorno il buffer_del_compiler
-                            match check_config(&parse_config(self.settings.toml_path.as_str())){
+                            match parse_config(self.settings.toml_path.as_str()){
                                 Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
                                 Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                             }

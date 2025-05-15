@@ -11,6 +11,7 @@ use host::NetCommand;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
 use server::ChatServer as LeChatServer;
+use initializer_utils::utils::parse_config;
 use simulation_controller::backend::simulation_controller::{log, SimulationController};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,13 +22,15 @@ pub enum ServerType {
 
 pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
     /// - Parsing the network configuration
-    let config = initializer_utils::utils::parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
+    let config = match parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config.toml") {
+        Ok(config) => config,
+        Err(e) => panic!("{}", e),
+    };
     // config contains {
     //  vector of drones
     //  vector of clients
     //  vector of servers
     // }
-    let _config_check = initializer_utils::utils::check_config(&config);
 
     /// - Creating and assigning the packet channels to each node
     let mut packet_senders = HashMap::new();
@@ -206,8 +209,8 @@ pub fn initialize() -> (SimulationController, HashMap<NodeId, JoinHandle<()>>) {
 
     (controller, handles)
 }
-/*
-pub fn parse_config(file: &str) -> Config {
+
+/*pub fn parse_config(file: &str) -> Config {
     let file_str = fs::read_to_string(file).unwrap();
     toml::from_str(&file_str).unwrap()
 }*/

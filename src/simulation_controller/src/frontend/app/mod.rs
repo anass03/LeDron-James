@@ -18,7 +18,7 @@ use std::{io, time};
 use std::time::Duration;
 use time::Instant;
 use rand::Rng;
-use initializer_utils::utils::{check_config, parse_config};
+use initializer_utils::utils::{parse_config};
 use crate::frontend::app::model::{Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*
@@ -125,7 +125,7 @@ impl App<'_>{
 
                 self.reload_file_to_buf();
 
-                match check_config(&parse_config(self.settings.toml_path.as_str())){
+                match parse_config(self.settings.toml_path.as_str()){
                     Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
                     Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                 }
