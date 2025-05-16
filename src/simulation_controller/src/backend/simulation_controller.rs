@@ -22,15 +22,11 @@ pub struct SimulationControllerData {
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
-    pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone
-    //pub drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,   //event receiver channel from drone
-    pub drone_event_receiver: Receiver<DroneEvent>,
+    pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-    //pub client_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
-    pub client_event_receiver: Receiver<HostEvent>,
     pub server_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-    //pub server_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
-    pub server_event_receiver: Receiver<HostEvent>,
+    pub drone_event_receiver: Receiver<DroneEvent>,
+    pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
 }
 
@@ -38,14 +34,10 @@ impl SimulationControllerData {
     pub fn new(
         config: Config,
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
-        //drone_event_receiver: HashMap<NodeId, Receiver<DroneEvent>>,
-        drone_event_receiver: Receiver<DroneEvent>,
         client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-        //client_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
-        client_event_receiver: Receiver<HostEvent>,
         server_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-        //server_event_receiver: HashMap<NodeId, Receiver<HostEvent>>,
-        server_event_receiver: Receiver<HostEvent>,
+        drone_event_receiver: Receiver<DroneEvent>,
+        host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
     ) -> Self {
         let mut drones = vec![];
@@ -65,11 +57,10 @@ impl SimulationControllerData {
             clients,
             servers,
             drone_command_sender,
-            drone_event_receiver,
             client_command_sender,
-            client_event_receiver,
             server_command_sender,
-            server_event_receiver,
+            drone_event_receiver,
+            host_event_receiver,
             packet_sender,
         }
     }

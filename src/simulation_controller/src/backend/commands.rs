@@ -111,11 +111,15 @@ impl SimulationControllerData {
         }
     }
 
-    /// - Drone Events
+    /*/// - Drone Events
 
-    /*pub fn handle_drone_packet_sent(&self) {
+    pub fn handle_drone_packet_sent(&self) -> Result<(), String> {
         for receiver in self.drone_event_receiver.iter() {
-
+            match receiver {
+                DroneEvent::PacketSent(packet) => Ok(()),
+                DroneEvent::PacketDropped(packet) => Ok(()),
+                DroneEvent::ControllerShortcut(packet) => Ok(()),
+            }
         }
     }*/
 

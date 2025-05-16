@@ -118,14 +118,14 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     }
 
     /// - Initializing the clients
-    let (client_event_send, client_event_recv) = unbounded();
+    let (host_event_send, host_event_recv) = unbounded();
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();
 
         // creating the actual client channels for commands and events
         let (controller_client_send, controller_client_recv) = unbounded();
-        let client_event_send = client_event_send.clone();
+        let host_event_send = host_event_send.clone();
 
         // inserting channels in related hashmaps
         client_command_senders.insert(client_id, controller_client_send);
@@ -144,7 +144,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                 client_id,
                 NodeType::Client,
                 connected_drone_ids,
-                client_event_send,
+                host_event_send,
                 controller_client_recv,
                 packet_recv,
                 packet_send,
@@ -155,7 +155,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     }
 
     /// - Initializing the servers
-    let (server_event_send, server_event_recv) = unbounded();
+    //let (server_event_send, server_event_recv) = unbounded();
     for (i, server) in config.server.iter().enumerate() {
         let server_type = match i {
             0 => ServerType::Chat,
@@ -170,7 +170,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
         let connected_drone_ids = server.connected_drone_ids.clone();
 
         let (controller_server_send, controller_server_recv) = unbounded();
-        let server_event_send = server_event_send.clone();
+        let host_event_send = host_event_send.clone();
 
         server_command_senders.insert(server_id, controller_server_send);
 
@@ -186,7 +186,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
-                    server_event_send,
+                    host_event_send,
                     controller_server_recv,
                     packet_recv,
                     packet_send,
@@ -198,7 +198,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
-                    server_event_send,
+                    host_event_send,
                     controller_server_recv,
                     packet_recv,
                     packet_send,
@@ -214,11 +214,10 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     let controller = SimulationControllerData::new(
         config.clone(),
         drone_command_senders,
-        drone_event_recv,
         client_command_senders,
-        client_event_recv,
         server_command_senders,
-        server_event_recv,
+        drone_event_recv,
+        host_event_recv,
         packet_senders,
     );
 

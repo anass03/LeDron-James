@@ -14,11 +14,10 @@ fn main() -> std::io::Result<()> {
         clients: vec![],
         servers: vec![],
         drone_command_sender: Default::default(),
-        drone_event_receiver: unbounded().1,
         client_command_sender: Default::default(),
-        client_event_receiver: unbounded().1,
         server_command_sender: Default::default(),
-        server_event_receiver: unbounded().1,
+        drone_event_receiver: unbounded().1,
+        host_event_receiver: unbounded().1,
         packet_sender: Default::default(),
     };
 
