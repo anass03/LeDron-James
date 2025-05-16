@@ -21,7 +21,7 @@ pub(super) fn demo_render_tab1(app:&App, area: Rect, buf : &mut Buffer){
 
     let [left_column, right_column] = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(30), Constraint::Percentage(60)])
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         .areas(area);
 
     let [fns_area, log_area] = Layout::default()
@@ -57,9 +57,11 @@ pub(super) fn demo_render_tab1(app:&App, area: Rect, buf : &mut Buffer){
         .highlight_spacing(HighlightSpacing::Always)
         .highlight_symbol(">");
 
-    list.render(left_column,buf)
-    // Log area will be rendered by the same function on Overview Page ( Tab0 )
+    list.render(left_column,buf);
 
+    // Log area will be rendered by the same function on Overview Page ( Tab0 )
+    let log_paragraph = super::tab0::process_log_paragraph(app);
+    log_paragraph.render(log_area, buf);
 
 
     // Retrieve
