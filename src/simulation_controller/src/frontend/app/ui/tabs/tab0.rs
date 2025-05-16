@@ -16,6 +16,31 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         ])
         .split(area);
 
+    let log_paragraph = process_log_paragraph(app);
+    log_paragraph.render(inner_columns[1], buf);
+
+    // Statistic Block
+    use super::super::utils::chart_rendering;
+
+    let mut chart_block = Block::default()
+        .borders(Borders::ALL);
+
+    if app.cache.cursor == 0 {
+        chart_block = chart_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+
+    // Log Block
+
+
+    // Shitty performance, gotta improve it with a Tick Rate
+    match app.cache.tab0_data.selected_chart{
+        0 => { chart_rendering::render_sparkline_1(&app.cache.tab0_data.charts_data,chart_block,inner_columns[0],buf) },
+        1 => {  },
+        2 => {  },
+        _ => panic!("OVERFLOW CHART SELECTION!")
+    }
+}
+pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>)->Paragraph<'a>{
     let lines: Vec<Line> = app
         .cache
         .tab0_data.logs_memory
@@ -45,7 +70,7 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
              */
             Line::from(Span::raw(msg)).style(Style::default().fg(Color::White))
         }
-             )
+        )
         .collect();
     let mut log_block = Block::default()
         .title("Logs")
@@ -56,30 +81,11 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
     }
 
-    let log_paragraph = Paragraph::new(lines)
+    let a = Paragraph::new(lines)
         .block(
             log_block
         )
         .wrap(Wrap { trim: true })
-        .scroll((app.cache.tab0_data.log_scroll_offset as u16, 0)); // vertical scroll only
-    log_paragraph.render(inner_columns[1], buf);
-
-    // Statistic Block
-    use super::super::utils::chart_rendering;
-
-    let mut chart_block = Block::default()
-        .borders(Borders::ALL);
-
-    if app.cache.cursor == 0 {
-        chart_block = chart_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
-    }
-
-    // Shitty performance, gotta improve it with a Tick Rate
-    match app.cache.tab0_data.selected_chart{
-        0 => { chart_rendering::render_sparkline_1(&app.cache.tab0_data.charts_data,chart_block,inner_columns[0],buf) },
-        1 => {  },
-        2 => {  },
-        _ => panic!("OVERFLOW CHART SELECTION!")
-    }
-
+        .scroll((app.cache.tab0_data.log_scroll_offset as u16, 0));
+    return a
 }

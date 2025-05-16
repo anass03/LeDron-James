@@ -27,16 +27,7 @@ impl App<'_>{
                     },
                     1 => {
                         // TODO! Log scroll mode
-                        /*
-                            Add a log scroll mode
-                            up or down to scroll menu, esc to exit
-
-                            Menu OPTION to:
-                            - Save logs out an external file
-
-
-                         */
-
+                        self.app_mode = AppMode::Scrolling;
                         self.cache.tab0_data.log_scroll_offset += 1;
                     },
                     _ => (),

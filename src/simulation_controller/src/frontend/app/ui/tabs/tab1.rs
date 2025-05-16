@@ -60,6 +60,8 @@ pub(super) fn demo_render_tab1(app:&App, area: Rect, buf : &mut Buffer){
     list.render(left_column,buf)
     // Log area will be rendered by the same function on Overview Page ( Tab0 )
 
+
+
     // Retrieve
 
 }
