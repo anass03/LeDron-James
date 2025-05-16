@@ -66,18 +66,6 @@ impl SimulationControllerData {
     }
 }
 
-pub fn simulate(_controller: SimulationControllerData, mut handles: HashMap<NodeId, JoinHandle<()>>) {
-
-    log("Starting simulation controller");
-
-
-    for (node_id, handle) in handles {
-        handle.join().unwrap();
-        log(&format!("Closing thread of node: {:?}", node_id));
-    }
-    log("Closing simulation controller");
-}
-
 pub fn log(txt: &str) {
     println!("{} - {}",Colorize::on_green("SimulationController"), Colorize::on_green(txt))
 }

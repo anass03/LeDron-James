@@ -20,7 +20,7 @@ pub enum ServerType {
 pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHandle<()>>), String> {
     /// - Parsing the network configuration
     let config;
-    match initializer_utils::utils::parse_and_check_config(&"../simulationconfig.toml".to_string()){
+    match initializer_utils::utils::parse_and_check_config(&"/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config.toml".to_string()){
         Ok(temp) => {
             config = temp;
         },
@@ -220,8 +220,6 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
         host_event_recv,
         packet_senders,
     );
-
-    log("Exiting initialization");
 
     Ok((controller, handles))
 }
