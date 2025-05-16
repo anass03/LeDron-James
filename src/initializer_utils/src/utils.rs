@@ -47,9 +47,9 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     // Existing check: drone -> node
     for drone in &config.drone {
         if drone.pdr > 1.0 {
-            errors.push(format!("Drone {} pdr is too high: {}. 0.0 < pdr < 1.0\n", drone.id,  drone.pdr));
+            errors.push(format!("Drone {} pdr is too high: {} | 0.0 < pdr < 1.0\n", drone.id,  drone.pdr));
         } else if drone.pdr < 0.0 {
-            errors.push(format!("Drone {} pdr is negative: {}. 0.0 < pdr < 1.0\n", drone.id,  drone.pdr));
+            errors.push(format!("Drone {} pdr is negative: {} | 0.0 < pdr < 1.0\n", drone.id,  drone.pdr));
         }
         for node_id in &drone.connected_node_ids {
             if let Some(client) = client_map.get(node_id) {
@@ -103,8 +103,8 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     }
 }
 
-/// Deprecated
-fn parse_config(file: &str) -> Result<(), String> {
+// Deprecated
+/*fn parse_config(file: &str) -> Result<(), String> {
     match std::fs::read_to_string(file){
         Ok(file_str) => {
             match toml::from_str::<Config>(&file_str){
@@ -121,4 +121,4 @@ fn parse_config(file: &str) -> Result<(), String> {
             Err(e.to_string())
         }
     }
-}
+}*/

@@ -8,47 +8,116 @@ use crate::backend::simulation_controller::{log, SimulationControllerData};
 impl SimulationControllerData {
 
     /// - Drone Commands
-    pub fn crash(&mut self, drone_id: NodeId) {
-        self.drone_command_sender.get(&drone_id).unwrap().send(DroneCommand::Crash).expect("error crashing drone");
+    pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
+        match self.drone_command_sender.get(&drone_id) {
+            Some(drone_command_sender) => {
+                match drone_command_sender.send(DroneCommand::Crash) {
+                    Ok(_) => Ok(()),
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            None => Err(format!("Drone {drone_id} command sender not found"))
+        }
     }
 
-    pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) {
-        let sender_forward = DroneCommand::AddSender(sender_id, self.packet_sender.get(&sender_id).unwrap().clone());
-        let sender_backwards = DroneCommand::AddSender(node_id, self.packet_sender.get(&node_id).unwrap().clone());
-        self.drone_command_sender.get(&node_id).unwrap().send(sender_forward).expect("error adding sender forward");
-        self.drone_command_sender.get(&sender_id).unwrap().send(sender_backwards).expect("error adding sender backwards");
+    pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+        //checking if packet sender for forward node exists
+        match self.packet_sender.get(&sender_id) {
+            Some(forward_packet_sender) => {
+                //preparing AddSender command forward
+                let forward_command = DroneCommand::AddSender(sender_id, forward_packet_sender.clone());
+                //checking if packet sender for backwards node exists
+                match self.packet_sender.get(&node_id) {
+                    Some(backwards_packet_sender) => {
+                        //preparing AddSender command backwards
+                        let backwards_command = DroneCommand::AddSender(node_id, backwards_packet_sender.clone());
+                        //if the two commands are ready, check if command sender for forward node exists
+                        match self.drone_command_sender.get(&node_id) {
+                            Some(forward_drone_command_sender) => {
+                                //trying to send command forward
+                                match forward_drone_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        //if successful, check if command sender for backwards node exists
+                                        match self.drone_command_sender.get(&sender_id) {
+                                            Some(backward_command_sender) => {
+                                                //trying to send command backwards
+                                                match backward_command_sender.send(backwards_command) {
+                                                    Ok(()) => Ok(()),
+                                                    Err(e) => Err(e.to_string()),
+                                                }
+                                            },
+                                            None => Err(format!("Drone {sender_id} command sender not found")),
+                                        }
+                                    },
+                                    Err(e) => Err(e.to_string())
+                                }
+                            },
+                            None => Err(format!("Drone {node_id} command sender not found")),
+                        }
+                    },
+                    None => Err(format!("Drone {node_id} packet sender not found")),
+                }
+            },
+            None => Err(format!("Drone {sender_id} packet sender not found")),
+        }
     }
 
-    pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) {
-        let sender_forward = DroneCommand::RemoveSender(sender_id);
-        let sender_backwards = DroneCommand::RemoveSender(node_id);
-        self.drone_command_sender.get(&node_id).unwrap().send(sender_forward).expect("error removing sender forward");
-        self.drone_command_sender.get(&sender_id).unwrap().send(sender_backwards).expect("error removing sender backwards");
+    pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+
+        let forward_command = DroneCommand::RemoveSender(sender_id);
+        let backwards_command = DroneCommand::RemoveSender(node_id);
+        //checking if command sender for forward node exists
+        match self.drone_command_sender.get(&node_id) {
+            Some(forward_drone_command_sender) => {
+                //trying to send command forward
+                match forward_drone_command_sender.send(forward_command) {
+                    Ok(()) => {
+                        //if successful, check if command sender for backwards node exists
+                        match self.drone_command_sender.get(&sender_id) {
+                            Some(backward_command_sender) => {
+                                //trying to send command backwards
+                                match backward_command_sender.send(backwards_command) {
+                                    Ok(()) => Ok(()),
+                                    Err(e) => Err(e.to_string()),
+                                }
+                            },
+                            None => Err(format!("Drone {sender_id} command sender not found")),
+                        }
+                    },
+                    Err(e) => Err(e.to_string())
+                }
+            },
+            None => Err(format!("Drone {node_id} command sender not found")),
+        }
     }
 
-    pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) {
+    pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) -> Result<(), String> {
+        let valid_pdr;
+        if new_pdr >= 0.0 && new_pdr <= 1.0 {
+            valid_pdr = new_pdr;
+        } else {
+            return Err(format!("Invalid pdr value: {} | 0.0 < pdr < 1.0", new_pdr));
+        }
+        let command = DroneCommand::SetPacketDropRate(new_pdr);
         self.drone_command_sender.get(&drone_id).unwrap().send(DroneCommand::SetPacketDropRate(new_pdr)).expect("error setting pdr");
+        match self.drone_command_sender.get(&drone_id) {
+            Some(drone_command_sender) => {
+                match drone_command_sender.send(command) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            None => Err(format!("Drone {drone_id} command sender not found")),
+        }
     }
 
     /// - Drone Events
 
-    pub fn handle_drone_packet_sent(&self) {
+    /*pub fn handle_drone_packet_sent(&self) {
         for receiver in self.drone_event_receiver.iter() {
-            for recieved in receiver.1.iter() {
-                match recieved {
-                    DroneEvent::PacketSent(packet) => {
-                        log(format!("Packet sent: {:?}", packet).as_str());
-                    },
-                    DroneEvent::PacketDropped(packet) => {
-                        log(format!("Packet dropped: {:?}", packet).as_str());
-                    },
-                    DroneEvent::ControllerShortcut(packet) => {
-                        log(format!("Controller shortcut: {:?}", packet).as_str());
-                    }
-                }
-            }
+
         }
-    }
+    }*/
 
     /// - Client Commands
 
@@ -84,9 +153,9 @@ impl SimulationControllerData {
         self.client_command_sender.get(&sender_client_id).expect("no such Client Id").send(NetCommand::ControllerShortcut(packet)).expect("error sending controller shortcut");
     }
 
-    /// - Client Events
+    // /// - Client Events
 
-    pub fn files_list(&self) {
+   /* pub fn files_list(&self) {
         for receiver in self.client_event_receiver.iter() {
             for received in receiver.1.iter() {
                 match received {
@@ -107,5 +176,5 @@ impl SimulationControllerData {
                 }
             }
         }
-    }
+    }*/
 }

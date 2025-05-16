@@ -1,13 +1,11 @@
 use crossbeam_channel::{unbounded, Sender};
 use std::collections::HashMap;
-use std::{fs, thread};
+use std::thread;
 use std::thread::JoinHandle;
-use wg_2024::config::Config;
 use wg_2024::drone::Drone;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
-use host::NetCommand;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
 use server::ChatServer as LeChatServer;
@@ -21,8 +19,6 @@ pub enum ServerType {
 
 pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHandle<()>>), String> {
     /// - Parsing the network configuration
-    // let config = initializer_utils::utils::parse_config("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/src/simulation_controller/src/config");
-
     let config;
     match initializer_utils::utils::parse_and_check_config(&"../simulationconfig.toml".to_string()){
         Ok(temp) => {
@@ -41,8 +37,6 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     //  vector of clients
     //  vector of servers
     // }
-
-    //let _config_check = initializer_utils::utils::check_config(&config);
 
     /// - Creating and assigning the packet channels to each node
     let mut packet_senders = HashMap::new();
@@ -64,6 +58,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
         packet_senders.insert(client.id, s);
         packet_receivers.insert(client.id, r);
     }
+
     for server in config.server.iter() {
         // for each server in the config we create the packet sender and receiver and we insert them
         // in the related hashmap
@@ -75,23 +70,28 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     /// - handles contains all the node's threads handles with NodeId as key
     let mut handles = HashMap::new();
 
-    /// - preparing command and event channels hashmaps
-    let mut drone_command_sender = HashMap::new();
-    let mut drone_event_receiver = HashMap::new();
-    let mut client_command_sender = HashMap::new();
-    let mut client_event_receiver = HashMap::new();
-    let mut server_event_receiver = HashMap::new();
+    /// - preparing command channels hashmaps
+    let mut drone_command_senders = HashMap::new();
+    //let mut drone_event_receivers = HashMap::new();
+    let mut client_command_senders = HashMap::new();
+    //let mut client_event_receivers = HashMap::new();
+    let mut server_command_senders = HashMap::new();
+    //let mut server_event_receivers = HashMap::new();
     // these hashmaps will contain the senders and receivers paired with each NodeId
 
     /// - Initializing the drones
+    //simulation controller has a single receiver for all drone events, while the sender is cloned
+    //among all drones
+    let (drone_event_send, drone_event_recv) = unbounded();
     for drone in config.drone.iter() {
-        // creating the actual drone channels for commands and events
+
+        // creating the actual drone channel for commands
         let (controller_drone_send, controller_drone_recv) = unbounded();
-        let (drone_event_sender, drone_event_recv) = unbounded();
+        //cloning the shared sender
+        let drone_event_send = drone_event_send.clone();
 
         // inserting channels in related hashmaps
-        drone_command_sender.insert(drone.id, controller_drone_send);
-        drone_event_receiver.insert(drone.id, drone_event_recv);
+        drone_command_senders.insert(drone.id, controller_drone_send);
         // taking the unique drone packet receiver that can't be cloned
         let drone_packet_recv = packet_receivers.remove(&drone.id).unwrap();
         // gathering all the senders for the connected nodes cloning them
@@ -100,14 +100,13 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
             .filter_map(|id| packet_senders.get(id).cloned().map(|sender| (*id, sender)))
             .collect();
 
-
         let drone_clone = drone.clone();
 
         /// - spawning the thread of the drone and collecting the handle in a vector
         handles.insert(drone.id, thread::spawn(move || {
             let mut drone = LeDron::new(
                 drone_clone.id,
-                drone_event_sender,
+                drone_event_send,
                 controller_drone_recv,
                 drone_packet_recv,
                 drone_packet_send,
@@ -119,17 +118,17 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     }
 
     /// - Initializing the clients
+    let (client_event_send, client_event_recv) = unbounded();
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();
 
         // creating the actual client channels for commands and events
         let (controller_client_send, controller_client_recv) = unbounded();
-        let (client_event_sender, client_event_recv) = unbounded();
+        let client_event_send = client_event_send.clone();
 
         // inserting channels in related hashmaps
-        client_command_sender.insert(client_id, controller_client_send);
-        client_event_receiver.insert(client_id, client_event_recv);
+        client_command_senders.insert(client_id, controller_client_send);
 
         // taking the unique client packet receiver that can't be cloned
         let packet_recv = packet_receivers.remove(&client_id).unwrap();
@@ -145,7 +144,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                 client_id,
                 NodeType::Client,
                 connected_drone_ids,
-                client_event_sender,
+                client_event_send,
                 controller_client_recv,
                 packet_recv,
                 packet_send,
@@ -156,6 +155,7 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     }
 
     /// - Initializing the servers
+    let (server_event_send, server_event_recv) = unbounded();
     for (i, server) in config.server.iter().enumerate() {
         let server_type = match i {
             0 => ServerType::Chat,
@@ -169,8 +169,10 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
         let server_id = server.id;
         let connected_drone_ids = server.connected_drone_ids.clone();
 
-        let (server_event_sender, server_event_recv) = unbounded();
-        server_event_receiver.insert(server_id, server_event_recv);
+        let (controller_server_send, controller_server_recv) = unbounded();
+        let server_event_send = server_event_send.clone();
+
+        server_command_senders.insert(server_id, controller_server_send);
 
         let packet_recv = packet_receivers.remove(&server_id).unwrap();
         let packet_send: HashMap<_, _> = connected_drone_ids
@@ -184,7 +186,8 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
-                    server_event_sender,
+                    server_event_send,
+                    controller_server_recv,
                     packet_recv,
                     packet_send,
                 );
@@ -195,7 +198,8 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
-                    server_event_sender,
+                    server_event_send,
+                    controller_server_recv,
                     packet_recv,
                     packet_send,
                 );
@@ -209,11 +213,12 @@ pub fn initialize() -> Result<(SimulationControllerData, HashMap<NodeId, JoinHan
     /// - Connecting the Simulation Controller to all the channels and nodes
     let controller = SimulationControllerData::new(
         config.clone(),
-        drone_command_sender,
-        drone_event_receiver,
-        client_command_sender,
-        client_event_receiver,
-        server_event_receiver,
+        drone_command_senders,
+        drone_event_recv,
+        client_command_senders,
+        client_event_recv,
+        server_command_senders,
+        server_event_recv,
         packet_senders,
     );
 
