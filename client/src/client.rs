@@ -29,7 +29,8 @@ impl Client {
         tracing_subscriber::fmt()
             // legge livello da RUST_LOG (es. "debug" o "info")
             .with_env_filter(EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .expect("failed to init tracing subscriber");
         // Uso i livelli appropriati:
         //
         // trace! per dettagli finissimi,
