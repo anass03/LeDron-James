@@ -3,15 +3,17 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
 use host::HostEvent::PacketSent;
+use wg_internal::packet::PacketType;
 use crate::backend::simulation_controller::{log, SimulationControllerData};
 
 impl SimulationControllerData {
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
+        let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
-                match drone_command_sender.send(DroneCommand::Crash) {
+                match drone_command_sender.send(command) {
                     Ok(_) => Ok(()),
                     Err(e) => Err(e.to_string()),
                 }
@@ -111,74 +113,124 @@ impl SimulationControllerData {
         }
     }
 
-    /*/// - Drone Events
+    /// - Drone Events
 
-    pub fn handle_drone_packet_sent(&self) -> Result<(), String> {
+    pub fn handle_drone_event(&self) -> Result<(), String> {
         for receiver in self.drone_event_receiver.iter() {
             match receiver {
-                DroneEvent::PacketSent(packet) => Ok(()),
-                DroneEvent::PacketDropped(packet) => Ok(()),
-                DroneEvent::ControllerShortcut(packet) => Ok(()),
+                DroneEvent::PacketSent(packet) => {
+                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                    handle_packet(&packet);
+                    let session_id = packet.session_id;
+                },
+                DroneEvent::PacketDropped(packet) => {
+                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                    handle_packet(&packet);
+                    let session_id = packet.session_id;
+                },
+                DroneEvent::ControllerShortcut(packet) => {
+                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                    handle_packet(&packet);
+                    let session_id = packet.session_id;
+                },
             }
         }
-    }*/
+        Ok(())
+    }
 
     /// - Client Commands
 
-    pub fn request_files_list(&self, client_id: ClientId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::FilesList)).expect("error sending files list request");
+    fn send_client_command(&self, client_id: ClientId, command: NetCommand) -> Result<(), String> {
+        match self.client_command_sender.get(&client_id) {
+            Some(client_command_sender) => {
+                match client_command_sender.send(command) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            None => Err(format!("Client {client_id} command sender not found")),
+        }
     }
 
-    pub fn request_file(&self, client_id: ClientId, file_id: FileId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::File(file_id))).expect("error sending file request");
+    pub fn request_files_list(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::FilesList);
+        self.send_client_command(client_id, command)
     }
 
-    pub fn request_media_list(&self, client_id: ClientId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::MediaList)).expect("error sending media list request");
+    pub fn request_file(&self, client_id: ClientId, file_id: FileId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::File(file_id));
+        self.send_client_command(client_id, command)
     }
 
-    pub fn request_media(&self, client_id: ClientId, media_id: MediaId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::Media(media_id))).expect("error sending media request");
+    pub fn request_media_list(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::MediaList);
+        self.send_client_command(client_id, command)
     }
 
-    pub fn request_registration_to_chat(&self, client_id: ClientId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::RegistrationToChat)).expect("error sending registration to chat request");
+    pub fn request_media(&self, client_id: ClientId, media_id: MediaId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::Media(media_id));
+        self.send_client_command(client_id, command)
     }
 
-    pub fn request_client_list(&self, client_id: ClientId) {
-        self.client_command_sender.get(&client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::ClientList)).expect("error sending client list request");
+    pub fn request_registration_to_chat(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::RegistrationToChat);
+        self.send_client_command(client_id, command)
     }
 
-    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: Message) {
-        self.client_command_sender.get(&sender_client_id).expect("no such Client Id").send(NetCommand::Net(ClientCommand::MessageFor(receiver_client_id, message))).expect("error sending message");
+    pub fn request_client_list(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ClientCommand::ClientList);
+        self.send_client_command(client_id, command)
     }
 
-    pub fn controller_shortcut(&self, sender_client_id: ClientId, packet: Packet) {
-        self.client_command_sender.get(&sender_client_id).expect("no such Client Id").send(NetCommand::ControllerShortcut(packet)).expect("error sending controller shortcut");
+    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: Message) -> Result<(), String> {
+        match self.clients.get(receiver_client_id as usize) {
+            Some(_) => {
+                let command = NetCommand::Net(ClientCommand::MessageFor(receiver_client_id, message));
+                self.send_client_command(sender_client_id, command)
+            },
+            None => Err(format!("Client {receiver_client_id} not found")),
+        }
+
+    }
+
+    pub fn controller_shortcut(&self, client_id: ClientId, packet: Packet) -> Result<(), String> {
+        let command = NetCommand::ControllerShortcut(packet);
+        self.send_client_command(client_id, command)
     }
 
     // /// - Client Events
 
-   /* pub fn files_list(&self) {
-        for receiver in self.client_event_receiver.iter() {
-            for received in receiver.1.iter() {
-                match received {
-                    HostEvent::PacketReconstructed(server_to_client) => {
-                        match server_to_client {
-                            ServerToClient::ServerType(server_type) => { log(format!("Client {} got {:?}", receiver.0, server_type).as_str())},
-                            ServerToClient::FilesList(file_list) => { log(format!("Files list received: {:?}", file_list).as_str())},
-                            ServerToClient::File(file_id, file) => { log(format!("File {} received: {:?}", file_id, file).as_str())},
-                            ServerToClient::MediaList(media_list) => { log(format!("Media list received: {:?}", media_list).as_str())},
-                            ServerToClient::Media(media_id, image) => { log(format!("File {} received: {:?}", media_id, image).as_str())},
-                            ServerToClient::ClientList(client_list) => { log(format!("Client list received: {:?}", client_list).as_str())},
-                            ServerToClient::MessageFrom(client_id, message) => { log(format!("Message from  Client {} received: {:?}", client_id, message).as_str())},
-                            ServerToClient::ErrNotFound => { log("Err Not Found"); },
-                            ServerToClient::ErrClientId => { log("Err Client Id Not Found"); },
-                        }
-                    },
-                    PacketSent(packet) => { log(format!("Packet Sent: {:?}", packet).as_str()); },
-                }
+    pub fn handle_client_event(&self) -> Option<String> {
+        for received in self.host_event_receiver.iter() {
+            return match received {
+                HostEvent::PacketReconstructed(server_to_client) => {
+                    Some(match server_to_client {
+                        ServerToClient::ServerType(server_type) => format!("Server type: {:?}", server_type),
+                        ServerToClient::FilesList(file_list) => format!("Files list received: {:?}", file_list),
+                        ServerToClient::File(file_id, file) => format!("File {} received: {:?}", file_id, file),
+                        ServerToClient::MediaList(media_list) => format!("Media list received: {:?}", media_list),
+                        ServerToClient::Media(media_id, image) => format!("File {} received: {:?}", media_id, image),
+                        ServerToClient::ClientList(client_list) => format!("Client list received: {:?}", client_list),
+                        ServerToClient::MessageFrom(client_id, message) => format!("Message from Client {} received: {:?}", client_id, message),
+                        ServerToClient::ErrNotFound => "Err Not Found".to_owned(),
+                        ServerToClient::ErrClientId => "Err Client Id Not Found".to_owned(),
+                    })
+                },
+                HostEvent::PacketSent(packet) => {
+                    Some(format!("Packet Sent: {:?}", packet))
+                },
             }
         }
-    }*/
+        None
+    }
+}
+
+fn handle_packet (packet: &Packet) {
+    match packet.clone().pack_type {
+        PacketType::MsgFragment(fragment) => {}
+        PacketType::Ack(ack) => {}
+        PacketType::Nack(nack) => {}
+        PacketType::FloodRequest(flood_request) => {}
+        PacketType::FloodResponse(flood_response) => {}
+    }
 }
