@@ -1,19 +1,19 @@
 use crossbeam_channel::unbounded;
-use tracing_subscriber::EnvFilter;
 use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
 use initializer::initializer::initialize;
 
-fn main() /*-> std::io::Result<()>*/ {
-
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target (true)
-        .with_level(true)
-        .try_init();
-
-    let init = initialize().unwrap();
-    let mut temp_sc = init.0;
+fn main() -> std::io::Result<()> {
+    //let (mut controller, handles) = initialize();
+    //controller.crash(2);
+    /*for (node_id, handle) in handles {
+        handle.join().unwrap();
+        println!("Closing thread of node: {:?}", node_id);
+    }
+     */
+    let init = initialize("init_file.toml").unwrap();
+    let temp_sc = init.0;
     let handles = init.1;
+
 
     /*let temp_sc = SimulationControllerData {
         drones: vec![],
@@ -27,16 +27,16 @@ fn main() /*-> std::io::Result<()>*/ {
         packet_sender: Default::default(),
     };*/
 
-    /*let mut terminal = ratatui::init();
+    let mut terminal = ratatui::init();
     let mut app = simulation_controller::frontend::app::App::default(temp_sc);
     let app_result = app.run(&mut terminal);
     terminal.clear()?;
-    ratatui::restore();*/
+    ratatui::restore();
 
     for (node_id, handle) in handles {
         handle.join().unwrap();
         log(&format!("Closing thread of node: {:?}", node_id));
     }
 
-    //app_result
+    app_result
 }

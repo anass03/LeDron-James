@@ -53,7 +53,7 @@ pub(super) struct Tab1{
 }
 pub(super) struct NodeList{
     pub(super) items: Vec<Node>,
-    selected: u8, // 256 Nodes MAX
+    pub(super) selected: u8, // 256 Nodes MAX
 }
 struct FnList {
     fns: Vec<Fns>
