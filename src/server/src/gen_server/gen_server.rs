@@ -40,11 +40,6 @@ impl GenServer {
         packet_send: HashMap<NodeId, Sender<Packet>>,
         server_type: ServerTypes,
     ) -> Self {
-        tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::from_default_env())
-            .try_init()
-            .expect("failed to init tracing subscriber");
-
         assert!(
             connected_drone_ids.len() >= 1 && connected_drone_ids.len() <= 2,
             "Server must be connected to at least one and at most two drones!"
