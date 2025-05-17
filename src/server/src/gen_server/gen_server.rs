@@ -42,7 +42,8 @@ impl GenServer {
     ) -> Self {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
-            .init();
+            .try_init()
+            .expect("failed to init tracing subscriber");
 
         assert!(
             connected_drone_ids.len() >= 1 && connected_drone_ids.len() <= 2,
@@ -87,7 +88,14 @@ impl GenServerBehavior for GenServer {
     }
 
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
-        let mut received_fragments = self.host.received_fragments.lock().unwrap();
+        let lock_result = self.host.received_fragments.lock();
+        let mut received_fragments = match lock_result {
+            Ok(guard) => guard,
+            Err(poisoned) => {
+                error!("Mutex poisoned while accessing received_fragments");
+                poisoned.into_inner() // oppure return None; per uscire dal metodo
+            }
+        };
         let session_data = received_fragments
             .entry(packet.session_id)
             .or_insert_with(|| RecSessionData {
@@ -95,7 +103,6 @@ impl GenServerBehavior for GenServer {
                 last_activity: Instant::now(),
                 pending: fragment.total_n_fragments as usize,
             });
-
         let index = fragment.fragment_index as usize;
         session_data.last_activity = Instant::now();
 
