@@ -2,7 +2,7 @@ use petgraph::visit::Walker;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
-use ratatui::text::{Line, Span};
+use ratatui::text::{Line, Span, ToLine};
 use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph, Tabs, Widget, Wrap};
 
 use wg_2024::config::Drone as DroneConfig;
@@ -58,6 +58,7 @@ pub(super) fn demo_render_tab1(app:&App, area: Rect, buf : &mut Buffer){
         .highlight_symbol(">");
 
     list.render(left_column,buf);
+    render_selected_fns(app, available_fns, buf);
 
     // Log area will be rendered by the same function on Overview Page ( Tab0 )
     let log_paragraph = super::tab0::process_log_paragraph(app);
@@ -67,6 +68,7 @@ pub(super) fn demo_render_tab1(app:&App, area: Rect, buf : &mut Buffer){
     // Retrieve
 
 }
+
 impl From<&Node> for ListItem<'_>{
     fn from(n: &Node) -> Self {
         let line = match n{
@@ -84,9 +86,70 @@ impl From<&Node> for ListItem<'_>{
     }
 }
 // Render functions depending on the item currently selected
-fn render_selected_fns(){
+fn render_selected_fns(app:&App,area:Rect, buf: &mut Buffer){
+    use super::super::super::super::app::model;
+    let selected_n = app.cache.tab1_data.nodelist.selected;
+    match app.cache.tab1_data.nodelist.items.get(selected_n as usize){
+        Some(n) => {
+            // Function Process
+            let vec_and_block = match n{
+                Node::Client(_) => {
+                    // Render Paragraph Client
+                    render_client_opt()
+                }
+                Node::Server(_) => {
+                    // Render Paragraph Server
+                    render_server_opt()
+                }
+                Node::Drone(_) => {
+                    // Render Drone
+                    render_client_opt()
+                }
+            };
+            let list = List::new(vec_and_block.0)
+                .block(vec_and_block.1)
+                .highlight_style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                .highlight_spacing(HighlightSpacing::Always)
+                .highlight_symbol(">");
+        },
+        None => {
+            // Error LOG Block processing
+        }
+    }
 }
-
+fn render_client_opt<'a>()->(Vec<Line<'a>>, Block<'a>){
+    let block_list = Block::default()
+        .title(Span::from("Choose your Client option"))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    let list_items:Vec<&str> = vec!["Open chat messages [CLIENTS]",
+                                    "Browse [SERVERS]",
+                                    "Start Flood Request",
+                                    "Crash",
+                                    "Add Edge",
+                                    "Find hypothetical best route"];
+    (list_items.iter().map(|&a| Line::from(a)).collect(),block_list)
+}
+fn render_server_opt<'a>()->(Vec<Line<'a>>, Block<'a>){
+    let block_list = Block::default()
+        .title(Span::from("Choose your Server option"))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    let list_items:Vec<&str> = vec!["Crash",
+                                    "Add Edge",
+                                    "Find hypothetical best route"];
+    (list_items.iter().map(|&a| Line::from(a)).collect(),block_list)
+}
+fn render_drone_opt<'a>()->(Vec<Line<'a>>, Block<'a>){
+    let block_list = Block::default()
+        .title(Span::from("Choose your Drone option"))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    let list_items:Vec<&str> = vec!["Set new PDR",
+                                    "Crash",
+                                    "Add Edge"];
+    (list_items.iter().map(|&a| Line::from(a)).collect(),block_list)
+}
 // Render output depending on the item currently selected
 // In case of a client showing: Chat
 fn render_selected_out(){

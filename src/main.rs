@@ -10,7 +10,7 @@ fn main() -> std::io::Result<()> {
         println!("Closing thread of node: {:?}", node_id);
     }
      */
-    let init = initialize().unwrap();
+    let init = initialize("init_file.toml").unwrap();
     let temp_sc = init.0;
     let handles = init.1;
 
