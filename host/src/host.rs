@@ -81,35 +81,59 @@ impl Network {
     }
     /// Aggiorna il grafo basandosi sulla topologia attuale
     pub fn update_graph(&mut self) {
-        // Rimuovi tutti gli archi esistenti
+        // Rimuove tutti gli archi esistenti
         self.graph.clear_edges();
 
-        for (_, (node_index, neighbors)) in &self.topology {
+        for (node_id, (node_index, neighbors)) in &self.topology {
             for neighbor_id in neighbors {
-                let neighbor_index = self.topology.get(neighbor_id).unwrap().0;
-                if !self.graph.contains_edge(*node_index, neighbor_index) {
-                    self.graph.add_edge(*node_index, neighbor_index, 0.0);
-                }
-                if !self.graph.contains_edge(neighbor_index, *node_index) {
-                    self.graph.add_edge(neighbor_index, *node_index, 0.0);
-                }
-            }
-        }
-    }
-    pub fn modify_pdr(&mut self){
-        for i in self.topology.keys(){
-            for j in self.topology.get(i).unwrap().1.iter(){
-                if let Some(a) = self.graph.find_edge(self.topology.get(i).unwrap().0, self.topology.get(j).unwrap().0) {
-                    if let Some(weight) = self.graph.edge_weight_mut(a) {
-                        *weight = match self.drones_packet_sent.get(i).unwrap().1 {
-                            0 => 0.0,
-                            _ => {self.drones_packet_sent.get(i).unwrap().1.clone() as f64 /self.drones_packet_sent.get(i).unwrap().0 as f64}
-                        };
+                if let Some((neighbor_index, _)) = self.topology.get(neighbor_id) {
+                    if !self.graph.contains_edge(*node_index, *neighbor_index) {
+                        self.graph.add_edge(*node_index, *neighbor_index, 0.0);
                     }
+                    if !self.graph.contains_edge(*neighbor_index, *node_index) {
+                        self.graph.add_edge(*neighbor_index, *node_index, 0.0);
+                    }
+                } else {
+                    warn!(
+                    "Neighbor {} of node {} not found in topology. Skipping edge.",
+                    neighbor_id,
+                    node_id
+                );
                 }
             }
         }
     }
+
+    pub fn modify_pdr(&mut self) {
+        for i in self.topology.keys() {
+            if let Some((index_i, neighbors)) = self.topology.get(i) {
+                if let Some((sent, total)) = self.drones_packet_sent.get(i) {
+                    let pdr = if *total == 0 {
+                        0.0
+                    } else {
+                        *total as f64 / *sent as f64
+                    };
+
+                    for j in neighbors {
+                        if let Some((index_j, _)) = self.topology.get(j) {
+                            if let Some(edge) = self.graph.find_edge(*index_i, *index_j) {
+                                if let Some(weight) = self.graph.edge_weight_mut(edge) {
+                                    *weight = pdr;
+                                }
+                            }
+                        } else {
+                            warn!("Neighbour node {} not found in topology.", j);
+                        }
+                    }
+                } else {
+                    warn!("Packet stats not found for node {} in drones_packet_sent.", i);
+                }
+            } else {
+                warn!("Node {} not found in topology.", i);
+            }
+        }
+    }
+
     pub fn pdr_helper(&mut self,source_routing_header: SourceRoutingHeader){
         for i in source_routing_header.hops{
             self.drones_packet_sent.entry(i).and_modify(|s| s.0 += 1).or_insert((0,0));
@@ -123,11 +147,16 @@ impl Network {
     }
 
     /// Trova il percorso migliore usando Dijkstra
-    pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Vec<NodeId> {
-        let start_index = self.topology.get(&start).unwrap().0;
-        let destination_index = self.topology.get(&destination).unwrap().0;
+    pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
+        let start_index = self.topology.get(&start)?.0;
+        let destination_index = self.topology.get(&destination)?.0;
 
         let shortest_paths = dijkstra(&self.graph, start_index, Some(destination_index), |edge| *edge.weight());
+
+        if !shortest_paths.contains_key(&destination_index) {
+            return None; // Nessun percorso trovato
+        }
+
         let mut current = destination_index;
         let mut path = vec![current];
 
@@ -142,39 +171,35 @@ impl Network {
         }
 
         path.reverse();
-        path.iter().map(|&n| self.graph[n]).collect()
+        Some(path.iter().filter_map(|&n| self.graph.node_weight(n).copied()).collect())
     }
 
     /// Trova un percorso alternativo, cercando comunque di soddisfare le condizioni di efficienza
     pub fn find_alternate_route(&self, start: NodeId, destination: NodeId, used_route: &[NodeId]) -> Option<Vec<NodeId>> {
-        // Identifica gli indici dei nodi nel grafo
         let start_index = self.topology.get(&start)?.0;
         let destination_index = self.topology.get(&destination)?.0;
 
-        // Crea una copia modificabile del grafo
         let mut graph = self.graph.clone();
 
-        // Rimuovi gli archi che fanno parte del percorso precedente
+        // Rimuove gli archi del percorso già usato
         for window in used_route.windows(2) {
             if let [prev, next] = window {
-                if let Some(&prev_index) = self.topology.get(prev).map(|(i, _)| i) {
-                    if let Some(&next_index) = self.topology.get(next).map(|(i, _)| i) {
-                        // Trova l'arco tra prev_index e next_index
-                        if let Some(edge_index) = graph.find_edge(prev_index, next_index) {
-                            graph.remove_edge(edge_index); // Rimuovi l'arco
-                        }
+                if let (Some(&(prev_index, _)), Some(&(next_index, _))) =
+                    (self.topology.get(prev), self.topology.get(next))
+                {
+                    if let Some(edge_index) = graph.find_edge(prev_index, next_index) {
+                        graph.remove_edge(edge_index);
                     }
                 }
             }
         }
 
-        // Applica Dijkstra sul grafo modificato
         let shortest_paths = dijkstra(&graph, start_index, Some(destination_index), |edge| *edge.weight());
+
         if !shortest_paths.contains_key(&destination_index) {
             return None; // Nessun percorso alternativo trovato
         }
 
-        // Costruisci il percorso alternativo
         let mut current = destination_index;
         let mut path = vec![current];
 
@@ -189,7 +214,7 @@ impl Network {
         }
 
         path.reverse();
-        Some(path.iter().map(|&n| self.graph[n]).collect())
+        Some(path.iter().filter_map(|&n| self.graph.node_weight(n).copied()).collect())
     }
 
 
