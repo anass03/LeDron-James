@@ -14,7 +14,10 @@ impl SimulationControllerData {
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
-                    Ok(_) => Ok(()),
+                    Ok(_) => {Ok(())
+                        /*//removing all connected channels
+                        for connected_node in self.drones.*/
+                    },
                     Err(e) => Err(e.to_string()),
                 }
             },
