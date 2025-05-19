@@ -411,20 +411,21 @@ impl Functionality for Host {
             let &(curr_id, curr_type) = &window[0];
             let &(next_id, _next_type) = &window[1];
 
-            // Aggiungi nodo e arco
-            // Primo inserimento: curr_id
+            // Verifica se next_id esiste già nella topologia
+            let needs_next = !self.network.topology.contains_key(&next_id);
+
+            // Se necessario, lo inserisce
+            if needs_next {
+                let idx = self.network.graph.add_node(next_id);
+                self.network.topology.insert(next_id, (idx, Vec::new()));
+            }
+
+            // Solo dopo: accedi mutabilmente a curr_id
             let entry = self.network.topology.entry(curr_id).or_insert_with(|| {
                 let idx = self.network.graph.add_node(curr_id);
                 (idx, Vec::new())
             });
 
-            // 💡 Inserimento separato per next_id per evitare borrow doppio
-            if !self.network.topology.contains_key(&next_id) {
-                let idx = self.network.graph.add_node(next_id);
-                self.network.topology.insert(next_id, (idx, Vec::new()));
-            }
-
-            // Ora puoi accedere ad `entry` senza conflitti
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
