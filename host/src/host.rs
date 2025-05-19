@@ -412,26 +412,29 @@ impl Functionality for Host {
             let &(next_id, _next_type) = &window[1];
 
             // Aggiungi nodo e arco
+            // Primo inserimento: curr_id
             let entry = self.network.topology.entry(curr_id).or_insert_with(|| {
                 let idx = self.network.graph.add_node(curr_id);
                 (idx, Vec::new())
             });
 
-            // Assicurati che anche next_id sia nella topologia
-            self.network.topology.entry(next_id).or_insert_with(|| {
+            // 💡 Inserimento separato per next_id per evitare borrow doppio
+            if !self.network.topology.contains_key(&next_id) {
                 let idx = self.network.graph.add_node(next_id);
-                (idx, Vec::new())
-            });
+                self.network.topology.insert(next_id, (idx, Vec::new()));
+            }
 
+            // Ora puoi accedere ad `entry` senza conflitti
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
-                host = host_id,
-                from = curr_id,
-                to = next_id,
-                "Recorded topology edge"
-            );
+                    host = host_id,
+                    from = curr_id,
+                    to = next_id,
+                    "Recorded topology edge"
+                );
             }
+
 
             // Registra server
             if curr_type == NodeType::Server {
