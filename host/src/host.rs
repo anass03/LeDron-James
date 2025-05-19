@@ -631,38 +631,39 @@ impl Functionality for Host {
         "Starting fragmentation"
     );
 
-        // trova percorso
-        let route = self.network.find_best_route(self.id, destination);
-        if route.is_empty() {
-            let err = format!("No route to {}", destination);
-            tracing::error!(host = self.id, session = message.session_id, "{}", err);
-            return Err(err);
-        }
+        // Trova percorso
+        let route = match self.network.find_best_route(self.id, destination) {
+            Some(r) => r,
+            None => {
+                let err = format!("No route to {}", destination);
+                error!(host = self.id, session = message.session_id, "{}", err);
+                return Err(err);
+            }
+        };
 
-        // calcola total fragments
+        // Calcola numero totale di frammenti
         let bytes = &message.content;
         let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
 
-        // prepara o aggiorna SentSessionData
+        // Prepara o aggiorna SentSessionData
         {
-            let mut sent = self.sent_fragments.lock().unwrap();
-            let session = sent.entry(message.session_id)
-                .or_insert_with(|| {
-                    tracing::debug!(
-                    host = self.id,
-                    session = message.session_id,
-                    total,
-                    "New SentSessionData"
-                );
-                    SentSessionData {
-                        buffer: vec![None; total],
-                        last_activity: Instant::now(),
-                        route: route.clone(),
-                        destination,
-                        pending: total,    // <— inizializzo qui
-                    }
-                });
-            // se già esiste, aggiorna pending e buffer size
+            let mut sent = self.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+            let session = sent.entry(message.session_id).or_insert_with(|| {
+                tracing::debug!(
+                host = self.id,
+                session = message.session_id,
+                total,
+                "New SentSessionData"
+            );
+                SentSessionData {
+                    buffer: vec![None; total],
+                    last_activity: Instant::now(),
+                    route: route.clone(),
+                    destination,
+                    pending: total,
+                }
+            });
+
             session.pending = total;
             session.last_activity = Instant::now();
             if session.buffer.len() < total {
@@ -670,7 +671,7 @@ impl Functionality for Host {
             }
         }
 
-        // invio frammenti
+        // Invio frammenti
         for (i, chunk) in bytes.chunks(FRAGMENT_DSIZE).enumerate() {
             let frag = Fragment {
                 fragment_index: i as u64,
@@ -683,22 +684,29 @@ impl Functionality for Host {
                 },
             };
 
-            // aggiorna buffer
+            // Aggiorna buffer
             {
-                let mut sent = self.sent_fragments.lock().unwrap();
-                sent.get_mut(&message.session_id).unwrap().buffer[i] = Some(frag.clone());
+                let mut sent = self.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+                if let Some(session) = sent.get_mut(&message.session_id) {
+                    session.buffer[i] = Some(frag.clone());
+                } else {
+                    return Err("Missing session in sent_fragments".to_string());
+                }
             }
 
-            // costruisci e invia
+            // Costruisci e invia pacchetto
             let header = SourceRoutingHeader::new(route.clone(), 0);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
+
             tracing::info!(
             host = self.id,
             session = message.session_id,
             fragment = i,
             "Sending fragment"
         );
+
             let result = self.send_packet(packet, None);
+
             tracing::info!(
             host = self.id,
             session = message.session_id,
@@ -723,8 +731,10 @@ impl Functionality for Host {
         session = message.session_id,
         "Fragmentation completed"
     );
+
         Ok(())
     }
+
     fn cleanup_expired_sessions(&self, timeout: Duration) {
         let host = self.id;
         tracing::info!(host, timeout_secs = timeout.as_secs(), "Cleanup start");
