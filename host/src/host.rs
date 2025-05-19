@@ -445,7 +445,10 @@ impl Functionality for Host {
             nodes = self.network.topology.len(),
             "Topology graph updated"
         );
+
         if host_id == 7 {
+            tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
+            tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
             if let Some(route) = self.network.find_best_route(7, 9) {
                 tracing::debug!("✅ Route from 7 to 9 found: {:?}", route);
             } else {
