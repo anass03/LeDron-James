@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use wg_2024::config::Config;
-
+//add check client server connections as protocol
+//check if the net is entirely connected
 pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     use std::collections::HashSet;
 

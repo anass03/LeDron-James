@@ -246,7 +246,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#fe553b1ca5f8ddf9a0d15714cbab9575da499885"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4f684981462c6ca3f5f4745efb496d214b1693f3"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -759,7 +759,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#fe553b1ca5f8ddf9a0d15714cbab9575da499885"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4f684981462c6ca3f5f4745efb496d214b1693f3"
 dependencies = [
  "crossbeam-channel",
  "image",
