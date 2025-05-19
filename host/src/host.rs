@@ -379,64 +379,73 @@ impl Functionality for Host {
     }
     fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
+
+        // 🔍 LOG: path completo in arrivo
+        let path_str = response
+            .path_trace
+            .iter()
+            .map(|(id, ty)| format!("{:?}({})", ty, id))
+            .collect::<Vec<_>>()
+            .join(" -> ");
+
         tracing::info!(
-            host = host_id,
-            flood_id = response.flood_id,
-            "Handling FloodResponse"
-        );
+        host = host_id,
+        flood_id = response.flood_id,
+        path = %path_str,
+        "Handling FloodResponse with path"
+    );
 
         let path = &response.path_trace;
         if path.len() < 2 {
             tracing::warn!(
-                host = host_id,
-                len = path.len(),
-                "FloodResponse path too short, skipping"
-            );
+            host = host_id,
+            len = path.len(),
+            "FloodResponse path too short, skipping"
+        );
+            return; // ← aggiunto return per evitare errori con .windows(2)
         }
 
-        // 1) Aggiorno topology in base a ciascuna coppia di hops
+        // 1) Aggiorna topologia
         for window in path.windows(2) {
             let &(curr_id, curr_type) = &window[0];
-            let &(next_id, next_type) = &window[1];
+            let &(next_id, _next_type) = &window[1];
 
-            // Inserisco nodo corrente se manca, e neighbor
-            let entry = self
-                .network
-                .topology
-                .entry(curr_id)
-                .or_insert_with(|| {
-                    let idx = self.network.graph.add_node(curr_id);
-                    (idx, Vec::new())
-                });
+            // Aggiungi nodo e arco
+            let entry = self.network.topology.entry(curr_id).or_insert_with(|| {
+                let idx = self.network.graph.add_node(curr_id);
+                (idx, Vec::new())
+            });
+
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
-                    host = host_id,
-                    from = curr_id,
-                    to = next_id,
-                    "Recorded topology edge"
-                );
+                host = host_id,
+                from = curr_id,
+                to = next_id,
+                "Recorded topology edge"
+            );
             }
 
-            // Se è un server, segnalo in set
+            // Registra server
             if curr_type == NodeType::Server {
                 self.network.servers.insert(curr_id);
                 tracing::debug!(
-                    host = host_id,
-                    server = curr_id,
-                    "Marked node as server"
-                );
+                host = host_id,
+                server = curr_id,
+                "Marked node as server"
+            );
             }
         }
 
-        // 2) Ricostruisco gli archi nel grafo
+        // 2) Ricostruzione grafo
         self.network.update_graph();
         tracing::info!(
-            host = host_id,
-            nodes = self.network.topology.len(),
-            "Topology graph updated"
-        );
+        host = host_id,
+        nodes = self.network.topology.len(),
+        "Topology graph updated"
+    );
     }
+
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
 
