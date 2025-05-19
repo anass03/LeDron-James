@@ -267,17 +267,17 @@ impl Functionality for Host {
         // Inoltro la richiesta a tutti i vicini
         for (neighbour_id, sender) in &self.packet_send {
             tracing::debug!(
-            host = host_id,
-            neighbour = neighbour_id,
-            "Sending FloodRequest"
-        );
+                host = host_id,
+                neighbour = neighbour_id,
+                "Sending FloodRequest"
+            );
             let result = self.send_packet(flood_request.clone(), Some(sender));
             tracing::info!(
-            host = host_id,
-            neighbour = neighbour_id,
-            ?result,
-            "FloodRequest send result"
-        );
+                host = host_id,
+                neighbour = neighbour_id,
+                ?result,
+                "FloodRequest send result"
+            );
         }
     }
     fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet) {
@@ -390,19 +390,19 @@ impl Functionality for Host {
             .join(" -> ");
 
         tracing::info!(
-        host = host_id,
-        flood_id = response.flood_id,
-        path = %path_str,
-        "Handling FloodResponse with path"
-    );
+            host = host_id,
+            flood_id = response.flood_id,
+            path = %path_str,
+            "Handling FloodResponse with path"
+        );
 
         let path = &response.path_trace;
         if path.len() < 2 {
             tracing::warn!(
-            host = host_id,
-            len = path.len(),
-            "FloodResponse path too short, skipping"
-        );
+                host = host_id,
+                len = path.len(),
+                "FloodResponse path too short, skipping"
+            );
             return; // ← aggiunto return per evitare errori con .windows(2)
         }
 
@@ -456,13 +456,13 @@ impl Functionality for Host {
             "Topology graph updated"
         );
 
-        if host_id == 7 {
-            tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
-            tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
+        if host_id == 6 {
+            tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
+            tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
             if let Some(route) = self.network.find_best_route(7, 9) {
-                tracing::debug!("✅ Route from 7 to 9 found: {:?}", route);
+                tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
             } else {
-                tracing::debug!("❌ No route yet from 7 to 9");
+                tracing::debug!("❌ No route yet from 6 to 7");
             }
         }
     }
