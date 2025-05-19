@@ -102,10 +102,7 @@ impl Network {
                 }
             }
         }
-        match self.find_best_route(7, 9) {
-            Some(route) => debug!("✅ Route from {} to {}: {:?}", 7, 9, route),
-            None => debug!("❌ No route found yet from {} to {}", 7, 9),
-        }
+
     }
 
     pub fn modify_pdr(&mut self) {
@@ -444,10 +441,17 @@ impl Functionality for Host {
         // 2) Ricostruzione grafo
         self.network.update_graph();
         tracing::info!(
-        host = host_id,
-        nodes = self.network.topology.len(),
-        "Topology graph updated"
-    );
+            host = host_id,
+            nodes = self.network.topology.len(),
+            "Topology graph updated"
+        );
+        if host_id == 7 {
+            if let Some(route) = self.network.find_best_route(7, 9) {
+                tracing::debug!("✅ Route from 7 to 9 found: {:?}", route);
+            } else {
+                tracing::debug!("❌ No route yet from 7 to 9");
+            }
+        }
     }
 
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
