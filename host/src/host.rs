@@ -417,6 +417,12 @@ impl Functionality for Host {
                 (idx, Vec::new())
             });
 
+            // Assicurati che anche next_id sia nella topologia
+            self.network.topology.entry(next_id).or_insert_with(|| {
+                let idx = self.network.graph.add_node(next_id);
+                (idx, Vec::new())
+            });
+
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
