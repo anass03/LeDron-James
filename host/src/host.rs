@@ -102,6 +102,10 @@ impl Network {
                 }
             }
         }
+        match self.find_best_route(7, 9) {
+            Some(route) => debug!("✅ Route from {} to {}: {:?}", 7, 9, route),
+            None => debug!("❌ No route found yet from {} to {}", 7, 9),
+        }
     }
 
     pub fn modify_pdr(&mut self) {
