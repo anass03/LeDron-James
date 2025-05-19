@@ -253,7 +253,7 @@ impl Functionality for Host {
         // Costruisco header e packet (attenzione: hop_index iniziale = 0)
         let routing_header = SourceRoutingHeader::new(vec![host_id], 0);
         let flood_request = Packet::new_flood_request(
-            routing_header.clone(),
+            routing_header,
             session_id,
             FloodRequest::initialize(flood_id, host_id, self.type_host),
         );
@@ -294,7 +294,8 @@ impl Functionality for Host {
             session = session_id,
             "Handling FloodRequest"
         );
-
+        let mut fr = flood_request.clone();
+        fr.increment(host_id, self.type_host);
         // 1) Evito riprocessamenti dello stesso flood
         if let Some(&seen_id) = self.flood_cache.get(&initiator) {
             if seen_id == flood_id {
@@ -335,8 +336,7 @@ impl Functionality for Host {
         );
 
         // 4) Aggiorno path_trace
-        let mut fr = flood_request.clone();
-        fr.increment(host_id, self.type_host);
+
 
         // 5) Calcolo a chi inoltrare (escludo chi me l'ha mandato)
         let neighbors: Vec<_> = self
