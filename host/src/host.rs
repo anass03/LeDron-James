@@ -295,17 +295,18 @@ impl Functionality for Host {
             "Handling FloodRequest"
         );
         let mut fr = flood_request.clone();
-        fr.increment(host_id, self.type_host);
         // 1) Evito riprocessamenti dello stesso flood
         if let Some(&seen_id) = self.flood_cache.get(&initiator) {
             if seen_id == flood_id {
+                fr.increment(host_id, self.type_host);
+
                 tracing::debug!(
                     host = host_id,
                     initiator,
                     flood_id,
                     "FloodRequest already seen, sending response immediately"
                 );
-                let response_pkt = flood_request.generate_response(session_id);
+                let response_pkt = fr.generate_response(session_id);
                 let result = self.send_packet(response_pkt, None);
                 tracing::info!(
                     host = host_id,
@@ -320,14 +321,13 @@ impl Functionality for Host {
         self.flood_cache.insert(initiator, flood_id);
 
         // 3) Da quale nodo è arrivata?
+        //    Usiamo la path_trace _originale_ (prima dell'increment)
         let from = flood_request
             .path_trace
             .last()
             .map(|(nid, _)| *nid)
-            .unwrap_or_else(|| {
-                error!( host = host_id, "Received FloodRequest with empty path_trace!" );
-                0 // oppure un altro NodeId di default che abbia senso
-            });
+            // se path_trace era vuota, prendiamo l'initiator come mittente
+            .unwrap_or(initiator);
 
         debug!(
             host = host_id,
@@ -336,7 +336,7 @@ impl Functionality for Host {
         );
 
         // 4) Aggiorno path_trace
-
+        fr.increment(host_id, self.type_host);
 
         // 5) Calcolo a chi inoltrare (escludo chi me l'ha mandato)
         let neighbors: Vec<_> = self
