@@ -1,6 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE};
+use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
@@ -249,9 +249,10 @@ impl Functionality for Host {
         let flood_id = generate_unique_flood_id();
         let host_id = self.id;
 
-        self.flood_cache.insert(host_id.clone(), flood_id.clone());
+        ///self.flood_cache.insert(host_id.clone(), flood_id.clone()); vedere se ha senso!!
+
         // Costruisco header e packet (attenzione: hop_index iniziale = 0)
-        let routing_header = SourceRoutingHeader::new(vec![host_id], 0);
+        let routing_header = SourceRoutingHeader::new(vec![], 0); //rimosso host_id dal vec
         let flood_request = Packet::new_flood_request(
             routing_header,
             session_id,
@@ -471,6 +472,13 @@ impl Functionality for Host {
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
 
+        match packet.pack_type {
+            PacketType::FloodRequest(_) => {
+                if channel.is_none() { tracing::info!("TRALLALERO TRALLALA"); }
+            }
+            _ => {}
+        }
+
         let next_channel = channel.or_else(|| {
             self.packet_send
                 .get(&packet.routing_header.hops[packet.routing_header.hop_index])
@@ -480,13 +488,13 @@ impl Functionality for Host {
             Some(ch) => match ch.send(packet.clone()) {
                 Ok(_) => {
                     if let Err(err) = self.sendto_controller(packet.clone()) {
-                        warn!("Error notifying controller: {}", err);
+                        warn!("Notifying controller gone wrong: {}", err);
                     }
                     SendingCodes::SuccessfullySent(packet.session_id)
                 }
                 Err(err) => {
                     if let Err(e) = self.sendto_controller(packet) {
-                        warn!("Error notifying controller: {}", e);
+                        warn!("Notifying controller, for error sending packet, gone wrong: {}", e);
                     }
                     SendingCodes::ErrorSending(err.to_string())
                 }
@@ -494,7 +502,7 @@ impl Functionality for Host {
             None => {
                 warn!("No valid channel found for sending packet.");
                 if let Err(e) = self.sendto_controller(packet) {
-                    warn!("Error notifying controller: {}", e);
+                    warn!("Error, notifying controller: {}", e);
                 }
                 SendingCodes::NoNextHop("Neighbour not found".to_string())
             }

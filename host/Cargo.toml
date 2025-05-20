@@ -13,3 +13,4 @@ petgraph = "0.7.1"
 tokio = { version = "1", features = ["full"] }
 image = "0.25.5"
 tracing = "0.1.41"
+log = "0.4.25"
