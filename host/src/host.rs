@@ -316,6 +316,15 @@ impl Functionality for Host {
             tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
             let mut response_pkt = fr.generate_response(session_id);
             response_pkt.routing_header.hop_index += 1;
+
+            let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
+            tracing::debug!(
+                host = host_id,
+                ?next_hop,
+                neighbors = ?self.packet_send.keys().collect::<Vec<_>>(),
+                "Attempting to send FloodResponse to next hop"
+            );
+
             let result = self.send_packet(response_pkt, None);
 
             tracing::info!(
@@ -360,6 +369,14 @@ impl Functionality for Host {
             tracing::info!(host = host_id, "No other neighbors: replying flood immediately");
             let mut resp_pkt = fr.generate_response(session_id);
             resp_pkt.routing_header.hop_index+=1;
+            let next_hop = resp_pkt.routing_header.hops[resp_pkt.routing_header.hop_index];
+            tracing::debug!(
+                host = host_id,
+                ?next_hop,
+                neighbors = ?self.packet_send.keys().collect::<Vec<_>>(),
+                "Attempting to send FloodResponse to next hop"
+            );
+
             let result = self.send_packet(resp_pkt, None);
 
             tracing::info!(
