@@ -244,7 +244,7 @@ impl App<'_> {
                                 .push_log(LogType::ERROR, str.as_str()),
                         }
                     }
-                    6 => {
+                    5 => {
                         // Reg to Chat
                         match self
                             .simulation_controller_data
@@ -260,7 +260,7 @@ impl App<'_> {
                                 .push_log(LogType::ERROR, str.as_str()),
                         }
                     }
-                    7 => {
+                    6 => {
                         // Client List
                         match self
                             .simulation_controller_data
