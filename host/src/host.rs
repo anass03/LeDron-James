@@ -344,10 +344,10 @@ impl Functionality for Host {
             from,
             "FloodRequest arrived from neighbor"
         );
-
+        tracing::info!("Path trace before adding myself: {:?}", fr.path_trace);
         // 4) Aggiorno path_trace
         fr.increment(host_id, self.type_host);
-
+        tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
         // 5) Inoltro a tutti i vicini (escluso chi me l'ha mandato)
         let neighbors: Vec<_> = self
             .packet_send
@@ -406,82 +406,73 @@ impl Functionality for Host {
             .join(" -> ");
 
         tracing::info!(
-            host = host_id,
-            flood_id = response.flood_id,
-            path = %path_str,
-            "Handling FloodResponse with path"
-        );
+        host = host_id,
+        flood_id = response.flood_id,
+        path = %path_str,
+        "Handling FloodResponse with path"
+    );
 
         let path = &response.path_trace;
         if path.len() < 2 {
             tracing::warn!(
-                host = host_id,
-                len = path.len(),
-                "FloodResponse path too short, skipping"
-            );
-            return; // ← aggiunto return per evitare errori con .windows(2)
+            host = host_id,
+            len = path.len(),
+            "FloodResponse path too short, skipping"
+        );
+            return;
         }
 
-        // 1) Aggiorna topologia
-        for window in path.windows(2) {
-            let &(curr_id, curr_type) = &window[0];
-            let &(next_id, _next_type) = &window[1];
-
-            // Verifica se next_id esiste già nella topologia
-            let needs_next = !self.network.topology.contains_key(&next_id);
-
-            // Se necessario, lo inserisce
-            if needs_next {
-                let idx = self.network.graph.add_node(next_id);
-                self.network.topology.insert(next_id, (idx, Vec::new()));
-            }
-
-            // Solo dopo: accedi mutabilmente a curr_id
-            let entry = self.network.topology.entry(curr_id).or_insert_with(|| {
-                let idx = self.network.graph.add_node(curr_id);
+        // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
+        for &(node_id, node_type) in path {
+            self.network.topology.entry(node_id).or_insert_with(|| {
+                let idx = self.network.graph.add_node(node_id);
                 (idx, Vec::new())
             });
 
+            if node_type == NodeType::Server {
+                self.network.servers.insert(node_id);
+                tracing::debug!(host = host_id, server = node_id, "Marked node as server");
+            }
+        }
+
+        // 2) Registra connessioni tra nodi adiacenti
+        for window in path.windows(2) {
+            let (curr_id, _) = window[0];
+            let (next_id, _) = window[1];
+
+            let entry = self.network.topology.get_mut(&curr_id).unwrap();
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
-                    host = host_id,
-                    from = curr_id,
-                    to = next_id,
-                    "Recorded topology edge"
-                );
-            }
-
-
-            // Registra server
-            if curr_type == NodeType::Server {
-                self.network.servers.insert(curr_id);
-                tracing::debug!(
                 host = host_id,
-                server = curr_id,
-                "Marked node as server"
+                from = curr_id,
+                to = next_id,
+                "Recorded topology edge"
             );
             }
         }
 
-        // 2) Ricostruzione grafo
+        // 3) Aggiorna la rappresentazione del grafo
         self.network.update_graph();
-        tracing::info!(
-            host = host_id,
-            nodes = self.network.topology.len(),
-            "Topology graph updated"
-        );
 
+        tracing::info!(
+        host = host_id,
+        nodes = self.network.topology.len(),
+        "Topology graph updated"
+    );
+
+        // Debug opzionale per nodo specifico
         if host_id == 6 {
             tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
             tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
-            if let Some(route) = self.network.find_best_route(7, 9) {
+            if let Some(route) = self.network.find_best_route(6, 7) {
                 tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
             } else {
                 tracing::debug!("❌ No route yet from 6 to 7");
             }
         }
     }
+
 
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
