@@ -11,7 +11,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Tabs, Wid
 use crate::frontend::app::App;
 use crate::frontend::app::model::AppMode;
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy,PartialEq,Eq)]
 pub(crate) enum SelectedTab {
     #[default]
     Overview,
@@ -121,6 +121,7 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
         }));
     match app.app_mode{
         AppMode::Normal => {
+            // Now some specific tab gotta have a different message that we will choose
             block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
         }
         AppMode::Input => {

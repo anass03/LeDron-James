@@ -21,7 +21,7 @@ use host::HostEvent;
 use rand::Rng;
 use wg_2024::packet::PacketType;
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::simulation_controller::SimulationControllerData;
+use crate::backend::simulation_controller::{LogType, SimulationControllerData};
 use crate::frontend::app::model::{AppMode, Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*
@@ -55,7 +55,7 @@ impl App<'_>{
             simulation_controller_data,
             stay:true,
             app_mode:AppMode::Normal,
-            tick_rate:Duration::from_millis(100),
+            tick_rate:Duration::from_millis(250),
 
             settings: Settings::load(),
             selected_tab: SelectedTab::default(),
@@ -69,8 +69,8 @@ impl App<'_>{
 
             // Ascoltare i canali e passare al backend
             // i pacchetti necessari
-
-            /*crossbeam_channel::select_biased! {
+            /*
+            crossbeam_channel::select_biased! {
                 recv(self.simulation_controller_data.client_event_receiver.get(&0).unwrap()) -> command => {
                     if let Ok(command) = command {
                         match command {
@@ -91,7 +91,15 @@ impl App<'_>{
                         // Closed Channel
                     }
                 },
-            }*/
+            }
+             */
+            self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str()));
+            match self.simulation_controller_data.handle_client_event(){
+                None => {}
+                Some(str) => {
+                    self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str());
+                }
+            }
 
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
@@ -175,10 +183,8 @@ impl App<'_>{
             }
             _ => ()
         }
-
-        if self.cache.tab1_data.nodelist.items.is_empty(){
-            self.cache.tab1_data.nodelist.initialize(self.simulation_controller_data.drones.clone(), self.simulation_controller_data.servers.clone(), self.simulation_controller_data.clients.clone());
-        }
+        // Nodelist initialized check
+        self.check_lists_initialized();
 
 
         //self.refresh_cache();

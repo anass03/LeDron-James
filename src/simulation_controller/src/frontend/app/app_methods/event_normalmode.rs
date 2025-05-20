@@ -7,7 +7,7 @@ impl App<'_>{
             match key.code.to_string().to_lowercase().as_str() {
                 "a" => self.previous_tab(),
                 "d" => self.next_tab(),
-                "p" => println!("{:?}", self.cache.text_buffer.text_area.clone().into_lines()),
+                "p" => println!("{:?}", self.cache.tab1_data.nodelist.items),
                 "q" => self.stay = false,
                 _ => {
                     match self.selected_tab {

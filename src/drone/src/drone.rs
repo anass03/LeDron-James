@@ -77,7 +77,7 @@ impl wg_2024::drone::Drone for Drone {
             cache: Cache {
                 history_floodreq: HashMap::new(),
                 crashed: false,
-                logging_enabled: true,
+                logging_enabled: false,
             },
         }
     }
