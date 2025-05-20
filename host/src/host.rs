@@ -151,8 +151,8 @@ impl Network {
     pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
         use petgraph::algo::dijkstra;
 
-        let &start_index = self.topology.get(&start)?.0;
-        let &destination_index = self.topology.get(&destination)?.0;
+        let start_index = self.topology.get(&start)?.0;
+        let destination_index = self.topology.get(&destination)?.0;
 
         // Costruisce mappa dei percorsi minimi da start, e tiene traccia dei predecessori
         let paths = dijkstra(&self.graph, start_index, Some(destination_index), |e| *e.weight());
@@ -166,15 +166,17 @@ impl Network {
         let mut current = destination_index;
 
         while current != start_index {
-            // Cerca predecessore tra i nodi collegati a current
             let predecessor = self.graph
                 .neighbors_directed(current, petgraph::Incoming)
                 .find(|&n| {
-                    let edge = self.graph.find_edge(n, current)?;
-                    let weight = *self.graph.edge_weight(edge)?;
-                    let current_cost = paths.get(&current)?;
-                    let prev_cost = paths.get(&n)?;
-                    (prev_cost + weight - current_cost).abs() < 1e-8
+                    if let Some(edge) = self.graph.find_edge(n, current) {
+                        if let Some(weight) = self.graph.edge_weight(edge) {
+                            if let (Some(&prev_cost), Some(&curr_cost)) = (paths.get(&n), paths.get(&current)) {
+                                return (prev_cost + weight - curr_cost).abs() < 1e-8;
+                            }
+                        }
+                    }
+                    false
                 });
 
             match predecessor {
@@ -182,9 +184,10 @@ impl Network {
                     current = prev;
                     path.push(current);
                 }
-                None => return None, // Se non troviamo predecessore, qualcosa è andato storto
+                None => return None, // percorso rotto
             }
         }
+
 
         path.reverse();
         Some(path.into_iter().filter_map(|ix| self.graph.node_weight(ix).copied()).collect())
