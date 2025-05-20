@@ -149,30 +149,45 @@ impl Network {
 
     /// Trova il percorso migliore usando Dijkstra
     pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
-        let start_index = self.topology.get(&start)?.0;
-        let destination_index = self.topology.get(&destination)?.0;
+        use petgraph::algo::dijkstra;
 
-        let shortest_paths = dijkstra(&self.graph, start_index, Some(destination_index), |edge| *edge.weight());
+        let &start_index = self.topology.get(&start)?.0;
+        let &destination_index = self.topology.get(&destination)?.0;
 
-        if !shortest_paths.contains_key(&destination_index) {
-            return None; // Nessun percorso trovato
+        // Costruisce mappa dei percorsi minimi da start, e tiene traccia dei predecessori
+        let paths = dijkstra(&self.graph, start_index, Some(destination_index), |e| *e.weight());
+
+        if !paths.contains_key(&destination_index) {
+            return None;
         }
 
+        // Ricostruisce il percorso indietro
+        let mut path = vec![destination_index];
         let mut current = destination_index;
-        let mut path = vec![current];
 
-        while let Some(prev_node) = shortest_paths.iter().find_map(|(node, &dist)| {
-            self.graph
-                .edges_connecting(*node, current)
-                .find(|edge| dist + edge.weight() == shortest_paths[&current])
-                .map(|_| *node)
-        }) {
-            current = prev_node;
-            path.push(current);
+        while current != start_index {
+            // Cerca predecessore tra i nodi collegati a current
+            let predecessor = self.graph
+                .neighbors_directed(current, petgraph::Incoming)
+                .find(|&n| {
+                    let edge = self.graph.find_edge(n, current)?;
+                    let weight = *self.graph.edge_weight(edge)?;
+                    let current_cost = paths.get(&current)?;
+                    let prev_cost = paths.get(&n)?;
+                    (prev_cost + weight - current_cost).abs() < 1e-8
+                });
+
+            match predecessor {
+                Some(prev) => {
+                    current = prev;
+                    path.push(current);
+                }
+                None => return None, // Se non troviamo predecessore, qualcosa è andato storto
+            }
         }
 
         path.reverse();
-        Some(path.iter().filter_map(|&n| self.graph.node_weight(n).copied()).collect())
+        Some(path.into_iter().filter_map(|ix| self.graph.node_weight(ix).copied()).collect())
     }
 
     /// Trova un percorso alternativo, cercando comunque di soddisfare le condizioni di efficienza
@@ -487,19 +502,15 @@ impl Functionality for Host {
             } else {
                 tracing::debug!("❌ No route yet from 6 to 7");
             }
+        }else {
+            tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
+            tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
         }
     }
 
 
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
-
-        match packet.pack_type {
-            PacketType::FloodRequest(_) => {
-                if channel.is_none() { tracing::info!("TRALLALERO TRALLALA"); }
-            }
-            _ => {}
-        }
 
         let next_channel = channel.or_else(|| {
             self.packet_send
