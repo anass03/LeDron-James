@@ -479,10 +479,16 @@ impl Functionality for Host {
             _ => {}
         }
 
-        let next_channel = channel.or_else(|| {
-            self.packet_send
-                .get(&packet.routing_header.hops[packet.routing_header.hop_index])
-        });
+        let next_channel;
+        if let Some(sender) = channel{
+            next_channel = Some(sender);
+        }else {
+            next_channel = self.packet_send.get(&packet.routing_header.hops[packet.routing_header.hop_index]);
+        }
+        // let next_channel = channel.or_else(|| {
+        //     self.packet_send
+        //         .get(&packet.routing_header.hops[packet.routing_header.hop_index])
+        // });
 
         let result = match next_channel {
             Some(ch) => match ch.send(packet.clone()) {
