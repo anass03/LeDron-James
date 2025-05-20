@@ -10,14 +10,12 @@ impl App<'_>{
                     self.app_mode = AppMode::Normal;
                 },
                 KeyCode::Up => {
-                    if self.cache.tab0_data.log_scroll_offset > 0{
-                        self.cache.tab0_data.log_scroll_offset -= 1;
+                    if self.simulation_controller_data.logs.log_scroll_offset > 1{
+                        self.simulation_controller_data.logs.log_scroll_offset -= 2;
                     }
                 }
                 KeyCode::Down => {
-                    if self.cache.tab0_data.log_scroll_offset < self.cache.tab0_data.logs_memory.len(){
-                        self.cache.tab0_data.log_scroll_offset += 1;
-                    }
+                    self.simulation_controller_data.logs.log_scroll_offset += 2;
                 }
                 _ => {()}
             }

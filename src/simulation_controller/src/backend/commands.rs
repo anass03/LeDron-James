@@ -4,7 +4,7 @@ use wg_2024::packet::Packet;
 use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
 use host::HostEvent::PacketSent;
 use wg_internal::packet::PacketType;
-use crate::backend::simulation_controller::{log, SimulationControllerData};
+use crate::backend::simulation_controller::{log, LogType, SimulationControllerData};
 
 impl SimulationControllerData {
 
@@ -118,23 +118,26 @@ impl SimulationControllerData {
 
     /// - Drone Events
 
-    pub fn handle_drone_event(&self) -> Result<(), String> {
-        for receiver in self.drone_event_receiver.iter() {
+    pub fn handle_drone_event(&mut self) -> Result<(), String> {
+        for receiver in self.drone_event_receiver.try_iter() {
             match receiver {
                 DroneEvent::PacketSent(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
+                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
                 DroneEvent::PacketDropped(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
+                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
                 DroneEvent::ControllerShortcut(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
+                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
             }
         }
@@ -204,7 +207,7 @@ impl SimulationControllerData {
     // /// - Client Events
 
     pub fn handle_client_event(&self) -> Option<String> {
-        for received in self.host_event_receiver.iter() {
+        for received in self.host_event_receiver.try_iter() {
             return match received {
                 HostEvent::PacketReconstructed(server_to_client) => {
                     Some(match server_to_client {

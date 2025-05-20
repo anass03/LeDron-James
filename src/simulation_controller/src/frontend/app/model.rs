@@ -1,4 +1,6 @@
-use ratatui::widgets::ListItem;
+use std::num::ParseIntError;
+use std::str::FromStr;
+use ratatui::widgets::{ListItem, ListState};
 use tui_textarea::Key::Tab;
 use tui_textarea::TextArea;
 use crate::frontend::app::ui::tabs::SelectedTab;
@@ -6,7 +8,7 @@ use crate::frontend::app::ui::tabs::SelectedTab;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Server as ServerConfig;
-
+use wg_2024::network::NodeId;
 use super::super::app::App;
 
 pub(super) struct Settings{
@@ -27,100 +29,147 @@ pub(super) struct Cache<'a> {
 }
 pub(super) struct TextBuffer<'a>{
     pub text_buffer: Vec<String>,
-    pub text_area : TextArea<'a>,
+    pub toml_text_area: TextArea<'a>,
+    pub inputfirst_text_area: TextArea<'a>,
+    pub inputsecond_text_area: TextArea<'a>
 }
 
 // Tab structs needed to encapsulate their information and data
 
 /// Tab n.00 data
 pub(super) struct Tab0{
-    pub logs_memory: Vec<(LogType,String)>,
-    pub log_scroll_offset: usize,
     pub selected_chart: usize,
     pub charts_data: ChartsData,
-}
-pub (super) enum LogType{
-    WARN, ERROR, INFO, DEBUG, FATAL
-}
-/// Temp
-mod _tab1{
-
 }
 
 /// Tab n.01 data
 pub(super) struct Tab1{
     pub nodelist: NodeList,
+    pub selected_fn: FnList,
+    pub selected_button: u8,
 }
-pub(super) struct NodeList{
-    pub(super) items: Vec<Node>,
-    pub(super) selected: u8, // 256 Nodes MAX
+pub(super) struct FnList{
+    pub(super) selected: u8,
+    pub(super) state: ListState,
 }
-struct FnList {
-    fns: Vec<Fns>
-}
-enum Fns{
 
+pub(super) struct NodeList {
+    pub(super) items: Vec<(Node, bool)>,
+    pub(super) selected: u8,
+    pub(super) state: ListState,
+    pub(super) initialized: bool,
 }
-impl NodeList {
-    fn default()->Self{
+impl FnList{
+    fn default() -> Self {
         Self{
-            items: vec![],
-            selected: 0,
+            selected:0,
+            state: ListState::default(),
         }
     }
-    pub(super) fn initialize(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>)->Self{
-        Self{
-            items: {
-                let mut nodes:Vec<Node> = Vec::new();
+
+    /// Has NO Control Against overflow, this fn is used only in specific and controlled cases
+    pub(super) fn select_next(&mut self){
+            self.selected += 1;
+            self.state.select(Some(self.selected as usize));
+    }
+    pub(super) fn select_prev(&mut self){
+        if self.selected > 0 {
+            self.selected -= 1;
+            self.state.select(Some(self.selected as usize));
+        }
+    }
+    pub(super) fn select_first(&mut self){
+        self.selected = 0;
+        self.state.select(Some(self.selected as usize));
+    }
+}
+impl NodeList {
+    fn default() -> Self {
+        Self {
+            items: vec![],
+            initialized: false,
+            selected: 0,
+            state: ListState::default(),
+        }
+    }
+    pub(super) fn initialize(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
+                
+                let mut nodes = Vec::new();
 
                 for d in drones{
-                    nodes.push(Node::Drone(d))
+                    nodes.push((Node::Drone(d),true))
                 }
                 for s in servers{
-                    nodes.push(Node::Server(s))
+                    nodes.push((Node::Server(s),true))
                 }
                 for c in clients{
-                    nodes.push(Node::Client(c))
+                    nodes.push((Node::Client(c),true))
                 }
-
-                nodes
-            },
-            selected: 0,
-        }
+                self.items = nodes;
+            self.selected= 0;
+            self.state.select(Some(self.selected as usize));
+            self.initialized= true;
     }
     fn retrieve_nodes(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
         self.selected = 0;
-        let mut nodes:Vec<Node> = Vec::new();
+        let mut nodes = Vec::new();
 
         for d in drones{
-            nodes.push(Node::Drone(d))
+            nodes.push((Node::Drone(d),true))
         }
         for s in servers{
-            nodes.push(Node::Server(s))
+            nodes.push((Node::Server(s),true))
         }
         for c in clients{
-            nodes.push(Node::Client(c))
+            nodes.push((Node::Client(c),true))
         }
 
         self.items = nodes
     }
+
+    pub(super) fn set_inactive_node(&mut self, id: NodeId){
+        for (n,b) in &mut self.items{
+            match n{
+                Node::Client(c) => {
+                    if c.id == id{
+                        *b = false;
+                    }
+                }
+                Node::Server(s) => {
+                    if s.id == id{
+                        *b = false;
+                    }
+                }
+                Node::Drone(d) => {
+                    if d.id == id{
+                        *b = false;
+                    }
+                }
+            }
+        }
+    }
     pub(super) fn select_next(&mut self){
-        if self.selected < self.items.len() as u8{
+        if self.selected + 1 < (self.items.len()) as u8{
             self.selected += 1;
+            self.state.select(Some(self.selected as usize));
         }
     }
     pub(super) fn select_prev(&mut self){
         if self.selected > 0 {
             self.selected -= 1;
+            self.state.select(Some(self.selected as usize));
         }
     }
-    fn select_first(&mut self){
+    pub(super) fn select_first(&mut self){
         self.selected = 0;
+        self.state.select(Some(self.selected as usize));
     }
     fn select_last(&mut self){
         self.selected = self.items.len() as u8;
+        self.state.select(Some(self.selected as usize));
     }
 }
+#[derive(Debug)]
 pub(super) enum Node{
     Client(ClientConfig), Server(ServerConfig), Drone(DroneConfig)
 }
@@ -150,9 +199,57 @@ impl<'a> TextBuffer<'_>{
     fn default()->Self{
         Self{
             text_buffer: Vec::new(),
-            text_area: Default::default(),
+            toml_text_area: Default::default(),
+            inputfirst_text_area: Default::default(),
+            inputsecond_text_area: Default::default(),
         }
     }
+    /// 1 - Get ID ( u8 ) on the first buffer
+    /// 2 - Get ID and Message ( String )
+    fn get_parsed_data(&self, n:u8)->Result<ParsedBuffer, String>{
+        match n{
+            1 => {
+                match self.inputfirst_text_area.clone().into_lines().first(){
+                    None => {
+                        Err("Nothing to parse".to_string())
+                    }
+                    Some(mystr) => {
+                        match u8::from_str(mystr){
+                            Ok(x) => {Ok(ParsedBuffer::OneParsed(x))}
+                            Err(x) => {Err(format!("Cannot parse an u8 [{:?}]", x))}
+                        }
+                    }
+                }
+            },
+            2 => {
+                match self.inputfirst_text_area.clone().into_lines().first(){
+                    None => {
+                        Err("Nothing to parse on I buffer".to_string())
+                    }
+                    Some(mystr) => {
+                        match u8::from_str(mystr){
+                            Ok(x) => {
+                                // Now we parse the 2nd one
+                                match self.inputfirst_text_area.clone().into_lines().first(){
+                                    None => {
+                                        Err("Nothing to parse on II buffer".to_string())
+                                    }
+                                    Some(mystr2) => {
+                                        Ok(ParsedBuffer::TwoParsed(x, mystr2.to_string()))
+                                    }
+                                }
+                            }
+                            Err(x) => {Err(format!("Cannot parse an u8 on I buffer [{:?}]", x))}
+                        }
+                    }
+                }
+            },
+            _ => Err(format!("Error requesting parsed data [{:?} is not a valid option]", n))
+        }
+    }
+}
+enum ParsedBuffer {
+    OneParsed(u8), TwoParsed(u8, String)
 }
 impl ChartsData {
     fn default()->Self{
@@ -173,32 +270,6 @@ impl Tab0 {
         Tab0 {
             charts_data:ChartsData::default(),
             selected_chart:0,
-            logs_memory: vec![
-                (LogType::INFO,  "[2025-04-18 12:00:01] Server started on port 8080".into()),
-                (LogType::DEBUG, "[2025-04-18 12:00:02] Connected to database successfully".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:05] New client connected: 192.168.1.24".into()),
-                (LogType::WARN,  "[2025-04-18 12:00:08] High memory usage detected".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:12] Job queue processed: 17 tasks in 432ms".into()),
-                (LogType::ERROR, "[2025-04-18 12:00:15] Failed to open config file: config.toml".into()),
-                (LogType::DEBUG, "[2025-04-18 12:00:18] Retrying connection to cache service...".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:20] Background sync completed".into()),
-                (LogType::WARN,  "[2025-04-18 12:00:23] Connection to backup server timed out".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:25] Metrics updated (CPU: 84%, RAM: 72%)".into()),
-                (LogType::DEBUG, "[2025-04-18 12:00:28] Heartbeat ping sent to 5 clients".into()),
-                (LogType::ERROR, "[2025-04-18 12:00:30] Unexpected token in lin from 10.0.0.12".into()),
-                (LogType::DEBUG, "[2025-04-18 12:00:34] Polling external services (3 targets)".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:36] Graceful shutdown initiated".into()),
-            ],
-            log_scroll_offset: 0,
-        }
-    }
-    /// Updates the vector while keeping MAX 50 logging info stored
-    pub(super) fn push_log(&mut self, type_of_log: LogType, text: &str){
-        if self.logs_memory.len()>=50{
-            self.logs_memory.remove(0);
-            self.logs_memory.push((type_of_log, text.to_string()));
-        }else{
-            self.logs_memory.push((type_of_log, text.to_string()));
         }
     }
     fn next_chart(&mut self){
@@ -218,6 +289,8 @@ impl Tab1{
     fn default()->Self{
         Self{
             nodelist: NodeList::default(),
+            selected_fn: FnList::default(),
+            selected_button: 0,
         }
     }
 }

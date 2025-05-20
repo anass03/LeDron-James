@@ -1,10 +1,11 @@
+use std::cmp::PartialEq;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Tabs, Widget, Wrap};
 use crate::frontend::app::App;
-use crate::frontend::app::model::LogType;
+use crate::frontend::app::ui::tabs::SelectedTab;
 
 /// Renders Overview tab-page
 pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
@@ -40,10 +41,12 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         _ => panic!("OVERFLOW CHART SELECTION!")
     }
 }
-pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>)->Paragraph<'a>{
+
+pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
     let lines: Vec<Line> = app
-        .cache
-        .tab0_data.logs_memory
+        .simulation_controller_data
+        .logs
+        .logs_memory
         .iter()
         .map(|(log,msg)| {
             // Single color matching not working
@@ -77,15 +80,19 @@ pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>)->Paragraph<'a>{
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
 
-    if app.cache.cursor == 1{
+    if app.cache.cursor == 1 && app.selected_tab==SelectedTab::Overview{
         log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
     }
+    if app.cache.cursor == 4 && app.selected_tab==SelectedTab::Topology{
+        log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+
 
     let a = Paragraph::new(lines)
         .block(
             log_block
         )
         .wrap(Wrap { trim: true })
-        .scroll((app.cache.tab0_data.log_scroll_offset as u16, 0));
+        .scroll((app.simulation_controller_data.logs.log_scroll_offset as u16, 0));
     return a
 }

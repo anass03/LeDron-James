@@ -86,7 +86,6 @@ pub(super) fn render_tab2(app:&App, area: Rect, buf : &mut Buffer){
         menu_view_area_block = menu_view_area_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
     }
 
-
     /*
     let list_menu_view= vec!["Delete toml content",
                              "Generate random network",
@@ -107,7 +106,7 @@ pub(super) fn render_tab2(app:&App, area: Rect, buf : &mut Buffer){
 
     //list.render(inner_menu_view_area, buf);
     menu_view_area_block.render(menu_view_area, buf);
-    app.cache.text_buffer.text_area.render(editor_area, buf);
+    app.cache.text_buffer.toml_text_area.render(editor_area, buf);
     compiler_status.render(inner_compiler_block, buf);
     compiler_block.render(compiler_area,buf);
     toml_block.render(toml_view_area, buf);
