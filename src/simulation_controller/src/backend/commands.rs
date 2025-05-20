@@ -2,6 +2,7 @@ use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
+use host::ClientCommand::ServerType;
 use host::HostEvent::PacketSent;
 use wg_internal::packet::PacketType;
 use crate::backend::simulation_controller::{log, SimulationControllerData};
@@ -118,7 +119,7 @@ impl SimulationControllerData {
 
     /// - Drone Events
 
-    pub fn handle_drone_event(&self) -> Result<(), String> {
+    pub fn handle_drone_event(&self) -> Option<String> {
         for receiver in self.drone_event_receiver.iter() {
             match receiver {
                 DroneEvent::PacketSent(packet) => {
@@ -138,7 +139,7 @@ impl SimulationControllerData {
                 },
             }
         }
-        Ok(())
+        Some(String::new())
     }
 
     /// - Client Commands
@@ -153,6 +154,11 @@ impl SimulationControllerData {
             },
             None => Err(format!("Client {client_id} command sender not found")),
         }
+    }
+
+    pub fn request_server_type(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ServerType);
+        self.send_client_command(client_id, command)
     }
 
     pub fn request_files_list(&self, client_id: ClientId) -> Result<(), String> {
@@ -193,7 +199,6 @@ impl SimulationControllerData {
             },
             None => Err(format!("Client {receiver_client_id} not found")),
         }
-
     }
 
     pub fn controller_shortcut(&self, client_id: ClientId, packet: Packet) -> Result<(), String> {
@@ -201,7 +206,7 @@ impl SimulationControllerData {
         self.send_client_command(client_id, command)
     }
 
-    // /// - Client Events
+    /// - Client Events
 
     pub fn handle_client_event(&self) -> Option<String> {
         for received in self.host_event_receiver.iter() {
