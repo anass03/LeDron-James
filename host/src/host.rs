@@ -24,7 +24,7 @@ pub struct Host{
     pub controller_send:Sender<HostEvent>,
     pub packet_recv:Receiver<Packet>,
     pub packet_send: HashMap<NodeId, Sender<Packet>>,
-    pub flood_cache:HashMap<NodeId, u64>,
+    pub flood_cache:HashMap<NodeId, Vec<u64>>,
     pub network: Network,
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
@@ -249,7 +249,7 @@ impl Functionality for Host {
         let flood_id = generate_unique_flood_id();
         let host_id = self.id;
 
-        ///self.flood_cache.insert(host_id.clone(), flood_id.clone()); vedere se ha senso!!
+        self.flood_cache.insert(host_id.clone(), vec![flood_id.clone()]);
 
         // Costruisco header e packet (attenzione: hop_index iniziale = 0)
         let routing_header = SourceRoutingHeader::new(vec![], 0); //rimosso host_id dal vec
@@ -278,7 +278,7 @@ impl Functionality for Host {
                 host = host_id,
                 neighbour = neighbour_id,
                 ?result,
-                "FloodRequest send result"
+                "FloodRequest send result: "
             );
         }
     }
@@ -295,42 +295,51 @@ impl Functionality for Host {
             session = session_id,
             "Handling FloodRequest"
         );
-        let mut fr = flood_request.clone();
-        // 1) Evito riprocessamenti dello stesso flood
-        if let Some(&seen_id) = self.flood_cache.get(&initiator) {
-            if seen_id == flood_id {
-                fr.increment(host_id, self.type_host);
 
-                tracing::debug!(
-                    host = host_id,
-                    initiator,
-                    flood_id,
-                    "FloodRequest already seen, sending response immediately"
-                );
-                let response_pkt = fr.generate_response(session_id);
-                let result = self.send_packet(response_pkt, None);
-                tracing::info!(
-                    host = host_id,
-                    ?result,
-                    "Sent FloodResponse for duplicate FloodRequest"
-                );
-                return;
-            }
+        let mut fr = flood_request.clone();
+
+        // 1) Controllo se ho già visto questo flood_id dall'initiator
+        let seen_flood_ids = self.flood_cache.entry(initiator).or_default();
+
+        if seen_flood_ids.contains(&flood_id) {
+            tracing::info!("Path trace before adding myself: {:?}", fr.path_trace);
+
+            fr.increment(host_id, self.type_host);
+
+            tracing::debug!(
+                host = host_id,
+                initiator,
+                flood_id,
+                "FloodRequest already seen, sending response immediately"
+            );
+
+            tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
+            let mut response_pkt = fr.generate_response(session_id);
+            response_pkt.routing_header.hop_index += 1;
+            let result = self.send_packet(response_pkt, None);
+
+            tracing::info!(
+                host = host_id,
+                ?result,
+                "Sent FloodResponse for duplicate FloodRequest"
+            );
+
+            return;
         }
 
-        // 2) Mark as seen
-        self.flood_cache.insert(initiator, flood_id);
+        // 2) Registriamo il flood_id come visto
+        seen_flood_ids.push(flood_id);
 
-        // 3) Da quale nodo è arrivata?
-        //    Usiamo la path_trace _originale_ (prima dell'increment)
-        let from = flood_request
-            .path_trace
-            .last()
-            .map(|(nid, _)| *nid)
-            // se path_trace era vuota, prendiamo l'initiator come mittente
-            .unwrap_or(initiator);
+        // 3) Verifico chi ha inviato il pacchetto
+        let from = match flood_request.path_trace.last() {
+            Some(&(node_id, _)) => node_id,
+            None => {
+                warn!("Received FloodRequest with empty path-trace! Dropping packet.");
+                return;
+            }
+        };
 
-        debug!(
+        tracing::debug!(
             host = host_id,
             from,
             "FloodRequest arrived from neighbor"
@@ -339,7 +348,7 @@ impl Functionality for Host {
         // 4) Aggiorno path_trace
         fr.increment(host_id, self.type_host);
 
-        // 5) Calcolo a chi inoltrare (escludo chi me l'ha mandato)
+        // 5) Inoltro a tutti i vicini (escluso chi me l'ha mandato)
         let neighbors: Vec<_> = self
             .packet_send
             .iter()
@@ -347,22 +356,25 @@ impl Functionality for Host {
             .collect();
 
         if neighbors.is_empty() {
-            // 6a) Fine della linea: genero risposta
-            tracing::info!(host = host_id, "No other neighbors: replying flood");
-            let resp_pkt = fr.generate_response(session_id);
+            // 6a) Fine linea: genero immediatamente FloodResponse
+            tracing::info!(host = host_id, "No other neighbors: replying flood immediately");
+            let mut resp_pkt = fr.generate_response(session_id);
+            resp_pkt.routing_header.hop_index+=1;
             let result = self.send_packet(resp_pkt, None);
+
             tracing::info!(
-                host = host_id,
-                ?result,
-                "FloodResponse sent from leaf node"
-            );
+            host = host_id,
+            ?result,
+            "FloodResponse sent from leaf node"
+        );
         } else {
-            // 6b) Forward a tutti gli altri vicini
+            // 6b) Inoltro ai vicini disponibili
             tracing::info!(
                 host = host_id,
                 count = neighbors.len(),
                 "Forwarding FloodRequest to neighbors"
             );
+
             for (&nbr, ch) in neighbors {
                 tracing::debug!(host = host_id, neighbor = nbr, "Forwarding to neighbor");
                 let fwd_pkt = Packet::new_flood_request(
@@ -371,6 +383,7 @@ impl Functionality for Host {
                     fr.clone(),
                 );
                 let result = self.send_packet(fwd_pkt, Some(ch));
+
                 tracing::debug!(
                     host = host_id,
                     neighbor = nbr,
@@ -380,6 +393,7 @@ impl Functionality for Host {
             }
         }
     }
+
     fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
 
