@@ -481,7 +481,7 @@ impl Functionality for Host {
 
         let next_channel = channel.or_else(|| {
             self.packet_send
-                .get(&packet.routing_header.hops[packet.routing_header.hop_index+1])
+                .get(&packet.routing_header.hops[packet.routing_header.hop_index])
         });
 
         let result = match next_channel {
