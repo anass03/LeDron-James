@@ -54,7 +54,7 @@ impl Client {
     }
 
     pub fn run(&mut self) {
-        let cleanup_tick   = tick(Duration::from_secs(60));
+        let cleanup_tick   = tick(Duration::from_secs(15));
         self.host.initiate_flood();
         loop {
             crossbeam_channel::select_biased! {
@@ -80,11 +80,11 @@ impl Client {
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
                     // STAMPA TOPOLOGIA IN FORMATO .dot
-                    // let dot = petgraph::dot::Dot::with_config(
-                    //     &self.host.network.graph,
-                    //     &[petgraph::dot::Config::EdgeNoLabel]
-                    // );
-                    // println!("{}", dot)
+                    let dot = petgraph::dot::Dot::with_config(
+                        &self.host.network.graph,
+                        &[petgraph::dot::Config::EdgeNoLabel]
+                    );
+                    println!("{}", dot)
                 }
 
                 // 4) otherwise wait a bit to avoid busy‑spin
