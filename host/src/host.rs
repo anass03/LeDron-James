@@ -498,23 +498,23 @@ impl Functionality for Host {
         );
 
         // Debug opzionale per nodo specifico
-        // if host_id == 6 {
-        //     tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
-        //     tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
-        //     if let Some(route) = self.network.find_best_route(6, 7) {
-        //         tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
-        //     } else {
-        //         tracing::debug!("❌ No route yet from 6 to 7");
-        //     }
-        // }else {
-        //     tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
-        //     tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
-        //     if let Some(route) = self.network.find_best_route(7, 6) {
-        //         tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
-        //     } else {
-        //         tracing::debug!("❌ No route yet from 7 to 6");
-        //     }
-        // }
+        if host_id == 6 {
+            tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
+            tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
+            // if let Some(route) = self.network.find_best_route(6, 7) {
+            //     tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
+            // } else {
+            //     tracing::debug!("❌ No route yet from 6 to 7");
+            // }
+        }else {
+            tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
+            tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
+            // if let Some(route) = self.network.find_best_route(7, 6) {
+            //     tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
+            // } else {
+            //     tracing::debug!("❌ No route yet from 7 to 6");
+            // }
+        }
     }
 
 
