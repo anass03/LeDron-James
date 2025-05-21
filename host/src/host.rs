@@ -149,6 +149,7 @@ impl Network {
 
     /// Trova il percorso migliore usando Dijkstra
     pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
+        info!("staring algorithm for routing...");
         use petgraph::algo::dijkstra;
 
         let start_index = self.topology.get(&start)?.0;
@@ -441,19 +442,19 @@ impl Functionality for Host {
             .join(" -> ");
 
         tracing::info!(
-        host = host_id,
-        flood_id = response.flood_id,
-        path = %path_str,
-        "Handling FloodResponse with path"
-    );
+            host = host_id,
+            flood_id = response.flood_id,
+            path = %path_str,
+            "Handling FloodResponse with path"
+        );
 
         let path = &response.path_trace;
         if path.len() < 2 {
             tracing::warn!(
-            host = host_id,
-            len = path.len(),
-            "FloodResponse path too short, skipping"
-        );
+                host = host_id,
+                len = path.len(),
+                "FloodResponse path too short, skipping"
+            );
             return;
         }
 
@@ -479,11 +480,11 @@ impl Functionality for Host {
             if !entry.1.contains(&next_id) {
                 entry.1.push(next_id);
                 tracing::debug!(
-                host = host_id,
-                from = curr_id,
-                to = next_id,
-                "Recorded topology edge"
-            );
+                    host = host_id,
+                    from = curr_id,
+                    to = next_id,
+                    "Recorded topology edge"
+                );
             }
         }
 
@@ -491,10 +492,10 @@ impl Functionality for Host {
         self.network.update_graph();
 
         tracing::info!(
-        host = host_id,
-        nodes = self.network.topology.len(),
-        "Topology graph updated"
-    );
+            host = host_id,
+            nodes = self.network.topology.len(),
+            "Topology graph updated"
+        );
 
         // Debug opzionale per nodo specifico
         if host_id == 6 {
@@ -508,6 +509,11 @@ impl Functionality for Host {
         }else {
             tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
             tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
+            if let Some(route) = self.network.find_best_route(7, 6) {
+                tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
+            } else {
+                tracing::debug!("❌ No route yet from 7 to 6");
+            }
         }
     }
 
