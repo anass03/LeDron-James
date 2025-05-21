@@ -334,7 +334,7 @@ impl Functionality for Host {
 
             tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
             let mut response_pkt = fr.generate_response(session_id);
-            response_pkt.routing_header.hop_index += 1;
+            //response_pkt.routing_header.hop_index += 1;
 
             let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
             tracing::debug!(
@@ -387,7 +387,7 @@ impl Functionality for Host {
             // 6a) Fine linea: genero immediatamente FloodResponse
             tracing::info!(host = host_id, "No other neighbors: replying flood immediately");
             let mut resp_pkt = fr.generate_response(session_id);
-            resp_pkt.routing_header.hop_index+=1;
+            //resp_pkt.routing_header.hop_index+=1;
             let next_hop = resp_pkt.routing_header.hops[resp_pkt.routing_header.hop_index];
             tracing::debug!(
                 host = host_id,
@@ -449,14 +449,14 @@ impl Functionality for Host {
         );
 
         let path = &response.path_trace;
-        // if path.len() < 2 {
-        //     tracing::warn!(
-        //         host = host_id,
-        //         len = path.len(),
-        //         "FloodResponse path too short, skipping"
-        //     );
-        //     return;
-        // }
+        if path.len() < 2 {
+            tracing::warn!(
+                host = host_id,
+                len = path.len(),
+                "FloodResponse path too short, skipping"
+            );
+            return;
+        }
 
         // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
         for &(node_id, node_type) in path {
