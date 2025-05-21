@@ -449,14 +449,14 @@ impl Functionality for Host {
         );
 
         let path = &response.path_trace;
-        if path.len() < 2 {
-            tracing::warn!(
-                host = host_id,
-                len = path.len(),
-                "FloodResponse path too short, skipping"
-            );
-            return;
-        }
+        // if path.len() < 2 {
+        //     tracing::warn!(
+        //         host = host_id,
+        //         len = path.len(),
+        //         "FloodResponse path too short, skipping"
+        //     );
+        //     return;
+        // }
 
         // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
         for &(node_id, node_type) in path {
