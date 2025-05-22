@@ -80,19 +80,19 @@ impl Network {
         }
     }
     /// Aggiorna il grafo basandosi sulla topologia attuale
-    pub fn update_graph(&mut self) {
-        // Cancella solo gli archi (mantieni i nodi)
-        self.graph.clear_edges();
-
-        // Ricostruisci tutti gli archi diretti con i relativi pesi
-        for (&node_id, &(idx, ref neighbors)) in &self.topology {
-            for &nbr in neighbors {
-                let nbr_idx = self.topology[&nbr].0;
-                let weight = self.compute_link_weight(node_id, nbr);
-                self.graph.add_edge(idx, nbr_idx, weight);
-            }
-        }
-    }
+    // pub fn update_graph(&mut self) {
+    //     // Cancella solo gli archi (mantieni i nodi)
+    //     self.graph.clear_edges();
+    //
+    //     // Ricostruisci tutti gli archi diretti con i relativi pesi
+    //     for (&node_id, &(idx, ref neighbors)) in &self.topology {
+    //         for &nbr in neighbors {
+    //             let nbr_idx = self.topology[&nbr].0;
+    //             let weight = self.compute_link_weight(node_id, nbr);
+    //             self.graph.add_edge(idx, nbr_idx, weight);
+    //         }
+    //     }
+    // }
 
     pub fn modify_pdr(&mut self) {
         for i in self.topology.keys() {
@@ -568,25 +568,44 @@ impl Functionality for Host {
             // → aggiorna grafo diretto con peso
             let curr_idx = entry.0;
             let next_idx = self.network.topology.get(&next_id).unwrap().0;
-            let weight = self.compute_link_weight(curr_id, next_id);
-            self.network.graph.update_edge(curr_idx, next_idx, weight);
-            tracing::debug!(
-                host   = host_id,
-                from   = curr_id,
-                to     = next_id,
-                weight,
-                "Inserted directed edge in graph"
-            );
+            //let weight = self.compute_link_weight(curr_id, next_id);
+            self.network.graph.update_edge(curr_idx, next_idx, 0.0);
+            // tracing::debug!(
+            //     host   = host_id,
+            //     from   = curr_id,
+            //     to     = next_id,
+            //     0.0,
+            //     "Inserted directed edge in graph"
+            // );
         }
 
         // 3) (Opzionale) Ricostruisci completamente il grafo se update_graph lo richiede
-        self.network.update_graph();
+        //self.network.update_graph();
 
-        tracing::info!(
-            host  = host_id,
-            nodes = self.network.topology.len(),
-            "Topology graph updated"
-        );
+        // tracing::info!(
+        //     host  = host_id,
+        //     nodes = self.network.topology.len(),
+        //     "Topology graph updated"
+        // );
+
+        //Debug opzionale per nodo specifico
+        // if host_id == 6 {
+        //     tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
+        //     tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
+        //     // if let Some(route) = self.network.find_best_route(6, 7) {
+        //     //     tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
+        //     // } else {
+        //     //     tracing::debug!("❌ No route yet from 6 to 7");
+        //     // }
+        // }else {
+        //     tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
+        //     tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
+        //     // if let Some(route) = self.network.find_best_route(7, 6) {
+        //     //     tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
+        //     // } else {
+        //     //     tracing::debug!("❌ No route yet from 7 to 6");
+        //     // }
+        // }
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
