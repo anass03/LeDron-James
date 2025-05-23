@@ -257,7 +257,7 @@ impl Functionality for Host {
         let flood_id = generate_unique_flood_id();
         let host_id = self.id;
 
-        self.flood_cache.insert(host_id.clone(), vec![flood_id.clone()]);
+        //self.flood_cache.insert(host_id.clone(), vec![flood_id.clone()]);
 
         // Costruisco header e packet (attenzione: hop_index iniziale = 0)
         let routing_header = SourceRoutingHeader::new(vec![], 0); //rimosso host_id dal vec
@@ -419,92 +419,7 @@ impl Functionality for Host {
         }
     }
 
-    // fn process_flood_response(&mut self, response: FloodResponse) {
-    //     let host_id = self.id;
-    //
-    //     // 🔍 LOG: path completo in arrivo
-    //     let path_str = response
-    //         .path_trace
-    //         .iter()
-    //         .map(|(id, ty)| format!("{:?}({})", ty, id))
-    //         .collect::<Vec<_>>()
-    //         .join(" -> ");
-    //
-    //     tracing::info!(
-    //         host = host_id,
-    //         flood_id = response.flood_id,
-    //         path = %path_str,
-    //         "Handling FloodResponse with path"
-    //     );
-    //
-    //     let path = &response.path_trace;
-    //     if path.len() < 2 {
-    //         tracing::warn!(
-    //             host = host_id,
-    //             len = path.len(),
-    //             "FloodResponse path too short, skipping"
-    //         );
-    //         return;
-    //     }
-    //
-    //     // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
-    //     for &(node_id, node_type) in path {
-    //         self.network.topology.entry(node_id).or_insert_with(|| {
-    //             let idx = self.network.graph.add_node(node_id);
-    //             (idx, Vec::new())
-    //         });
-    //
-    //         if node_type == NodeType::Server {
-    //             self.network.servers.insert(node_id);
-    //             tracing::debug!(host = host_id, server = node_id, "Marked node as server");
-    //         }
-    //     }
-    //
-    //     // 2) Registra connessioni tra nodi adiacenti
-    //     for window in path.windows(2) {
-    //         let (curr_id, _) = window[0];
-    //         let (next_id, _) = window[1];
-    //
-    //         let entry = self.network.topology.get_mut(&curr_id).unwrap(); //unwrap() è sicuro qui perché tutti i nodi della path sono stati già inseriti nel blocco precedente
-    //         if !entry.1.contains(&next_id) {
-    //             entry.1.push(next_id);
-    //             tracing::debug!(
-    //                 host = host_id,
-    //                 from = curr_id,
-    //                 to = next_id,
-    //                 "Recorded topology edge"
-    //             );
-    //         }
-    //     }
-    //
-    //     // 3) Aggiorna la rappresentazione del grafo
-    //     self.network.update_graph();
-    //
-    //     tracing::info!(
-    //         host = host_id,
-    //         nodes = self.network.topology.len(),
-    //         "Topology graph updated"
-    //     );
-    //
-    //     // Debug opzionale per nodo specifico
-    //     // if host_id == 6 {
-    //     //     tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
-    //     //     tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
-    //     //     // if let Some(route) = self.network.find_best_route(6, 7) {
-    //     //     //     tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
-    //     //     // } else {
-    //     //     //     tracing::debug!("❌ No route yet from 6 to 7");
-    //     //     // }
-    //     // }else {
-    //     //     tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
-    //     //     tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
-    //     //     // if let Some(route) = self.network.find_best_route(7, 6) {
-    //     //     //     tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
-    //     //     // } else {
-    //     //     //     tracing::debug!("❌ No route yet from 7 to 6");
-    //     //     // }
-    //     // }
-    // }
+
 
     fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
@@ -564,24 +479,11 @@ impl Functionality for Host {
                     "Recorded topology edge"
                 );
             }
-
-            // → aggiorna grafo diretto con peso
-            let curr_idx = entry.0;
-            let next_idx = self.network.topology.get(&next_id).unwrap().0;
-            //let weight = self.compute_link_weight(curr_id, next_id);
-            self.network.graph.update_edge(curr_idx, next_idx, 0.0);
-            // tracing::debug!(
-            //     host   = host_id,
-            //     from   = curr_id,
-            //     to     = next_id,
-            //     0.0,
-            //     "Inserted directed edge in graph"
-            // );
         }
 
         // 3) (Opzionale) Ricostruisci completamente il grafo se update_graph lo richiede
-        //self.network.update_graph();
-
+        // self.network.update_graph();
+        //
         // tracing::info!(
         //     host  = host_id,
         //     nodes = self.network.topology.len(),
