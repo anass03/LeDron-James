@@ -257,7 +257,7 @@ impl Functionality for Host {
         let flood_id = generate_unique_flood_id();
         let host_id = self.id;
 
-        //self.flood_cache.insert(host_id.clone(), vec![flood_id.clone()]);
+        self.flood_cache.insert(host_id.clone(), vec![flood_id.clone()]);
 
         // Costruisco header e packet (attenzione: hop_index iniziale = 0)
         let routing_header = SourceRoutingHeader::new(vec![], 0); //rimosso host_id dal vec
