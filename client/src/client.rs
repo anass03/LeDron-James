@@ -76,12 +76,20 @@ impl Client {
 
                 // 3) timer for cleaning
                 recv(cleanup_tick) -> _ => {
-                    // STAMPA TOPOLOGIA IN FORMATO .dot
-                    let dot = petgraph::dot::Dot::with_config(
-                        &self.host.network.graph,
-                        &[petgraph::dot::Config::EdgeNoLabel]
-                    );
-                    println!("{}", dot)
+                    // ... dove vuoi vedere la rete stampata, ad esempio alla fine di process_flood_response …
+                    println!("=== Discovered Network ===");
+                    for (&node_id, &(ref node_type, ref edges)) in &self.host.network.nodes {
+                        // raccogli solo gli ID dei vicini
+                        let neighs: Vec<_> = edges.iter().map(|e| e.to).collect();
+                        println!(
+                            "Node {} ({:?}) -> {:?}",
+                            node_id,
+                            node_type,
+                            neighs,
+                        );
+                    }
+                    println!("==========================");
+
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);

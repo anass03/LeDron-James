@@ -1,7 +1,8 @@
+use std::cmp::Reverse;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
-use std::collections::{HashMap, HashSet};
+use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -64,166 +65,203 @@ pub struct SentSessionData {
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
 }
 #[derive(Clone)]
+pub struct Edge {
+    pub to:     NodeId,
+    weight: f64,
+}
+#[derive(Clone)]
 pub struct Network {
-    pub graph: DiGraph<NodeId, f64>,
-    pub topology: HashMap<NodeId, (NodeIndex, Vec<NodeId>)>, // NodeId -> (Graph NodeIndex, Vec of neighbors)
+    // pub graph: DiGraph<NodeId, f64>,
+    // pub topology: HashMap<NodeId, (NodeIndex, Vec<NodeId>)>, // NodeId -> (Graph NodeIndex, Vec of neighbors)
     pub servers: HashSet<NodeId>,
-    pub drones_packet_sent: HashMap<NodeId,(i32,i32)>
+    /// Mappa nodo → (tipo, lista archi)
+    pub nodes: HashMap<NodeId, (NodeType, Vec<Edge>)>,
+
+    /// Per ogni drone: (pacchetti inviati, pacchetti persi)
+    pub drones_packet_stats: HashMap<NodeId, (u32, u32)>,
 }
 impl Network {
     pub fn new() -> Self {
         Self {
-            graph: DiGraph::new(),
-            topology: HashMap::new(),
+            // graph: DiGraph::new(),
+            // topology: HashMap::new(),
             servers: HashSet::new(),
-            drones_packet_sent: HashMap::new()
+            // drones_packet_sent: HashMap::new()
+            nodes: HashMap::new(),
+            drones_packet_stats: HashMap::new(),
         }
     }
-    /// Aggiorna il grafo basandosi sulla topologia attuale
-    // pub fn update_graph(&mut self) {
-    //     // Cancella solo gli archi (mantieni i nodi)
-    //     self.graph.clear_edges();
-    //
-    //     // Ricostruisci tutti gli archi diretti con i relativi pesi
-    //     for (&node_id, &(idx, ref neighbors)) in &self.topology {
-    //         for &nbr in neighbors {
-    //             let nbr_idx = self.topology[&nbr].0;
-    //             let weight = self.compute_link_weight(node_id, nbr);
-    //             self.graph.add_edge(idx, nbr_idx, weight);
-    //         }
-    //     }
-    // }
+    /// Chiama questa funzione **dopo** aver inserito/aggiornato
+    /// i contatori in `drones_packet_stats` per ricalcolare tutti
+    /// i PDR sugli archi uscenti da ciascun drone.
+    pub fn recalc_pdr(&mut self) {
+        for (&drone_id, &(sent, lost)) in &self.drones_packet_stats {
+            // Evitiamo divisioni per zero
+            let pdr = if sent == 0 {
+                0.0
+            } else {
+                // PDR = (sent - lost) / sent
+                (sent.saturating_sub(lost)) as f64 / sent as f64
+            };
 
-    pub fn modify_pdr(&mut self) {
-        for i in self.topology.keys() {
-            if let Some((index_i, neighbors)) = self.topology.get(i) {
-                if let Some((sent, total)) = self.drones_packet_sent.get(i) {
-                    let pdr = if *total == 0 {
-                        0.0
-                    } else {
-                        *total as f64 / *sent as f64
-                    };
-
-                    for j in neighbors {
-                        if let Some((index_j, _)) = self.topology.get(j) {
-                            if let Some(edge) = self.graph.find_edge(*index_i, *index_j) {
-                                if let Some(weight) = self.graph.edge_weight_mut(edge) {
-                                    *weight = pdr;
-                                }
-                            }
-                        } else {
-                            warn!("Neighbour node {} not found in topology.", j);
-                        }
+            // Aggiorna ogni arco uscente dal drone
+            if let Some((node_type, edges)) = self.nodes.get_mut(&drone_id) {
+                // Solo se è effettivamente un drone
+                if *node_type == NodeType::Drone {
+                    for edge in edges.iter_mut() {
+                        edge.weight = pdr;
                     }
-                } else {
-                    warn!("Packet stats not found for node {} in drones_packet_sent.", i);
                 }
             } else {
-                warn!("Node {} not found in topology.", i);
+                log::warn!("Drone node {} non trovato in `nodes`!", drone_id);
             }
         }
     }
 
-    pub fn pdr_helper(&mut self,source_routing_header: SourceRoutingHeader){
-        for i in source_routing_header.hops{
-            self.drones_packet_sent.entry(i).and_modify(|s| s.0 += 1).or_insert((0,0));
+    /// Registra un tentativo di forwarding su ciascun hop
+    /// (ad esempio quando mandi un pacchetto a percorso sorgente).
+    pub fn pdr_helper(&mut self, hops: &[NodeId]) {
+        // Ogni volta che "provi" a inoltrare via hop, incrementa sent
+        for &node in hops {
+            self.drones_packet_stats
+                .entry(node)
+                .and_modify(|stats| stats.0 += 1)
+                .or_insert((1, 0));
         }
-        self.modify_pdr();
-
-    }
-    pub fn pdr_from_nack(&mut self,id:NodeId){
-        self.drones_packet_sent.entry(id).and_modify(|s| s.1 += 1).or_insert((0,0));
-        self.modify_pdr();
+        self.recalc_pdr();
     }
 
-    /// Trova il percorso migliore usando Dijkstra
+    /// Registra un NACK (drop) ricevuto dal drone `node_id`
+    pub fn pdr_from_nack(&mut self, node_id: NodeId) {
+        self.drones_packet_stats
+            .entry(node_id)
+            .and_modify(|stats| stats.1 += 1)
+            .or_insert((0, 1));
+        self.recalc_pdr();
+    }
+
     pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
-        info!("staring algorithm for routing...");
-        use petgraph::algo::dijkstra;
-
-        let start_index = self.topology.get(&start)?.0;
-        let destination_index = self.topology.get(&destination)?.0;
-
-        // Costruisce mappa dei percorsi minimi da start, e tiene traccia dei predecessori
-        let paths = dijkstra(&self.graph, start_index, Some(destination_index), |e| *e.weight());
-
-        if !paths.contains_key(&destination_index) {
-            return None;
-        }
-
-        // Ricostruisce il percorso indietro
-        let mut path = vec![destination_index];
-        let mut current = destination_index;
-
-        while current != start_index {
-            let predecessor = self.graph
-                .neighbors_directed(current, petgraph::Incoming)
-                .find(|&n| {
-                    if let Some(edge) = self.graph.find_edge(n, current) {
-                        if let Some(weight) = self.graph.edge_weight(edge) {
-                            if let (Some(&prev_cost), Some(&curr_cost)) = (paths.get(&n), paths.get(&current)) {
-                                return (prev_cost + weight - curr_cost).abs() < 1e-8;
-                            }
-                        }
-                    }
-                    false
-                });
-
-            match predecessor {
-                Some(prev) => {
-                    current = prev;
-                    path.push(current);
-                }
-                None => return None, // percorso rotto
-            }
-        }
-
-
-        path.reverse();
-        Some(path.into_iter().filter_map(|ix| self.graph.node_weight(ix).copied()).collect())
+        // Min-heap di (cumulative_cost, node)
+        // let mut dist: HashMap<NodeId, f64> = HashMap::new();
+        // let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
+        // let mut heap = BinaryHeap::new();
+        //
+        // // Costo iniziale = 0
+        // dist.insert(start, 0.0);
+        // heap.push(Reverse((0.0, start)));
+        //
+        // while let Some(Reverse((cost_u, u))) = heap.pop() {
+        //     // Se estratto un costo obsoleto, skip
+        //     if cost_u > *dist.get(&u)? {
+        //         continue;
+        //     }
+        //     if u == destination {
+        //         break;
+        //     }
+        //     // Scorri i vicini
+        //     if let Some((_, edges)) = self.nodes.get(&u) {
+        //         for edge in edges {
+        //             let v = edge.to;
+        //             // Se weight == 0, costo infinite → salta
+        //             if edge.weight <= 0.0 {
+        //                 continue;
+        //             }
+        //             // costo additivo = -ln(PDR)
+        //             let c = -edge.weight.ln();
+        //             let next_cost = cost_u + c;
+        //             let better = dist.get(&v)
+        //                 .map_or(true, |&old| next_cost < old);
+        //             if better {
+        //                 dist.insert(v, next_cost);
+        //                 prev.insert(v, u);
+        //                 heap.push(Reverse((next_cost, v)));
+        //             }
+        //         }
+        //     }
+        // }
+        //
+        // // Se non raggiunto
+        // if !dist.contains_key(&destination) {
+        //     return None;
+        // }
+        // // Ricostruisci percorso
+        // let mut path = Vec::new();
+        // let mut cur = destination;
+        // while cur != start {
+        //     path.push(cur);
+        //     cur = prev[&cur];
+        // }
+        // path.push(start);
+        // path.reverse();
+        // Some(path)
+        Some(vec![])
     }
 
-    /// Trova un percorso alternativo, cercando comunque di soddisfare le condizioni di efficienza
-    pub fn find_alternate_route(&self, start: NodeId, destination: NodeId, used_route: &[NodeId]) -> Option<Vec<NodeId>> {
-        let start_index = self.topology.get(&start)?.0;
-        let destination_index = self.topology.get(&destination)?.0;
-
-        let mut graph = self.graph.clone();
-
-        // Rimuove gli archi del percorso già usato
-        for window in used_route.windows(2) {
-            if let [prev, next] = window {
-                if let (Some(&(prev_index, _)), Some(&(next_index, _))) =
-                    (self.topology.get(prev), self.topology.get(next))
-                {
-                    if let Some(edge_index) = graph.find_edge(prev_index, next_index) {
-                        graph.remove_edge(edge_index);
-                    }
-                }
-            }
-        }
-
-        let shortest_paths = dijkstra(&graph, start_index, Some(destination_index), |edge| *edge.weight());
-
-        if !shortest_paths.contains_key(&destination_index) {
-            return None; // Nessun percorso alternativo trovato
-        }
-
-        let mut current = destination_index;
-        let mut path = vec![current];
-
-        while let Some(prev_node) = shortest_paths.iter().find_map(|(node, &dist)| {
-            graph
-                .edges_connecting(*node, current)
-                .find(|edge| dist + edge.weight() == shortest_paths[&current])
-                .map(|_| *node)
-        }) {
-            current = prev_node;
-            path.push(current);
-        }
-
-        path.reverse();
-        Some(path.iter().filter_map(|&n| self.graph.node_weight(n).copied()).collect())
+    /// Trova un percorso alternativo escludendo gli archi già usati in `used_route`.
+    pub fn find_alternate_route(
+        &self,
+        start: NodeId,
+        destination: NodeId,
+        used_route: &[NodeId],
+    ) -> Option<Vec<NodeId>> {
+        // Costruisci una copia temporanea dell'adjacency-list
+        // let mut temp_adj = self.nodes.clone();
+        //
+        // // Rimuovi gli archi che fanno parte di `used_route`
+        // for window in used_route.windows(2) {
+        //     if let [u, v] = window {
+        //         if let Some((_, edges)) = temp_adj.get_mut(u) {
+        //             edges.retain(|edge| edge.to != *v);
+        //         }
+        //     }
+        // }
+        //
+        // // Dijkstra sulla struttura temporanea
+        // let mut dist: HashMap<NodeId, f64> = HashMap::new();
+        // let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
+        // let mut heap = BinaryHeap::new();
+        //
+        // dist.insert(start, 0.0);
+        // heap.push(Reverse((0.0, start)));
+        //
+        // while let Some(Reverse((cost_u, u))) = heap.pop() {
+        //     if cost_u > *dist.get(&u).unwrap() {
+        //         continue;
+        //     }
+        //     if u == destination {
+        //         break;
+        //     }
+        //     if let Some((_, edges)) = temp_adj.get(&u) {
+        //         for edge in edges {
+        //             if edge.weight <= 0.0 {
+        //                 continue;
+        //             }
+        //             let c = -edge.weight.ln();
+        //             let next_cost = cost_u + c;
+        //             let better = dist.get(&edge.to)
+        //                 .map_or(true, |&old| next_cost < old);
+        //             if better {
+        //                 dist.insert(edge.to, next_cost);
+        //                 prev.insert(edge.to, u);
+        //                 heap.push(Reverse((next_cost, edge.to)));
+        //             }
+        //         }
+        //     }
+        // }
+        //
+        // if !dist.contains_key(&destination) {
+        //     return None;
+        // }
+        // let mut path = Vec::new();
+        // let mut cur = destination;
+        // while cur != start {
+        //     path.push(cur);
+        //     cur = prev[&cur];
+        // }
+        // path.push(start);
+        // path.reverse();
+        // Some(path)
+        Some(vec![])
     }
 
 
@@ -534,67 +572,56 @@ impl Functionality for Host {
             return;
         }
 
-        // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
+        // 1) Assicura che tutti i nodi nel percorso siano nella adjacency-list
         for &(node_id, node_type) in path {
-            self.network.topology.entry(node_id).or_insert_with(|| {
-                // aggiunge il nodo al grafo e restituisce (indice, vicini)
-                let idx = self.network.graph.add_node(node_id);
-                (idx, Vec::new())
-            });
+            // entry nuovo nodo, se non esiste
+            self.network
+                .nodes
+                .entry(node_id)
+                .or_insert_with(|| (node_type, Vec::new()));
 
+            // per i droni, inizializza subito i contatori (0 inviati, 0 persi)
+            if node_type == NodeType::Drone {
+                self.network
+                    .drones_packet_stats
+                    .entry(node_id)
+                    .or_insert((0, 0));
+            }
+            // per i server, inserisci nell’HashSet dei server
             if node_type == NodeType::Server {
-                self.network.servers.insert(node_id);
-                tracing::debug!(host = host_id, server = node_id, "Marked node as server");
+                self.network
+                    .servers
+                    .insert(node_id);
             }
         }
 
-        // 2) Registra connessioni tra nodi adiacenti e aggiorna il grafo diretto
+        // 2) Registra connessioni tra nodi adiacenti
         for window in path.windows(2) {
             let (curr_id, _) = window[0];
             let (next_id, _) = window[1];
 
-            // → aggiorna topology
-            let entry = self.network.topology.get_mut(&curr_id).unwrap();
-            let next = self.network.topology.get_mut(&next_id).unwrap();
-            if !entry.1.contains(&next_id) {
-                entry.1.push(next_id);
-                tracing::debug!(
+            if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
+                // evita doppioni
+                if !edges.iter().any(|e| e.to == next_id) {
+                    edges.push(Edge { to: next_id, weight: 0.0 });
+                    tracing::debug!(
+                        host = host_id,
+                        from = curr_id,
+                        to = next_id,
+                        "Recorded adjacency edge"
+                    );
+                }
+            } else {
+                tracing::warn!(
                     host = host_id,
-                    from = curr_id,
-                    to = next_id,
-                    "Recorded topology edge"
+                    node = curr_id,
+                    "Current node missing from network.nodes"
                 );
-                self.network.graph.add_edge(entry.0, next.0, 0.0);
             }
         }
 
-        // 3) (Opzionale) Ricostruisci completamente il grafo se update_graph lo richiede
-        // self.network.update_graph();
-        //
-        // tracing::info!(
-        //     host  = host_id,
-        //     nodes = self.network.topology.len(),
-        //     "Topology graph updated"
-        // );
-
-        //Debug opzionale per nodo specifico
-        // if host_id == 6 {
-        //     tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
-        //     tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
-        //     // if let Some(route) = self.network.find_best_route(6, 7) {
-        //     //     tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
-        //     // } else {
-        //     //     tracing::debug!("❌ No route yet from 6 to 7");
-        //     // }
-        // }else {
-        //     tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
-        //     tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
-        //     // if let Some(route) = self.network.find_best_route(7, 6) {
-        //     //     tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
-        //     // } else {
-        //     //     tracing::debug!("❌ No route yet from 7 to 6");
-        //     // }
-        // }
+        // (Opzionale) se vuoi ricalcolare subito i PDR:
+        // self.network.recalc_pdr();
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         info!("Sending packet...");
@@ -875,7 +902,7 @@ impl Functionality for Host {
         );
 
             if let SendingCodes::SuccessfullySent(_) = result {
-                self.network.pdr_helper(header.clone());
+                self.network.pdr_helper(header.hops.as_slice());
                 tracing::debug!(
                 host = self.id,
                 hops = ?header.hops,
