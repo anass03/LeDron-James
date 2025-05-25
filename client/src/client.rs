@@ -110,7 +110,7 @@ impl Client {
                     }
 
                     println!("=== find_best_route TEST ===");
-                    if let Some(route) = self.host.network.find_best_route(6, 7){
+                    if let Some(route) = self.host.network.find_best_route(106, 207){
                         println!("✅ Route: {:?}", route);
                     }else{
                         println!("❌ No route found!");
