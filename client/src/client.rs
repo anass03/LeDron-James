@@ -99,9 +99,15 @@ impl Client {
                                 }
                             })
                             .collect();
-                        println!("Node {} <- {:?}", node_id, incoming);
+                        println!("Node {} -> {:?}", node_id, incoming);
                     }
 
+                    println!("=== All links ===");
+                    for (&from, &(_, ref edges)) in &self.host.network.nodes {
+                        for edge in edges {
+                            println!("{} -> {}", from, edge.to);
+                        }
+                    }
 
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
