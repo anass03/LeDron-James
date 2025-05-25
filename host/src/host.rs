@@ -154,33 +154,31 @@ impl Network {
     ) -> Option<Vec<NodeId>> {
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
-        // Min‐heap di (distanza, nodo) con OrderedFloat per implementare Ord su f64
         let mut pq: BinaryHeap<Reverse<(OrderedFloat<f64>, NodeId)>> = BinaryHeap::new();
 
         dist.insert(start, 0.0);
         pq.push(Reverse((OrderedFloat(0.0), start)));
 
         while let Some(Reverse((OrderedFloat(cost_u), u))) = pq.pop() {
-            // se abbiamo già trovato un costo migliore, scarta
+            // se troviamo un costo più grande di quello già noto, skip
             if cost_u > dist.get(&u).copied().unwrap_or(f64::INFINITY) {
                 continue;
             }
             if u == destination {
                 break;
             }
-            // esplora i vicini
             if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    // ignora archi peso ≤ 0
-                    if edge.weight <= 0.0 {
+                    let reliability = 1.0 - edge.weight;
+                    // se affidabilità nulla, ignoro l'arco
+                    if reliability <= 0.0 {
                         continue;
                     }
-                    let c = -edge.weight.ln();
+                    // costo additivo
+                    let c = -reliability.ln();
                     let next_cost = cost_u + c;
-                    // se è meglio, aggiorna e metti nella coda
-                    let is_better = dist.get(&v).map_or(true, |&old| next_cost < old);
-                    if is_better {
+                    if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
                         pq.push(Reverse((OrderedFloat(next_cost), v)));
@@ -189,11 +187,10 @@ impl Network {
             }
         }
 
-        // se non raggiungibile
         if !dist.contains_key(&destination) {
             return None;
         }
-        // ricostruisci percorso
+        // ricostruzione del percorso
         let mut path = Vec::new();
         let mut cur = destination;
         while cur != start {
@@ -205,15 +202,15 @@ impl Network {
         Some(path)
     }
 
-    /// Come `find_best_route`, ma rimuove tutti gli archi presenti in `used_route`
-    /// (cioè non considererà né u→v né v→u per ogni coppia consecutiva u,v).
+    /// Come `find_best_route`, ma esclude tutti gli archi consecutivi già
+    /// presenti in `used_route`.
     pub fn find_alternate_route(
         &self,
         start: NodeId,
         destination: NodeId,
         used_route: &[NodeId],
     ) -> Option<Vec<NodeId>> {
-        // clona la topologia per rimuovere gli archi “usati”
+        // clono la topologia e rimuovo gli archi usati
         let mut temp = self.nodes.clone();
         for window in used_route.windows(2) {
             if let [u, v] = window {
@@ -243,13 +240,13 @@ impl Network {
             if let Some((_, edges)) = temp.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    if edge.weight <= 0.0 {
+                    let reliability = 1.0 - edge.weight;
+                    if reliability <= 0.0 {
                         continue;
                     }
-                    let c = -edge.weight.ln();
+                    let c = -reliability.ln();
                     let next_cost = cost_u + c;
-                    let is_better = dist.get(&v).map_or(true, |&old| next_cost < old);
-                    if is_better {
+                    if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
                         pq.push(Reverse((OrderedFloat(next_cost), v)));
