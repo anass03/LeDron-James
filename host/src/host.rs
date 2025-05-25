@@ -12,6 +12,8 @@ use tracing::{info, warn, error, debug};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
+use ordered_float::OrderedFloat;
+
 
 pub type FileId = usize;
 pub type MediaId = usize;
@@ -140,131 +142,135 @@ impl Network {
         self.recalc_pdr();
     }
 
-    pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
-        // Min-heap di (cumulative_cost, node)
-        // let mut dist: HashMap<NodeId, f64> = HashMap::new();
-        // let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
-        // let mut heap = BinaryHeap::new();
-        //
-        // // Costo iniziale = 0
-        // dist.insert(start, 0.0);
-        // heap.push(Reverse((0.0, start)));
-        //
-        // while let Some(Reverse((cost_u, u))) = heap.pop() {
-        //     // Se estratto un costo obsoleto, skip
-        //     if cost_u > *dist.get(&u)? {
-        //         continue;
-        //     }
-        //     if u == destination {
-        //         break;
-        //     }
-        //     // Scorri i vicini
-        //     if let Some((_, edges)) = self.nodes.get(&u) {
-        //         for edge in edges {
-        //             let v = edge.to;
-        //             // Se weight == 0, costo infinite → salta
-        //             if edge.weight <= 0.0 {
-        //                 continue;
-        //             }
-        //             // costo additivo = -ln(PDR)
-        //             let c = -edge.weight.ln();
-        //             let next_cost = cost_u + c;
-        //             let better = dist.get(&v)
-        //                 .map_or(true, |&old| next_cost < old);
-        //             if better {
-        //                 dist.insert(v, next_cost);
-        //                 prev.insert(v, u);
-        //                 heap.push(Reverse((next_cost, v)));
-        //             }
-        //         }
-        //     }
-        // }
-        //
-        // // Se non raggiunto
-        // if !dist.contains_key(&destination) {
-        //     return None;
-        // }
-        // // Ricostruisci percorso
-        // let mut path = Vec::new();
-        // let mut cur = destination;
-        // while cur != start {
-        //     path.push(cur);
-        //     cur = prev[&cur];
-        // }
-        // path.push(start);
-        // path.reverse();
-        // Some(path)
-        Some(vec![])
+
+
+
+    /// Restituisce Some(path) che massimizza la probabilità di successo (PDR),
+    /// ovvero minimizza la somma dei costi c = -ln(pdr) lungo gli archi.
+    pub fn find_best_route(
+        &self,
+        start: NodeId,
+        destination: NodeId,
+    ) -> Option<Vec<NodeId>> {
+        let mut dist: HashMap<NodeId, f64> = HashMap::new();
+        let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
+        // Min‐heap di (distanza, nodo) con OrderedFloat per implementare Ord su f64
+        let mut pq: BinaryHeap<Reverse<(OrderedFloat<f64>, NodeId)>> = BinaryHeap::new();
+
+        dist.insert(start, 0.0);
+        pq.push(Reverse((OrderedFloat(0.0), start)));
+
+        while let Some(Reverse((OrderedFloat(cost_u), u))) = pq.pop() {
+            // se abbiamo già trovato un costo migliore, scarta
+            if cost_u > dist.get(&u).copied().unwrap_or(f64::INFINITY) {
+                continue;
+            }
+            if u == destination {
+                break;
+            }
+            // esplora i vicini
+            if let Some((_, edges)) = self.nodes.get(&u) {
+                for edge in edges {
+                    let v = edge.to;
+                    // ignora archi peso ≤ 0
+                    if edge.weight <= 0.0 {
+                        continue;
+                    }
+                    let c = -edge.weight.ln();
+                    let next_cost = cost_u + c;
+                    // se è meglio, aggiorna e metti nella coda
+                    let is_better = dist.get(&v).map_or(true, |&old| next_cost < old);
+                    if is_better {
+                        dist.insert(v, next_cost);
+                        prev.insert(v, u);
+                        pq.push(Reverse((OrderedFloat(next_cost), v)));
+                    }
+                }
+            }
+        }
+
+        // se non raggiungibile
+        if !dist.contains_key(&destination) {
+            return None;
+        }
+        // ricostruisci percorso
+        let mut path = Vec::new();
+        let mut cur = destination;
+        while cur != start {
+            path.push(cur);
+            cur = prev[&cur];
+        }
+        path.push(start);
+        path.reverse();
+        Some(path)
     }
 
-    /// Trova un percorso alternativo escludendo gli archi già usati in `used_route`.
+    /// Come `find_best_route`, ma rimuove tutti gli archi presenti in `used_route`
+    /// (cioè non considererà né u→v né v→u per ogni coppia consecutiva u,v).
     pub fn find_alternate_route(
         &self,
         start: NodeId,
         destination: NodeId,
         used_route: &[NodeId],
     ) -> Option<Vec<NodeId>> {
-        // Costruisci una copia temporanea dell'adjacency-list
-        // let mut temp_adj = self.nodes.clone();
-        //
-        // // Rimuovi gli archi che fanno parte di `used_route`
-        // for window in used_route.windows(2) {
-        //     if let [u, v] = window {
-        //         if let Some((_, edges)) = temp_adj.get_mut(u) {
-        //             edges.retain(|edge| edge.to != *v);
-        //         }
-        //     }
-        // }
-        //
-        // // Dijkstra sulla struttura temporanea
-        // let mut dist: HashMap<NodeId, f64> = HashMap::new();
-        // let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
-        // let mut heap = BinaryHeap::new();
-        //
-        // dist.insert(start, 0.0);
-        // heap.push(Reverse((0.0, start)));
-        //
-        // while let Some(Reverse((cost_u, u))) = heap.pop() {
-        //     if cost_u > *dist.get(&u).unwrap() {
-        //         continue;
-        //     }
-        //     if u == destination {
-        //         break;
-        //     }
-        //     if let Some((_, edges)) = temp_adj.get(&u) {
-        //         for edge in edges {
-        //             if edge.weight <= 0.0 {
-        //                 continue;
-        //             }
-        //             let c = -edge.weight.ln();
-        //             let next_cost = cost_u + c;
-        //             let better = dist.get(&edge.to)
-        //                 .map_or(true, |&old| next_cost < old);
-        //             if better {
-        //                 dist.insert(edge.to, next_cost);
-        //                 prev.insert(edge.to, u);
-        //                 heap.push(Reverse((next_cost, edge.to)));
-        //             }
-        //         }
-        //     }
-        // }
-        //
-        // if !dist.contains_key(&destination) {
-        //     return None;
-        // }
-        // let mut path = Vec::new();
-        // let mut cur = destination;
-        // while cur != start {
-        //     path.push(cur);
-        //     cur = prev[&cur];
-        // }
-        // path.push(start);
-        // path.reverse();
-        // Some(path)
-        Some(vec![])
+        // clona la topologia per rimuovere gli archi “usati”
+        let mut temp = self.nodes.clone();
+        for window in used_route.windows(2) {
+            if let [u, v] = window {
+                if let Some((_, edges)) = temp.get_mut(u) {
+                    edges.retain(|e| e.to != *v);
+                }
+                if let Some((_, edges)) = temp.get_mut(v) {
+                    edges.retain(|e| e.to != *u);
+                }
+            }
+        }
+
+        let mut dist: HashMap<NodeId, f64> = HashMap::new();
+        let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
+        let mut pq: BinaryHeap<Reverse<(OrderedFloat<f64>, NodeId)>> = BinaryHeap::new();
+
+        dist.insert(start, 0.0);
+        pq.push(Reverse((OrderedFloat(0.0), start)));
+
+        while let Some(Reverse((OrderedFloat(cost_u), u))) = pq.pop() {
+            if cost_u > dist.get(&u).copied().unwrap_or(f64::INFINITY) {
+                continue;
+            }
+            if u == destination {
+                break;
+            }
+            if let Some((_, edges)) = temp.get(&u) {
+                for edge in edges {
+                    let v = edge.to;
+                    if edge.weight <= 0.0 {
+                        continue;
+                    }
+                    let c = -edge.weight.ln();
+                    let next_cost = cost_u + c;
+                    let is_better = dist.get(&v).map_or(true, |&old| next_cost < old);
+                    if is_better {
+                        dist.insert(v, next_cost);
+                        prev.insert(v, u);
+                        pq.push(Reverse((OrderedFloat(next_cost), v)));
+                    }
+                }
+            }
+        }
+
+        if !dist.contains_key(&destination) {
+            return None;
+        }
+        let mut path = Vec::new();
+        let mut cur = destination;
+        while cur != start {
+            path.push(cur);
+            cur = prev[&cur];
+        }
+        path.push(start);
+        path.reverse();
+        Some(path)
     }
-
-
 }
 pub trait Functionality{
     fn initiate_flood(&mut self);

@@ -109,6 +109,12 @@ impl Client {
                         }
                     }
 
+                    println!("=== find_best_route TEST ===");
+                    if let Some(route) = self.host.network.find_best_route(6, 7){
+                        println!("✅ Route: {:?}", route);
+                    }else{
+                        println!("❌ No route found!");
+                    }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
