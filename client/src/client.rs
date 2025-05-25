@@ -77,32 +77,32 @@ impl Client {
                 // 3) timer for cleaning
                 recv(cleanup_tick) -> _ => {
                     // ... dove vuoi vedere la rete stampata, ad esempio alla fine di process_flood_response …
-                    println!("=== Discovered Network (outgoing edges) ===");
-                    for (&node_id, &(_, ref edges)) in &self.host.network.nodes {
-                        let neighs: Vec<_> = edges.iter().map(|e| e.to).collect();
-                        println!("Node {} -> {:?}", node_id, neighs);
-                    }
+                    // println!("=== Discovered Network (outgoing edges) ===");
+                    // for (&node_id, &(_, ref edges)) in &self.host.network.nodes {
+                    //     let neighs: Vec<_> = edges.iter().map(|e| e.to).collect();
+                    //     println!("Node {} -> {:?}", node_id, neighs);
+                    // }
+                    //
+                    // println!("=== Discovered Network (incoming edges) ===");
+                    // for (&node_id, _) in &self.host.network.nodes {
+                    //     // trova tutti i nodi che puntano a `node_id`
+                    //     let incoming: Vec<_> = self
+                    //         .host
+                    //         .network
+                    //         .nodes
+                    //         .iter()
+                    //         .filter_map(|(&other, &(_, ref edges))| {
+                    //             if edges.iter().any(|e| e.to == node_id) {
+                    //                 Some(other)
+                    //             } else {
+                    //                 None
+                    //             }
+                    //         })
+                    //         .collect();
+                    //     println!("Node {} -> {:?}", node_id, incoming);
+                    // }
 
-                    println!("=== Discovered Network (incoming edges) ===");
-                    for (&node_id, _) in &self.host.network.nodes {
-                        // trova tutti i nodi che puntano a `node_id`
-                        let incoming: Vec<_> = self
-                            .host
-                            .network
-                            .nodes
-                            .iter()
-                            .filter_map(|(&other, &(_, ref edges))| {
-                                if edges.iter().any(|e| e.to == node_id) {
-                                    Some(other)
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect();
-                        println!("Node {} -> {:?}", node_id, incoming);
-                    }
-
-                    println!("=== All links ===");
+                    println!("=== All links FROM CLIENT VIEW ===");
                     for (&from, &(_, ref edges)) in &self.host.network.nodes {
                         for edge in edges {
                             println!("{} -> {}", from, edge.to);
