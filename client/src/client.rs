@@ -77,18 +77,31 @@ impl Client {
                 // 3) timer for cleaning
                 recv(cleanup_tick) -> _ => {
                     // ... dove vuoi vedere la rete stampata, ad esempio alla fine di process_flood_response …
-                    println!("=== Discovered Network ===");
-                    for (&node_id, &(ref node_type, ref edges)) in &self.host.network.nodes {
-                        // raccogli solo gli ID dei vicini
+                    println!("=== Discovered Network (outgoing edges) ===");
+                    for (&node_id, &(_, ref edges)) in &self.host.network.nodes {
                         let neighs: Vec<_> = edges.iter().map(|e| e.to).collect();
-                        println!(
-                            "Node {} ({:?}) -> {:?}",
-                            node_id,
-                            node_type,
-                            neighs,
-                        );
+                        println!("Node {} -> {:?}", node_id, neighs);
                     }
-                    println!("==========================");
+
+                    println!("=== Discovered Network (incoming edges) ===");
+                    for (&node_id, _) in &self.host.network.nodes {
+                        // trova tutti i nodi che puntano a `node_id`
+                        let incoming: Vec<_> = self
+                            .host
+                            .network
+                            .nodes
+                            .iter()
+                            .filter_map(|(&other, &(_, ref edges))| {
+                                if edges.iter().any(|e| e.to == node_id) {
+                                    Some(other)
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect();
+                        println!("Node {} <- {:?}", node_id, incoming);
+                    }
+
 
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
