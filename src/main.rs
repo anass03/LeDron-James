@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
-use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::{log, Logs, SimulationControllerData};
 use initializer::initializer::initialize;
 
 fn main() /*-> std::io::Result<()>*/ {
@@ -27,6 +27,7 @@ fn main() /*-> std::io::Result<()>*/ {
         drone_event_receiver: unbounded().1,
         host_event_receiver: unbounded().1,
         packet_sender: Default::default(),
+        logs: Logs { logs_memory: vec![], log_scroll_offset: 0 },
     };
     match initialize("init_file.toml") {
         Ok((simulation_controller, handles)) => {
@@ -54,7 +55,7 @@ fn main() /*-> std::io::Result<()>*/ {
     };*/
 
     /*let mut terminal = ratatui::init();
-    let mut app = simulation_controller::frontend::app::App::default(temp_sc);
+    let mut app = simulation_controller::frontend::app::App::default(simulation_controller_data);
     let app_result = app.run(&mut terminal);
     terminal.clear()?;
     ratatui::restore();*/

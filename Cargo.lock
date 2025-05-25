@@ -246,7 +246,7 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4f684981462c6ca3f5f4745efb496d214b1693f3"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#ebd0c0f039d6b8cafb5f69d01de989be03a46076"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -759,10 +759,11 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4f684981462c6ca3f5f4745efb496d214b1693f3"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#ebd0c0f039d6b8cafb5f69d01de989be03a46076"
 dependencies = [
  "crossbeam-channel",
  "image",
+ "log",
  "petgraph 0.7.1",
  "rand 0.9.1",
  "serde",
@@ -892,9 +893,9 @@ checksum = "00210d6893afc98edb752b664b8890f0ef174c8adbb8d0be9710fa66fbbf72d3"
 
 [[package]]
 name = "icu_properties"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2549ca8c7241c82f59c80ba2a6f415d931c5b58d24fb8412caa1a1f02c49139a"
+checksum = "016c619c1eeb94efb86809b015c58f479963de65bdb6253345c1a1276f22e32b"
 dependencies = [
  "displaydoc",
  "icu_collections",
@@ -908,9 +909,9 @@ dependencies = [
 
 [[package]]
 name = "icu_properties_data"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8197e866e47b68f8f7d95249e172903bec06004b18b2937f1095d40a0c57de04"
+checksum = "298459143998310acd25ffe6810ed544932242d3f07083eee1084d83a71bd632"
 
 [[package]]
 name = "icu_provider"
