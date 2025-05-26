@@ -137,28 +137,28 @@ impl Client {
     /// Se non ho ancora scoperto *tutti* i server,
     /// mando la discovery e aspetto che `self.servers` contenga
     /// tutti gli ID di `self.host.network.servers`.
-    fn ensure_all_servers_discovered(&mut self) {
-        let expected_count = self.host.network.servers.len();
-        if self.servers.len() != expected_count {
-            tracing::info!(
-                "Discovering server types from {} nodes...",
-                expected_count
-            );
-            self.request_server_type();
-
-            // rimani in polling finché non hai ricevuto tutte le risposte
-            while self.servers.len() != expected_count {
-                tracing::info!("not yet found all servers");
-                thread::sleep(Duration::from_millis(100));
-            }
-
-            tracing::info!("Discovered all {} servers", expected_count);
-        }
-    }
+    // fn ensure_all_servers_discovered(&mut self) {
+    //     let expected_count = self.host.network.servers.len();
+    //     if self.servers.len() != expected_count {
+    //         tracing::info!(
+    //             "Discovering server types from {} nodes...",
+    //             expected_count
+    //         );
+    //         self.request_server_type();
+    //
+    //         // rimani in polling finché non hai ricevuto tutte le risposte
+    //         while self.servers.len() != expected_count {
+    //             tracing::info!("not yet found all servers");
+    //             thread::sleep(Duration::from_millis(100));
+    //         }
+    //
+    //         tracing::info!("Discovered all {} servers", expected_count);
+    //     }
+    // }
 
 
     fn handle_command(&mut self, net_comm: NetCommand) {
-        self.ensure_all_servers_discovered();
+        //self.ensure_all_servers_discovered();
 
         match net_comm {
             // Command network serializable
@@ -262,26 +262,26 @@ impl Client {
 
                     ClientCommand::RegistrationToChat => {
                         info!("Preparing RegistrationToChat request");
-                        if let Some(&server_id) = self.servers.get(&Chat) {
+                        //if let Some(/*&server_id*/ 9) = /*self.servers.get(&Chat)*/ {
                             match serde_json::to_vec(&ClientCommand::RegistrationToChat) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
                                         content,
                                     };
-                                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                        error!("Failed to send RegistrationToChat to server {}: {}", server_id, err);
+                                    if let Err(err) = self.host.build_msg_fragment(/*server_id*/9, message) {
+                                        error!("Failed to send RegistrationToChat to server {}: {}", /*server_id*/9, err);
                                     } else {
-                                        debug!("RegistrationToChat sent to server {}", server_id);
+                                        debug!("RegistrationToChat sent to server {}", /*server_id*/9);
                                     }
                                 }
                                 Err(e) => {
                                     error!("Serialization of RegistrationToChat failed: {}", e);
                                 }
                             }
-                        } else {
-                            warn!("No chat server available for RegistrationToChat");
-                        }
+                        // } else {
+                        //     warn!("No chat server available for RegistrationToChat");
+                        // }
                     }
 
                     ClientCommand::ClientList => {
