@@ -829,6 +829,7 @@ impl Functionality for Host {
                 return Err(err);
             }
         };
+        println!("Route found for fragmentation: {:?}", route.clone());
 
         // Calcola numero totale di frammenti
         let bytes = &message.content;
@@ -888,11 +889,11 @@ impl Functionality for Host {
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
 
             tracing::info!(
-            host = self.id,
-            session = message.session_id,
-            fragment = i,
-            "Sending fragment"
-        );
+                host = self.id,
+                session = message.session_id,
+                fragment = i,
+                "Sending fragment"
+            );
 
             let result = self.send_packet(packet, None);
 
