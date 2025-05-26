@@ -916,7 +916,7 @@ pub enum ClientCommand{
     //chat-server
     RegistrationToChat,
     ClientList,
-    MessageFor(ClientId, Message),
+    MessageFor(ClientId, String),
 
 }
 pub enum NetCommand {
@@ -934,7 +934,7 @@ pub enum ServerToClient{
     Media(MediaId, Image),
 
     ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, Message),
+    MessageFrom(ClientId, String),
 
     ErrNotFound,
     ErrClientId

@@ -133,12 +133,10 @@ impl Client {
                     self.handle_packet(packet)?;
                 }
 
-                // 2) (opzionale) se arriva un comando nuovo mentre sto scoprendo, puoi
-                //    fare o un buffer, o semplicemente loggarlo e rifiutarlo, oppure
-                //    gestirlo subito in qualcun altro modo.
+                // 2) se arriva un comando nuovo mentre sto scoprendo
                 recv(self.controller_recv) -> _cmd => {
                     // ad esempio: loggo e poi continuo a scoprire
-                    self.host.send_logging("Got a command while discovering — ritento discovery".to_string());
+                    self.host.send_logging("Got a command while discovering".to_string());
                 }
 
                 // 3) dopo un po’ riprovo a inviare le ServerType request
@@ -316,7 +314,7 @@ impl Client {
                     ClientCommand::MessageFor(client_id, msg) => {
                         self.host.send_logging(format!("Preparing MessageFor({}, …) request", client_id));
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                            match serde_json::to_vec(&ClientCommand::MessageFor(client_id, msg)) {
+                            match serde_json::to_vec(&ClientCommand::MessageFor(client_id, String::from(msg))) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -397,7 +395,7 @@ impl Client {
                                 }
 
                                 MessageFrom(from, msg) => {
-                                    self.host.send_logging(format!("Message from {}: {:?}", from, msg.content));
+                                    self.host.send_logging(format!("Message from {}: {:?}", from, msg.clone()));
                                     send_reconstructed(MessageFrom(from, msg))?;
                                 }
                                 FilesList(files) => {
