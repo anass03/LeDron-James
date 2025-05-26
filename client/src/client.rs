@@ -141,6 +141,7 @@ impl Client {
 
             // rimani in polling finché non hai ricevuto tutte le risposte
             while self.servers.len() != expected_count {
+                tracing::info!("not yet found all servers");
                 thread::sleep(Duration::from_millis(100));
             }
 
