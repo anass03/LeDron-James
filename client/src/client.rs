@@ -117,19 +117,19 @@ impl Client {
         let expected_count = self.host.network.servers.len();
         if self.servers.len() != expected_count {
             self.host.send_logging(format!(
-                "Discovering server types from {} nodes...",
-                expected_count
+                "Discovering server types from {} nodes, host={}",
+                expected_count, self.host.id
             ));
 
             self.request_server_type();
 
             // rimani in polling finché non hai ricevuto tutte le risposte
             while self.servers.len() != expected_count {
-                self.host.send_logging("not yet found all servers".to_string());
+                //self.host.send_logging("not yet found all servers".to_string());
                 thread::sleep(Duration::from_millis(100));
             }
 
-            self.host.send_logging(format!("Discovered all {} servers", expected_count));
+            self.host.send_logging(format!("Discovered all {} servers, host={}", expected_count, self.host.id));
         }
     }
 
@@ -240,26 +240,26 @@ impl Client {
 
                     ClientCommand::RegistrationToChat => {
                         self.host.send_logging("Preparing RegistrationToChat request".to_string());
-                        //if let Some(/*&server_id*/ 9) = /*self.servers.get(&Chat)*/ {
+                        if let Some(&server_id) = self.servers.get(&Chat) {
                         match serde_json::to_vec(&ClientCommand::RegistrationToChat) {
                             Ok(content) => {
                                 let message = Message {
                                     session_id: generate_unique_session_id(),
                                     content,
                                 };
-                                if let Err(err) = self.host.build_msg_fragment(/*server_id*/9, message) {
-                                    self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", /*server_id*/9, err));
+                                if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                                    self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", server_id, err));
                                 } else {
-                                    self.host.send_logging(format!("RegistrationToChat sent to server {}", /*server_id*/9));
+                                    self.host.send_logging(format!("RegistrationToChat sent to server {}", server_id));
                                 }
                             }
                             Err(e) => {
                                 self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
                             }
                         }
-                        // } else {
-                        //     self.host.send_logging(format!("No chat server available for RegistrationToChat"));
-                        // }
+                        } else {
+                            self.host.send_logging(format!("No chat server available for RegistrationToChat host={}", self.host.id));
+                        }
                     }
 
                     ClientCommand::ClientList => {
