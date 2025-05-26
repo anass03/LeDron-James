@@ -2004,12 +2004,13 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#269a24e8b57016a8be5864d10c2ce0534e6d1c97"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#9d3a61c2a38bb2d82937424712ddd5ff7fb3a088"
 dependencies = [
  "crossbeam-channel",
  "delegate",
  "host",
  "image",
+ "log",
  "petgraph 0.6.5",
  "rand 0.9.1",
  "reqwest",

@@ -61,7 +61,7 @@ fn main() -> std::io::Result<()> {
     let mut logs_arc = simulation_controller_data.logs.clone();
     std::thread::spawn(move || {
         for received in log_receiver.iter() {
-            logs_arc.push_log(LogType::DEBUG, received.as_str());
+            logs_arc.push_log(LogType::INFO, received.as_str());
         }
     });
 
