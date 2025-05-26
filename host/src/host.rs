@@ -885,7 +885,7 @@ impl Functionality for Host {
             }
 
             // Costruisci e invia pacchetto
-            let header = SourceRoutingHeader::new(route.clone(), 0);
+            let header = SourceRoutingHeader::new(route.clone(), 1);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
 
             tracing::info!(
