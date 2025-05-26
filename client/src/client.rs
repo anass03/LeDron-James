@@ -1,13 +1,11 @@
 use crossbeam_channel::{tick, Receiver, Sender};
-use wg_2024::controller::{DroneEvent};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
-use std::collections::{HashMap, HashSet};
-use std::{fs, io, thread};
+use std::collections::{HashMap};
+use std::{thread};
 use std::time::{Duration, Instant};
 use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
 use host::ServerTypes::{Content,Chat};
-use image::{DynamicImage, ImageBuffer};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
 
 pub struct Client {
@@ -80,25 +78,25 @@ impl Client {
                     //     println!("Node {} -> {:?}", node_id, incoming);
                     // }
 
-                    self.host.send_logging("=== All links FROM CLIENT VIEW ===".to_string());
-                    for (&from, &(_, ref edges)) in &self.host.network.nodes {
-                        for edge in edges {
-                            self.host.send_logging(format!("{} - {}", from, edge.to));
-                        }
-                    }
+                    // self.host.send_logging(format!("=== All links FROM CLIENT VIEW host={} ===",self.host.id));
+                    // for (&from, &(_, ref edges)) in &self.host.network.nodes {
+                    //     for edge in edges {
+                    //         self.host.send_logging(format!("{} - {}", from, edge.to));
+                    //     }
+                    // }
                     //
                     self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
                     if let Some(route) = self.host.network.find_best_route(7, 9){
-                        self.host.send_logging(format!("✅ Route: {:?}", route));
+                        self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
                     }else{
-                        self.host.send_logging("❌ No route found!".to_string());
+                        self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
                     }
-
-                    self.host.send_logging("=== find_best_route 7-8 TEST ===".to_string());
-                    if let Some(route) = self.host.network.find_best_route(7, 8){
-                        self.host.send_logging(format!("✅ Route: {:?}", route));
+                    thread::sleep(Duration::from_secs(2));
+                    self.host.send_logging("=== find_best_route 6-8 TEST ===".to_string());
+                    if let Some(route) = self.host.network.find_best_route(6, 8){
+                        self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
                     }else{
-                        self.host.send_logging("❌ No route found!".to_string());
+                        self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
                     }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);

@@ -520,6 +520,20 @@ impl Functionality for Host {
                         next_id,
                     ));
                 }
+                // ——— Aggiungi anche l'arco inverso ———
+                if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
+                    // evita doppioni
+                    if !inv_edges.iter().any(|e| e.to == curr_id) {
+                        inv_edges.push(Edge { to: curr_id, weight: 0.0 });
+                        self.send_logging(format!(
+                            "Recorded adjacency edge host={} from={} to={}",
+                            host_id,
+                            next_id,
+                            curr_id,
+                        ));
+                    }
+                }
+
             } else {
                 self.send_logging(format!(
                     "Current node missing from network.nodes host={} node={}",
