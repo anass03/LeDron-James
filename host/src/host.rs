@@ -719,6 +719,11 @@ impl Functionality for Host {
             message.session_id,
             destination,
         ));
+        for (&from, &(_, ref edges)) in &self.network.nodes {
+            for edge in edges {
+                self.send_logging(format!("{} - {}", from, edge.to));
+            }
+        }
         // Trova percorso
         let route = match self.network.find_best_route(self.id, destination) {
             Some(r) => r,
