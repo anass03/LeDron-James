@@ -546,7 +546,7 @@ impl Functionality for Host {
         // self.network.recalc_pdr();
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
-        self.send_logging("Sending packet...".to_string());
+        self.send_logging(format!("Sending packet... host={}", self.id));
 
         let next_channel = channel.or_else(|| {
             self.packet_send
@@ -569,7 +569,7 @@ impl Functionality for Host {
                 }
             },
             None => {
-                self.send_logging("No valid channel found for sending packet.".to_string());
+                self.send_logging(format!("No valid channel found for sending packet. host={}", self.id));
                 if let Err(e) = self.sendto_controller(packet) {
                     self.send_logging(format!("Error, notifying controller: {}", e));
                 }

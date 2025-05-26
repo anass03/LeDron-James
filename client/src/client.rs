@@ -113,29 +113,56 @@ impl Client {
     /// Se non ho ancora scoperto *tutti* i server,
     /// mando la discovery e aspetto che `self.servers` contenga
     /// tutti gli ID di `self.host.network.servers`.
-    fn ensure_all_servers_discovered(&mut self) {
-        let expected_count = self.host.network.servers.len();
-        if self.servers.len() != expected_count {
+    fn ensure_all_servers_discovered(&mut self) -> Result<(), String> {
+        let expected = self.host.network.servers.len();
+        if self.servers.len() != expected {
             self.host.send_logging(format!(
                 "Discovering server types from {} nodes, host={}",
-                expected_count, self.host.id
+                expected, self.host.id
             ));
-
+            // invio subito la prima ondata di request
             self.request_server_type();
 
-            // rimani in polling finché non hai ricevuto tutte le risposte
-            while self.servers.len() != expected_count {
-                //self.host.send_logging("not yet found all servers".to_string());
-                thread::sleep(Duration::from_millis(100));
+            // resto in discovery finché non ho tutte le risposte
+            while self.servers.len() != expected {
+                crossbeam_channel::select! {
+                // 1) arrivo di un FloodResponse o di un ServerType: lo processo
+                recv(self.host.packet_recv) -> pkt => {
+                    let packet = pkt.map_err(|e| e.to_string())?;
+                    // la chiamata interna aggiornerà `self.servers` quando riceve un ServerType
+                    self.handle_packet(packet)?;
+                }
+
+                // 2) (opzionale) se arriva un comando nuovo mentre sto scoprendo, puoi
+                //    fare o un buffer, o semplicemente loggarlo e rifiutarlo, oppure
+                //    gestirlo subito in qualcun altro modo.
+                recv(self.controller_recv) -> _cmd => {
+                    // ad esempio: loggo e poi continuo a scoprire
+                    self.host.send_logging("Got a command while discovering — ritento discovery".to_string());
+                }
+
+                // 3) dopo un po’ riprovo a inviare le ServerType request
+                default(Duration::from_millis(200)) => {
+                    self.request_server_type();
+                }
+            }
             }
 
-            self.host.send_logging(format!("Discovered all {} servers, host={}", expected_count, self.host.id));
+            self.host.send_logging(format!(
+                "Discovered all {} servers, host={}",
+                expected, self.host.id
+            ));
         }
+        Ok(())
     }
 
 
+
     fn handle_command(&mut self, net_comm: NetCommand) {
-        self.ensure_all_servers_discovered();
+        if let Err(e) = self.ensure_all_servers_discovered() {
+            self.host.send_logging(format!("Error during discovery: {}", e));
+            return;
+        }
 
         match net_comm {
             // Command network serializable
