@@ -13,7 +13,7 @@ use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use ordered_float::OrderedFloat;
-
+use crate::host;
 
 pub type FileId = usize;
 pub type MediaId = usize;
@@ -118,7 +118,7 @@ impl Network {
                     }
                 }
             } else {
-                log::warn!("Drone node {} non trovato in `nodes`!", drone_id);
+                //Host::send_logging(format!("Drone node {} non trovato in `nodes`!", drone_id));
             }
         }
     }
@@ -273,7 +273,7 @@ impl Network {
     }
 }
 pub trait Functionality{
-    fn send_logging(&self, message: &str);
+    fn send_logging(&self, message: String);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, response: FloodResponse);
@@ -319,80 +319,72 @@ impl Functionality for Host {
             FloodRequest::initialize(flood_id, host_id, self.type_host),
         );
 
-        tracing::info!(host = host_id,flood_id,session_id,"Starting flood discovery");
+        self.send_logging(format!("host: {}, flood_id: {},session_id: {}, Starting flood discovery", host_id, flood_id,session_id));
 
         if self.packet_send.is_empty() {
-            tracing::warn!(host = host_id, "No neighbors to flood to");
+            self.send_logging(format!("host: {}, No neighbors to flood to",host_id));
             return;
         }
 
         // Inoltro la richiesta a tutti i vicini
         for (neighbour_id, sender) in &self.packet_send {
-            tracing::debug!(
-                host = host_id,
-                neighbour = neighbour_id,
-                "Sending FloodRequest"
-            );
+            self.send_logging(format!(
+                "Sending FloodRequest host={} neighbor={}",
+                host_id, neighbour_id,
+            ));
             let result = self.send_packet(flood_request.clone(), Some(sender));
-            tracing::info!(
-                host = host_id,
-                neighbour = neighbour_id,
-                ?result,
-                "FloodRequest send result: "
-            );
-        }
+            let neighbour = neighbour_id;
+            self.send_logging(format!(
+                "FloodRequest send result: host={}, neishbor={}, result={}",
+                host_id, neighbour, result,
+            ));}
     }
     fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet) {
         let host_id = self.id;
         let initiator = flood_request.initiator_id;
         let flood_id = flood_request.flood_id;
         let session_id = packet.session_id;
+        let host = host_id;
 
-        tracing::info!(
-            host = host_id,
+        self.send_logging(format!(
+            "Handling FloodRequest host={} initiator={} flood_id={} session={}",
+            host,
             initiator,
             flood_id,
-            session = session_id,
-            "Handling FloodRequest"
-        );
-
+            session_id,
+        ));
         let mut fr = flood_request.clone();
 
         // 1) Controllo se ho già visto questo flood_id dall'initiator
         let seen_flood_ids = self.flood_cache.entry(initiator).or_default();
 
         if seen_flood_ids.contains(&flood_id) {
-            tracing::info!("Path trace before adding myself: {:?}", fr.path_trace);
+            self.send_logging(format!("Path trace before adding myself: {:?}", fr.path_trace));
 
             fr.increment(host_id, self.type_host);
-
-            tracing::debug!(
-                host = host_id,
+            let host = host_id;
+            self.send_logging(format!(
+                "FloodRequest already seen, sending response immediately host={} initiator={} flood_id={}",
+                host,
                 initiator,
                 flood_id,
-                "FloodRequest already seen, sending response immediately"
-            );
-
-            tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
+            ));
+            self.send_logging(format!("Path trace after adding myself: {:?}", fr.path_trace));
             let mut response_pkt = fr.generate_response(session_id);
             response_pkt.routing_header.hop_index += 1;
 
             let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
-            tracing::debug!(
-                host = host_id,
-                ?next_hop,
-                neighbors = ?self.packet_send.keys().collect::<Vec<_>>(),
-                "Attempting to send FloodResponse to next hop"
-            );
 
+            self.send_logging(format!(
+                "Attempting to send FloodResponse to next hop host={} next_hop={} neighbors={:?}",
+                host_id, next_hop, self.packet_send.keys().collect::<Vec<_>>(),
+            ));
             let result = self.send_packet(response_pkt, None);
 
-            tracing::info!(
-                host = host_id,
-                ?result,
-                "Sent FloodResponse for duplicate FloodRequest"
-            );
-
+            self.send_logging(format!(
+                "Sent FloodResponse for duplicate FloodRequest host={}, result={}",
+                host_id, result,
+            ));
             return;
         }
 
@@ -403,20 +395,20 @@ impl Functionality for Host {
         let from = match flood_request.path_trace.last() {
             Some(&(node_id, _)) => node_id,
             None => {
-                warn!("Received FloodRequest with empty path-trace! Dropping packet.");
+                self.send_logging("Received FloodRequest with empty path-trace! Dropping packet.".to_string());
                 return;
             }
         };
-
-        tracing::debug!(
-            host = host_id,
-            from,
-            "FloodRequest arrived from neighbor"
-        );
-        tracing::info!("Path trace before adding myself: {:?}", fr.path_trace);
+        let host = host_id;
+        self.send_logging(format!(
+            "FloodRequest arrived from neighbor host={} from={}",
+            host,
+            from
+        ));
+        self.send_logging(format!("Path trace before adding myself: {:?}", fr.path_trace));
         // 4) Aggiorno path_trace
         fr.increment(host_id, self.type_host);
-        tracing::info!("Path trace after adding myself: {:?}", fr.path_trace);
+        self.send_logging(format!("Path trace after adding myself: {:?}", fr.path_trace));
         // 5) Inoltro a tutti i vicini (escluso chi me l'ha mandato)
         let neighbors: Vec<_> = self
             .packet_send
@@ -426,34 +418,31 @@ impl Functionality for Host {
 
         if neighbors.is_empty() {
             // 6a) Fine linea: genero immediatamente FloodResponse
-            tracing::info!(host = host_id, "No other neighbors: replying flood immediately");
+            self.send_logging(format!("No other neighbors: replying flood immediately host={}", host_id));
             let mut resp_pkt = fr.generate_response(session_id);
             resp_pkt.routing_header.hop_index+=1;
             let next_hop = resp_pkt.routing_header.hops[resp_pkt.routing_header.hop_index];
-            tracing::debug!(
-                host = host_id,
-                ?next_hop,
-                neighbors = ?self.packet_send.keys().collect::<Vec<_>>(),
-                "Attempting to send FloodResponse to next hop"
-            );
-
+            self.send_logging(format!(
+                "Attempting to send FloodResponse to next hop host={} next_hop={} neighbors={:?}",
+                 host_id,
+                next_hop,
+                self.packet_send.keys().collect::<Vec<_>>(),
+            ));
             let result = self.send_packet(resp_pkt, None);
 
-            tracing::info!(
-            host = host_id,
-            ?result,
-            "FloodResponse sent from leaf node"
-        );
+            self.send_logging(format!(
+                "FloodResponse sent from leaf node host={}, result={}",
+                host_id, result,
+            ));
         } else {
             // 6b) Inoltro ai vicini disponibili
-            tracing::info!(
-                host = host_id,
-                count = neighbors.len(),
-                "Forwarding FloodRequest to neighbors"
-            );
-
+            self.send_logging(format!(
+                "Forwarding FloodRequest to neighbors host={} count={}",
+                 host_id,
+                 neighbors.len(),
+            ));
             for (&nbr, ch) in neighbors {
-                tracing::debug!(host = host_id, neighbor = nbr, "Forwarding to neighbor");
+                self.send_logging(format!("Forwarding to neighbor host={} neighbor={}",  host_id, nbr));
                 let fwd_pkt = Packet::new_flood_request(
                     packet.routing_header.clone(),
                     session_id,
@@ -461,102 +450,13 @@ impl Functionality for Host {
                 );
                 let result = self.send_packet(fwd_pkt, Some(ch));
 
-                tracing::debug!(
-                    host = host_id,
-                    neighbor = nbr,
-                    ?result,
-                    "ForwardFloodRequest result"
-                );
+                self.send_logging(format!(
+                    "ForwardFloodRequest result host={} neighbor={} result={}",
+                    host_id, nbr, result,
+                ));
             }
         }
     }
-
-    // fn process_flood_response(&mut self, response: FloodResponse) {
-    //     let host_id = self.id;
-    //
-    //     // 🔍 LOG: path completo in arrivo
-    //     let path_str = response
-    //         .path_trace
-    //         .iter()
-    //         .map(|(id, ty)| format!("{:?}({})", ty, id))
-    //         .collect::<Vec<_>>()
-    //         .join(" -> ");
-    //
-    //     tracing::info!(
-    //         host = host_id,
-    //         flood_id = response.flood_id,
-    //         path = %path_str,
-    //         "Handling FloodResponse with path"
-    //     );
-    //
-    //     let path = &response.path_trace;
-    //     if path.len() < 2 {
-    //         tracing::warn!(
-    //             host = host_id,
-    //             len = path.len(),
-    //             "FloodResponse path too short, skipping"
-    //         );
-    //         return;
-    //     }
-    //
-    //     // 1) Assicura che tutti i nodi nel percorso siano aggiunti alla topologia
-    //     for &(node_id, node_type) in path {
-    //         self.network.topology.entry(node_id).or_insert_with(|| {
-    //             let idx = self.network.graph.add_node(node_id);
-    //             (idx, Vec::new())
-    //         });
-    //
-    //         if node_type == NodeType::Server {
-    //             self.network.servers.insert(node_id);
-    //             tracing::debug!(host = host_id, server = node_id, "Marked node as server");
-    //         }
-    //     }
-    //
-    //     // 2) Registra connessioni tra nodi adiacenti
-    //     for window in path.windows(2) {
-    //         let (curr_id, _) = window[0];
-    //         let (next_id, _) = window[1];
-    //
-    //         let entry = self.network.topology.get_mut(&curr_id).unwrap(); //unwrap() è sicuro qui perché tutti i nodi della path sono stati già inseriti nel blocco precedente
-    //         if !entry.1.contains(&next_id) {
-    //             entry.1.push(next_id);
-    //             tracing::debug!(
-    //                 host = host_id,
-    //                 from = curr_id,
-    //                 to = next_id,
-    //                 "Recorded topology edge"
-    //             );
-    //         }
-    //     }
-    //
-    //     // 3) Aggiorna la rappresentazione del grafo
-    //     self.network.update_graph();
-    //
-    //     tracing::info!(
-    //         host = host_id,
-    //         nodes = self.network.topology.len(),
-    //         "Topology graph updated"
-    //     );
-    //
-    //     // Debug opzionale per nodo specifico
-    //     // if host_id == 6 {
-    //     //     tracing::debug!("🔍 Topology at node 6: {:?}", self.network.topology.keys());
-    //     //     tracing::debug!("🔍 Servers known to node 6: {:?}", self.network.servers);
-    //     //     // if let Some(route) = self.network.find_best_route(6, 7) {
-    //     //     //     tracing::debug!("✅ Route from 6 to 7 found: {:?}", route);
-    //     //     // } else {
-    //     //     //     tracing::debug!("❌ No route yet from 6 to 7");
-    //     //     // }
-    //     // }else {
-    //     //     tracing::debug!("🔍 Topology at node 7: {:?}", self.network.topology.keys());
-    //     //     tracing::debug!("🔍 Servers known to node 7: {:?}", self.network.servers);
-    //     //     // if let Some(route) = self.network.find_best_route(7, 6) {
-    //     //     //     tracing::debug!("✅ Route from 7 to 6 found: {:?}", route);
-    //     //     // } else {
-    //     //     //     tracing::debug!("❌ No route yet from 7 to 6");
-    //     //     // }
-    //     // }
-    // }
 
     fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
@@ -569,20 +469,19 @@ impl Functionality for Host {
             .collect::<Vec<_>>()
             .join(" -> ");
 
-        tracing::info!(
-            host = host_id,
-            flood_id = response.flood_id,
-            path = %path_str,
-            "Handling FloodResponse with path"
-        );
-
+        self.send_logging(format!(
+            "Handling FloodResponse with path host={} flood_id={}, path_str={}",
+             host_id,
+             response.flood_id,
+             path_str,
+        ));
         let path = &response.path_trace;
         if path.len() < 2 {
-            tracing::warn!(
-                host = host_id,
-                len = path.len(),
-                "FloodResponse path too short, skipping"
-            );
+            self.send_logging(format!(
+                "FloodResponse path too short, skipping host={} len={}",
+                 host_id,
+                 path.len(),
+            ));
             return;
         }
 
@@ -618,19 +517,18 @@ impl Functionality for Host {
                 // evita doppioni
                 if !edges.iter().any(|e| e.to == next_id) {
                     edges.push(Edge { to: next_id, weight: 0.0 });
-                    tracing::debug!(
-                        host = host_id,
-                        from = curr_id,
-                        to = next_id,
-                        "Recorded adjacency edge"
-                    );
+                    self.send_logging(format!(
+                        "Recorded adjacency edge host={} from={} to={}",
+                         host_id,
+                         curr_id,
+                         next_id,
+                    ));
                 }
             } else {
-                tracing::warn!(
-                    host = host_id,
-                    node = curr_id,
-                    "Current node missing from network.nodes"
-                );
+                self.send_logging(format!(
+                    "Current node missing from network.nodes host={} node={}",
+                    host_id, curr_id,
+                ));
             }
         }
 
@@ -638,7 +536,7 @@ impl Functionality for Host {
         // self.network.recalc_pdr();
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
-        info!("Sending packet...");
+        self.send_logging("Sending packet...".to_string());
 
         let next_channel = channel.or_else(|| {
             self.packet_send
@@ -649,214 +547,196 @@ impl Functionality for Host {
             Some(ch) => match ch.send(packet.clone()) {
                 Ok(_) => {
                     if let Err(err) = self.sendto_controller(packet.clone()) {
-                        warn!("Notifying controller gone wrong: {}", err);
+                        self.send_logging(format!("Notifying controller gone wrong: {}", err));
                     }
                     SendingCodes::SuccessfullySent(packet.session_id)
                 }
                 Err(err) => {
                     if let Err(e) = self.sendto_controller(packet) {
-                        warn!("Notifying controller, for error sending packet, gone wrong: {}", e);
+                        self.send_logging(format!("Notifying controller, for error sending packet, gone wrong: {}", e));
                     }
                     SendingCodes::ErrorSending(err.to_string())
                 }
             },
             None => {
-                warn!("No valid channel found for sending packet.");
+                self.send_logging("No valid channel found for sending packet.".to_string());
                 if let Err(e) = self.sendto_controller(packet) {
-                    warn!("Error, notifying controller: {}", e);
+                    self.send_logging(format!("Error, notifying controller: {}", e));
                 }
                 SendingCodes::NoNextHop("Neighbour not found".to_string())
             }
         };
 
-        debug!("{:?}", result);
+        self.send_logging(format!("{:?}", result));
         result
     }
     fn sendto_controller(&self, packet: Packet) -> Result<(), String> {
-        info!("Sending to controller...");
+        self.send_logging("Sending to controller...".to_string());
 
         match self.controller_send.send(HostEvent::PacketSent(packet)) {
             Ok(_) => {
-                info!("Successfully sent to controller.");
+                self.send_logging("Successfully sent to controller.".to_string());
                 Ok(())
             }
             Err(er) => {
-                warn!("Failed to send to controller: {}", er);
+                self.send_logging(format!("Failed to send to controller: {}", er));
                 Err(er.to_string())
             }
         }
     }
     fn handle_ack(&self, ack: Ack, session_id: u64) {
         let idx = ack.fragment_index as usize;
-        tracing::info!(
-        host = self.id,
-        session = session_id,
-        fragment = ack.fragment_index,
-        "Received ACK"
-    );
-
+        self.send_logging(format!(
+            "Received ACK host={} session={} fragment={}",
+            self.id,
+            session_id,
+            ack.fragment_index,
+        ));
         let mut sent = self.sent_fragments.lock().unwrap();
         if let Some(session) = sent.get_mut(&session_id) {
             if idx < session.buffer.len() && session.buffer[idx].is_some() {
                 session.buffer[idx] = None;
                 session.pending = session.pending.saturating_sub(1);
                 session.last_activity = Instant::now();
-                tracing::debug!(
-                host = self.id,
-                session = session_id,
-                pending = session.pending,
-                "ACK processed, pending--"
-            );
+                self.send_logging(format!(
+                    "ACK processed, pending-- host={} session={} pending={}",
+                    self.id,
+                     session_id,
+                     session.pending,
+                ));
             } else {
-                tracing::debug!(
-                host = self.id,
-                session = session_id,
-                fragment = ack.fragment_index,
-                "ACK for nonexistent or already confirmed fragment"
-            );
+                self.send_logging(format!(
+                    "ACK for nonexistent or already confirmed fragment host={} session={} fragment={}",
+                     self.id,
+                     session_id,
+                     ack.fragment_index,
+                ));
             }
         } else {
-            tracing::warn!(
-            host = self.id,
-            session = session_id,
-            "ACK for unknown session"
-        );
+            self.send_logging(format!(
+                "ACK for unknown session host={} session={}",
+                self.id, session_id,
+            ));
         }
     }
     fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64) {
         let host = self.id;
         let frag_idx = nack.fragment_index;
-        tracing::warn!(
-            host = host,
-            session = session_id,
-            fragment = frag_idx,
-            reason = ?nack.nack_type,
-            "Received NACK"
-        );
-
+        self.send_logging(format!(
+            "Received NACK host={} session={}, frag_index={} nacktype={}",
+            host, session_id, frag_idx, nack
+        ));
         let mut sent = self.sent_fragments.lock().unwrap();
         if let Some(session) = sent.get_mut(&session_id) {
             match session.buffer.get(frag_idx as usize) {
                 Some(Some(fragment)) => {
                     match nack.nack_type {
                         NackType::Dropped => {
-                            tracing::info!(
-                                host = host,
-                                session = session_id,
-                                fragment = frag_idx,
-                                "Retransmitting dropped fragment"
-                            );
+                            self.send_logging(format!(
+                                "Retransmitting dropped fragment host={} session={} fragment={}",
+                                 host,
+                                 session_id,
+                                 frag_idx,
+                            ));
                             self.send_fragment(session_id, fragment.clone());
                             self.network.pdr_from_nack(nack_generator);
                         }
                         NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
-                            tracing::info!(
-                                host = host,
-                                session = session_id,
-                                fragment = frag_idx,
-                                bad_hop = bad,
-                                "Routing error, attempting alternate route"
-                            );
-                            if let Some(new_route) =
-                                self.network.find_alternate_route(host, session.destination, &session.route)
+                            self.send_logging(format!(
+                                "Routing error, attempting alternate route host={} session={} fragment={} bad_hop={}",
+                                host,
+                                session_id,
+                                frag_idx,
+                                bad,
+                            ));if let Some(new_route) = self.network.find_alternate_route(host, session.destination, &session.route)
                             {
-                                tracing::debug!(
-                                    host = host,
-                                    session = session_id,
-                                    fragment = frag_idx,
-                                    alt_route = ?new_route,
-                                    "Alternate route found, updating and retransmitting"
-                                );
+                                self.send_logging(format!("Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}", host, session_id, frag_idx, new_route));
                                 session.route = new_route.clone();
                                 let header = SourceRoutingHeader::new(new_route, 0);
                                 let pkt = Packet::new_fragment(header, session_id, fragment.clone());
                                 let res = self.send_packet(pkt, None);
-                                tracing::debug!(
-                                    host = host,
-                                    session = session_id,
-                                    fragment = frag_idx,
-                                    ?res,
-                                    "Retransmission result"
-                                );
+                                self.send_logging(format!(
+                                    "Retransmission result host={} session={} fragment={} result={}",
+                                     host,
+                                     session_id,
+                                     frag_idx,
+                                    res,
+                                ));
                             } else {
                                 drop(sent);
-                                tracing::warn!(
-                                    host = host,
-                                    session = session_id,
-                                    "No alternate route, re-initiating flood"
-                                );
-                                self.initiate_flood();
+                                self.send_logging(format!(
+                                    "No alternate route, re-initiating flood host={} session={}",
+                                     host,
+                                     session_id,
+                                ));self.initiate_flood();
                             }
                         }
                         NackType::DestinationIsDrone => {
-                            tracing::error!(
-                                host = host,
-                                session = session_id,
-                                fragment = frag_idx,
-                                "DestinationIsDrone NACK—dropping fragment"
-                            );
-                        }
+                            self.send_logging(format!(
+                                "DestinationIsDrone NACK—dropping fragment host={} session={} fragment={}",
+                                 host,
+                                 session_id,
+                                 frag_idx,
+                            ));}
                     }
                 }
                 Some(None) => {
-                    tracing::debug!(
-                        host = host,
-                        session = session_id,
-                        fragment = frag_idx,
-                        "NACK for fragment already confirmed"
-                    );
-                }
+                    self.send_logging(format!(
+                        "NACK for fragment already confirmed host={} session={} fragment={}",
+                        host,
+                        session_id,
+                        frag_idx,
+                    ));}
                 None => {
-                    tracing::warn!(
-                        host = host,
-                        session = session_id,
-                        fragment = frag_idx,
-                        "NACK index out of range"
-                    );
-                }
+                    self.send_logging(format!(
+                        "NACK index out of range host={} session={} fragment={}",
+                        host,
+                         session_id,
+                         frag_idx,
+                    ));}
             }
         } else {
-            tracing::warn!(
-                host = host,
-                session = session_id,
-                "NACK for unknown session"
-            );
-        }
+            self.send_logging(format!(
+                "NACK for unknown session host={} session={}",
+                 host,
+                 session_id,
+            ));}
     }
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
-        tracing::info!(
-        host = self.id,
-        session = message.session_id,
-        dest = destination,
-        "Starting fragmentation"
-    );
-
+        self.send_logging(format!(
+            "Starting fragmentation host={} session={} dest={}",
+             self.id,
+             message.session_id,
+             destination,
+        ));
         // Trova percorso
         let route = match self.network.find_best_route(self.id, destination) {
             Some(r) => r,
             None => {
                 let err = format!("No route to {}", destination);
-                error!(host = self.id, session = message.session_id, "{}", err);
+                self.send_logging(format!("{} host={} session={}", err, self.id, message.session_id));
                 return Err(err);
             }
         };
-        println!("✅💥💥 Route found for fragmentation: {:?}", route.clone());
+        self.send_logging(format!("✅💥💥 Route found for fragmentation: {:?}", route.clone()));
 
         // Calcola numero totale di frammenti
         let bytes = &message.content;
-        println!("❤️❤️ vettore di byte: {:?}", bytes.clone());
+        self.send_logging(format!("❤️❤️ vettore di byte: {:?}", bytes.clone()));
         let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
 
         // Prepara o aggiorna SentSessionData
         {
             let mut sent = self.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
             let session = sent.entry(message.session_id).or_insert_with(|| {
-                tracing::debug!(
-                host = self.id,
-                session = message.session_id,
-                total,
-                "New SentSessionData"
-            );
+                let host = self.id;
+                let session = message.session_id;
+                self.send_logging(format!(
+                    "New SentSessionData host={} session={} total={}",
+                    host,
+                    session,
+                    total,
+                ));
                 SentSessionData {
                     buffer: vec![None; total],
                     last_activity: Instant::now(),
@@ -900,46 +780,38 @@ impl Functionality for Host {
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
 
-            tracing::info!(
-                host = self.id,
-                session = message.session_id,
-                fragment = i,
-                "Sending fragment"
-            );
-
+            self.send_logging(format!(
+                "Sending fragment host={} session={} fragment={}",
+                self.id,
+                 message.session_id,
+                 i,
+            ));
             let result = self.send_packet(packet, None);
 
-            tracing::info!(
-            host = self.id,
-            session = message.session_id,
-            fragment = i,
-            ?result,
-            "Send result"
-        );
-
+            self.send_logging(format!(
+                "Send result host={} session={} fragment={} result={}",
+                self.id, message.session_id, i, result
+            ));
             if let SendingCodes::SuccessfullySent(_) = result {
                 self.network.pdr_helper(header.hops.as_slice());
-                tracing::debug!(
-                    host = self.id,
-                    hops = ?header.hops,
-                    fragment = i,
-                    "PDR updated"
-                );
-            }
+                self.send_logging(format!(
+                    "PDR updated host={} header hops={:?} fragment={}",
+                    self.id,
+                    header.hops,
+                    i,
+                ));}
         }
 
-        tracing::info!(
-            host = self.id,
-            session = message.session_id,
-            "Fragmentation completed"
-        );
-
+        self.send_logging(format!(
+            "Fragmentation completed host={} session={}",
+            self.id,
+            message.session_id,
+        ));
         Ok(())
     }
-
     fn cleanup_expired_sessions(&self, timeout: Duration) {
         let host = self.id;
-        tracing::info!(host, timeout_secs = timeout.as_secs(), "Cleanup start");
+        self.send_logging(format!("Cleanup start host={} timeout_secs={}", host, timeout.as_secs()));
         let now = Instant::now();
 
         // 1) raccogli ID to remove
@@ -961,14 +833,14 @@ impl Functionality for Host {
             for (sid, expired) in to_remove_sent {
                 sent.remove(&sid);
                 if expired {
-                    tracing::warn!(host, session = sid, "Removed expired sent session");
+                    self.send_logging(format!("Removed expired sent session host={} session={}", host, sid));
                 } else {
-                    tracing::debug!(host, session = sid, "Removed completed sent session");
+                    self.send_logging(format!("Removed completed sent session host={} session={}", host, sid));
                 }
             }
         }
 
-        tracing::info!(host, "Cleanup completed");
+        self.send_logging(format!("Cleanup completed host={}", host));
     }
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment> {
         let sent_fragments = self.sent_fragments.lock().unwrap();
@@ -990,12 +862,10 @@ impl Functionality for Host {
                     session.route.clone()
                 }
                 None => {
-                    tracing::warn!(
-                        host = host,
-                        session = session_id,
-                        fragment = frag_idx,
-                        "send_fragment: session not found"
-                    );
+                    self.send_logging(format!(
+                        "send_fragment: session not found host={} session={} fragment={}",
+                        host, session_id, frag_idx,
+                    ));
                     return;
                 }
             }
@@ -1006,21 +876,15 @@ impl Functionality for Host {
         let packet = Packet::new_fragment(header.clone(), session_id, fragment.clone());
 
         // 3) Log e invio
-        tracing::info!(
-            host = host,
-            session = session_id,
-            fragment = frag_idx,
-            route = ?route,
-            "sending fragment"
-        );
+        self.send_logging(format!(
+            "sending fragment host={}, session={} fragment={}, route={:?}",
+            host, session_id, frag_idx, route
+        ));
         let result = self.send_packet(packet, None);
-        tracing::info!(
-            host = host,
-            session = session_id,
-            fragment = frag_idx,
-            ?result,
-            "send result"
-        );
+        self.send_logging(format!(
+            "send result host={}, session={} fragment={}, result={}",
+            host, session_id, frag_idx, result
+        ));
     }
     fn build_packet_ack(&self, packet: Packet, fragment_index: Option<u64>) -> Packet{
         let mut routing_header = packet.routing_header;
