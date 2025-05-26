@@ -82,27 +82,26 @@ impl Client {
                     //     println!("Node {} -> {:?}", node_id, incoming);
                     // }
 
-                    // self.host.send_logging("=== All links FROM CLIENT VIEW ===".to_string());
-                    // for (&from, &(_, ref edges)) in &self.host.network.nodes {
-                    //     for edge in edges {
-                    //         println!("{} -> {}", from, edge.to);
-                    //     }
-                    // }
-                    // //
-                    // println!();
-                    // self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
-                    // if let Some(route) = self.host.network.find_best_route(7, 9){
-                    //     self.host.send_logging(format!("✅ Route: {:?}", route));
-                    // }else{
-                    //     self.host.send_logging("❌ No route found!".to_string());
-                    // }
+                    self.host.send_logging("=== All links FROM CLIENT VIEW ===".to_string());
+                    for (&from, &(_, ref edges)) in &self.host.network.nodes {
+                        for edge in edges {
+                            self.host.send_logging(format!("{} - {}", from, edge));
+                        }
+                    }
                     //
-                    // self.host.send_logging("=== find_best_route 7-8 TEST ===".to_string());
-                    // if let Some(route) = self.host.network.find_best_route(7, 8){
-                    //     self.host.send_logging(format!("✅ Route: {:?}", route));
-                    // }else{
-                    //     self.host.send_logging("❌ No route found!".to_string());
-                    // }
+                    self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
+                    if let Some(route) = self.host.network.find_best_route(7, 9){
+                        self.host.send_logging(format!("✅ Route: {:?}", route));
+                    }else{
+                        self.host.send_logging("❌ No route found!".to_string());
+                    }
+
+                    self.host.send_logging("=== find_best_route 7-8 TEST ===".to_string());
+                    if let Some(route) = self.host.network.find_best_route(7, 8){
+                        self.host.send_logging(format!("✅ Route: {:?}", route));
+                    }else{
+                        self.host.send_logging("❌ No route found!".to_string());
+                    }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
