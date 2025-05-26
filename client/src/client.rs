@@ -102,19 +102,26 @@ impl Client {
                     //     println!("Node {} -> {:?}", node_id, incoming);
                     // }
 
-                    // println!("=== All links FROM CLIENT VIEW ===");
-                    // for (&from, &(_, ref edges)) in &self.host.network.nodes {
-                    //     for edge in edges {
-                    //         println!("{} -> {}", from, edge.to);
-                    //     }
-                    // }
+                    println!("=== All links FROM CLIENT VIEW ===");
+                    for (&from, &(_, ref edges)) in &self.host.network.nodes {
+                        for edge in edges {
+                            println!("{} -> {}", from, edge.to);
+                        }
+                    }
                     //
-                    // println!("=== find_best_route TEST ===");
-                    // if let Some(route) = self.host.network.find_best_route(106, 207){
-                    //     println!("✅ Route: {:?}", route);
-                    // }else{
-                    //     println!("❌ No route found!");
-                    // }
+                    println!("=== find_best_route 7-9 TEST ===");
+                    if let Some(route) = self.host.network.find_best_route(7, 9){
+                        println!("✅ Route: {:?}", route);
+                    }else{
+                        println!("❌ No route found!");
+                    }
+
+                     println!("=== find_best_route 7-8 TEST ===");
+                    if let Some(route) = self.host.network.find_best_route(7, 8){
+                        println!("✅ Route: {:?}", route);
+                    }else{
+                        println!("❌ No route found!");
+                    }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
