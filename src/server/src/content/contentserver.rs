@@ -8,7 +8,6 @@ use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
 use delegate::delegate;
 use wg_2024::controller::DroneEvent;
-use tracing::{info, error};
 use crate::utils::handle_server_control_loop;
 
 pub struct ContentServer {
@@ -30,6 +29,7 @@ impl ContentServer {
             fn process_flood_response(&mut self, response: FloodResponse);
             fn handle_ack(&self, ack: Ack, session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
+            fn send_logging(&self, message: String);
         }
         to self.info {
             fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
@@ -46,6 +46,7 @@ impl ContentServer {
         controller_recv: Receiver<NetCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
+        log_sender: Sender<String>,
     ) -> Self {
         Self {
             info: GenServer::new(
@@ -57,6 +58,7 @@ impl ContentServer {
                 packet_recv,
                 packet_send,
                 ServerTypes::Content,
+                log_sender
             ),
             files: Vec::new(),
             media: Vec::new(),
@@ -91,11 +93,11 @@ impl ContentServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    error!("Failed to send response to {}: {}", destination, e);
+                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
                 }
             }
             Err(e) => {
-                error!("Failed to serialize ServerToClient: {}", e);
+                self.send_logging(format!("Failed to serialize ServerToClient: {}", e));
             }
         }
     }

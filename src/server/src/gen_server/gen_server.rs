@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fmt::format;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
@@ -7,8 +8,7 @@ use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
 use host::{ClientCommand, Functionality, Host, Message, generate_unique_session_id, RecSessionData, HostEvent, NetCommand};
 use host::ServerTypes;
 use host::ClientCommand::ServerType;
-use tracing_subscriber::EnvFilter;
-use tracing::{info, error};
+use log::log;
 
 pub struct GenServer {
     pub host: Host,
@@ -26,6 +26,7 @@ impl GenServer {
     delegate! {
         to self.host {
             pub fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
+            pub fn send_logging(&self, message: String);
             //fn log<S: AsRef<str>>(&self, message: S);
         }
     }
@@ -39,13 +40,14 @@ impl GenServer {
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         server_type: ServerTypes,
+        log_sender: Sender<String>,
     ) -> Self {
         assert!(
             connected_drone_ids.len() >= 1 && connected_drone_ids.len() <= 2,
             "Server must be connected to at least one and at most two drones!"
         );
 
-        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send);
+        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send,log_sender);
         Self {
             host,
             controller_recv,
@@ -61,8 +63,8 @@ impl GenServerBehavior for GenServer {
             content: data,
         };
         match self.host.build_msg_fragment(destination, message) {
-            Ok(_) => info!("Server ID {} - message built successfully", self.host.id),
-            Err(e) => error!("Failed to build message: {}", e),
+            Ok(_) => self.send_logging(format!("Server ID {} - message built successfully", self.host.id)),
+            Err(e) => self.send_logging(format!("Failed to build message: {}", e)),
         }
     }
 
@@ -76,7 +78,7 @@ impl GenServerBehavior for GenServer {
                 if let Ok(data) = serde_json::to_vec(&host::ServerToClient::ServerType(response)) {
                     self.create_message(data, destination);
                 } else {
-                    error!("Failed to serialize ServerType response");
+                    self.send_logging(format!("Failed to serialize ServerType response"));
                 }
             }
         }
@@ -87,7 +89,7 @@ impl GenServerBehavior for GenServer {
         let mut received_fragments = match lock_result {
             Ok(guard) => guard,
             Err(poisoned) => {
-                error!("Mutex poisoned while accessing received_fragments");
+                self.send_logging(format!("Mutex poisoned while accessing received_fragments"));
                 poisoned.into_inner() // oppure return None; per uscire dal metodo
             }
         };

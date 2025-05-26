@@ -9,7 +9,6 @@ use std::time::Duration;
 use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
-use tracing::{info, error};
 
 pub struct ChatServer {
     info: GenServer,
@@ -19,12 +18,12 @@ pub struct ChatServer {
 impl ChatServer {
     delegate! {
         to self.info.host {
-            //fn log<S: AsRef<str>>(&self, message: S);
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
             fn handle_ack(&self, ack: Ack, session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
+            fn send_logging(&self, message: String);
         }
         to self.info {
             fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
@@ -41,6 +40,7 @@ impl ChatServer {
         controller_recv: Receiver<NetCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
+        log_sender: Sender<String>,
     ) -> Self {
         Self {
             info: GenServer::new(
@@ -52,6 +52,7 @@ impl ChatServer {
                 packet_recv,
                 packet_send,
                 ServerTypes::Chat,
+                log_sender,
             ),
             client_list: vec![],
         }
@@ -59,7 +60,7 @@ impl ChatServer {
 
     pub fn run(&mut self) {
         self.initiate_flood();
-        //self.log("Starting Chat Server...");
+        self.send_logging("Starting Chat Server...".to_string());
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.host.packet_recv) -> packet => {
@@ -85,11 +86,11 @@ impl ChatServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    error!("Failed to send response to {}: {}", destination, e);
+                  self.send_logging(format!("Failed to send response to {}: {}", destination, e));
                 }
             }
             Err(e) => {
-                error!("Failed to serialize ServerToClient: {}", e);
+                self.send_logging(format!("Failed to serialize ServerToClient: {}", e));
             }
         }
     }
@@ -102,7 +103,7 @@ impl ChatServer {
             ClientCommand::RegistrationToChat => {
                 if !self.client_list.contains(&source) {
                     self.client_list.push(source);
-                    info!("Registered new client to chat: {}", source);
+                    self.send_logging(format!("Registered new client to chat: {}", source));
                 }
             }
             ClientCommand::ClientList => {
@@ -126,18 +127,12 @@ impl ChatServer {
                 PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
                 PacketType::MsgFragment(fragment) => {
                     if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
-                        match serde_json::from_slice::<ClientCommand>(&data) {
-                            Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                            Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
+                        if let Ok(cmd) = serde_json::from_slice::<ClientCommand>(&data) {
+                            self.handle_command(cmd, packet.routing_header.hops[0]);
                         }
-                    } else {
-                        //self.log("Failed to reassemble message fragment.");
                     }
                 }
             }
         }
     }
 }
-
-#[test]
-fn main() {}
