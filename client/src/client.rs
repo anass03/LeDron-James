@@ -8,9 +8,7 @@ use std::time::{Duration, Instant};
 use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
 use host::ServerTypes::{Content,Chat};
 use image::{DynamicImage, ImageBuffer};
-use tracing_subscriber::{fmt, EnvFilter};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
-use tracing::{info, warn, error, debug};
 
 pub struct Client {
     host: Host,
@@ -85,7 +83,7 @@ impl Client {
                     self.host.send_logging("=== All links FROM CLIENT VIEW ===".to_string());
                     for (&from, &(_, ref edges)) in &self.host.network.nodes {
                         for edge in edges {
-                            self.host.send_logging(format!("{} - {}", from, edge));
+                            self.host.send_logging(format!("{} - {}", from, edge.to));
                         }
                     }
                     //
@@ -120,10 +118,11 @@ impl Client {
     fn ensure_all_servers_discovered(&mut self) {
         let expected_count = self.host.network.servers.len();
         if self.servers.len() != expected_count {
-            tracing::info!(
+            self.host.send_logging(format!(
                 "Discovering server types from {} nodes...",
                 expected_count
-            );
+            ));
+
             self.request_server_type();
 
             // rimani in polling finché non hai ricevuto tutte le risposte
@@ -244,22 +243,22 @@ impl Client {
                     ClientCommand::RegistrationToChat => {
                         self.host.send_logging("Preparing RegistrationToChat request".to_string());
                         //if let Some(/*&server_id*/ 9) = /*self.servers.get(&Chat)*/ {
-                            match serde_json::to_vec(&ClientCommand::RegistrationToChat) {
-                                Ok(content) => {
-                                    let message = Message {
-                                        session_id: generate_unique_session_id(),
-                                        content,
-                                    };
-                                    if let Err(err) = self.host.build_msg_fragment(/*server_id*/9, message) {
-                                        self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", /*server_id*/9, err));
-                                    } else {
-                                        self.host.send_logging(format!("RegistrationToChat sent to server {}", /*server_id*/9));
-                                    }
-                                }
-                                Err(e) => {
-                                    self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
+                        match serde_json::to_vec(&ClientCommand::RegistrationToChat) {
+                            Ok(content) => {
+                                let message = Message {
+                                    session_id: generate_unique_session_id(),
+                                    content,
+                                };
+                                if let Err(err) = self.host.build_msg_fragment(/*server_id*/9, message) {
+                                    self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", /*server_id*/9, err));
+                                } else {
+                                    self.host.send_logging(format!("RegistrationToChat sent to server {}", /*server_id*/9));
                                 }
                             }
+                            Err(e) => {
+                                self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
+                            }
+                        }
                         // } else {
                         //     self.host.send_logging(format!("No chat server available for RegistrationToChat"));
                         // }
@@ -496,14 +495,15 @@ impl Client {
 
         // se finito, reassembly e rimozione
         if session.pending == 0 {
-            info!(
-                host = self.host.id,
-                session = session_id,
-                "All fragments received"
-            );
+            self.host.send_logging( format!(
+                "All fragments received host={} session={}",
+                self.host.id,
+                session_id,
+            ));
+
             self.host.send_logging(
                 format!("host: {}, session: {}, All fragments received",
-                self.host.id, session_id));
+                        self.host.id, session_id));
 
             let data = session.buffer
                 .iter()

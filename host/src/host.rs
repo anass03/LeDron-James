@@ -6,14 +6,10 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use petgraph::algo::dijkstra;
-use petgraph::graph::{DiGraph, NodeIndex};
-use tracing::{info, warn, error, debug};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use ordered_float::OrderedFloat;
-use crate::host;
 
 pub type FileId = usize;
 pub type MediaId = usize;
@@ -424,7 +420,7 @@ impl Functionality for Host {
             let next_hop = resp_pkt.routing_header.hops[resp_pkt.routing_header.hop_index];
             self.send_logging(format!(
                 "Attempting to send FloodResponse to next hop host={} next_hop={} neighbors={:?}",
-                 host_id,
+                host_id,
                 next_hop,
                 self.packet_send.keys().collect::<Vec<_>>(),
             ));
@@ -438,8 +434,8 @@ impl Functionality for Host {
             // 6b) Inoltro ai vicini disponibili
             self.send_logging(format!(
                 "Forwarding FloodRequest to neighbors host={} count={}",
-                 host_id,
-                 neighbors.len(),
+                host_id,
+                neighbors.len(),
             ));
             for (&nbr, ch) in neighbors {
                 self.send_logging(format!("Forwarding to neighbor host={} neighbor={}",  host_id, nbr));
@@ -471,16 +467,16 @@ impl Functionality for Host {
 
         self.send_logging(format!(
             "Handling FloodResponse with path host={} flood_id={}, path_str={}",
-             host_id,
-             response.flood_id,
-             path_str,
+            host_id,
+            response.flood_id,
+            path_str,
         ));
         let path = &response.path_trace;
         if path.len() < 2 {
             self.send_logging(format!(
                 "FloodResponse path too short, skipping host={} len={}",
-                 host_id,
-                 path.len(),
+                host_id,
+                path.len(),
             ));
             return;
         }
@@ -519,9 +515,9 @@ impl Functionality for Host {
                     edges.push(Edge { to: next_id, weight: 0.0 });
                     self.send_logging(format!(
                         "Recorded adjacency edge host={} from={} to={}",
-                         host_id,
-                         curr_id,
-                         next_id,
+                        host_id,
+                        curr_id,
+                        next_id,
                     ));
                 }
             } else {
@@ -601,15 +597,15 @@ impl Functionality for Host {
                 self.send_logging(format!(
                     "ACK processed, pending-- host={} session={} pending={}",
                     self.id,
-                     session_id,
-                     session.pending,
+                    session_id,
+                    session.pending,
                 ));
             } else {
                 self.send_logging(format!(
                     "ACK for nonexistent or already confirmed fragment host={} session={} fragment={}",
-                     self.id,
-                     session_id,
-                     ack.fragment_index,
+                    self.id,
+                    session_id,
+                    ack.fragment_index,
                 ));
             }
         } else {
@@ -634,9 +630,9 @@ impl Functionality for Host {
                         NackType::Dropped => {
                             self.send_logging(format!(
                                 "Retransmitting dropped fragment host={} session={} fragment={}",
-                                 host,
-                                 session_id,
-                                 frag_idx,
+                                host,
+                                session_id,
+                                frag_idx,
                             ));
                             self.send_fragment(session_id, fragment.clone());
                             self.network.pdr_from_nack(nack_generator);
@@ -657,26 +653,26 @@ impl Functionality for Host {
                                 let res = self.send_packet(pkt, None);
                                 self.send_logging(format!(
                                     "Retransmission result host={} session={} fragment={} result={}",
-                                     host,
-                                     session_id,
-                                     frag_idx,
+                                    host,
+                                    session_id,
+                                    frag_idx,
                                     res,
                                 ));
                             } else {
                                 drop(sent);
                                 self.send_logging(format!(
                                     "No alternate route, re-initiating flood host={} session={}",
-                                     host,
-                                     session_id,
+                                    host,
+                                    session_id,
                                 ));self.initiate_flood();
                             }
                         }
                         NackType::DestinationIsDrone => {
                             self.send_logging(format!(
                                 "DestinationIsDrone NACK—dropping fragment host={} session={} fragment={}",
-                                 host,
-                                 session_id,
-                                 frag_idx,
+                                host,
+                                session_id,
+                                frag_idx,
                             ));}
                     }
                 }
@@ -691,23 +687,23 @@ impl Functionality for Host {
                     self.send_logging(format!(
                         "NACK index out of range host={} session={} fragment={}",
                         host,
-                         session_id,
-                         frag_idx,
+                        session_id,
+                        frag_idx,
                     ));}
             }
         } else {
             self.send_logging(format!(
                 "NACK for unknown session host={} session={}",
-                 host,
-                 session_id,
+                host,
+                session_id,
             ));}
     }
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
         self.send_logging(format!(
             "Starting fragmentation host={} session={} dest={}",
-             self.id,
-             message.session_id,
-             destination,
+            self.id,
+            message.session_id,
+            destination,
         ));
         // Trova percorso
         let route = match self.network.find_best_route(self.id, destination) {
@@ -783,8 +779,8 @@ impl Functionality for Host {
             self.send_logging(format!(
                 "Sending fragment host={} session={} fragment={}",
                 self.id,
-                 message.session_id,
-                 i,
+                message.session_id,
+                i,
             ));
             let result = self.send_packet(packet, None);
 
