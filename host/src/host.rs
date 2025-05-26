@@ -829,10 +829,11 @@ impl Functionality for Host {
                 return Err(err);
             }
         };
-        println!("Route found for fragmentation: {:?}", route.clone());
+        println!("✅💥💥 Route found for fragmentation: {:?}", route.clone());
 
         // Calcola numero totale di frammenti
         let bytes = &message.content;
+        println!("❤️❤️ vettore di byte: {:?}", bytes.clone());
         let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
 
         // Prepara o aggiorna SentSessionData
@@ -908,19 +909,19 @@ impl Functionality for Host {
             if let SendingCodes::SuccessfullySent(_) = result {
                 self.network.pdr_helper(header.hops.as_slice());
                 tracing::debug!(
-                host = self.id,
-                hops = ?header.hops,
-                fragment = i,
-                "PDR updated"
-            );
+                    host = self.id,
+                    hops = ?header.hops,
+                    fragment = i,
+                    "PDR updated"
+                );
             }
         }
 
         tracing::info!(
-        host = self.id,
-        session = message.session_id,
-        "Fragmentation completed"
-    );
+            host = self.id,
+            session = message.session_id,
+            "Fragmentation completed"
+        );
 
         Ok(())
     }

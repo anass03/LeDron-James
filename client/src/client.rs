@@ -2,8 +2,8 @@ use crossbeam_channel::{tick, Receiver, Sender};
 use wg_2024::controller::{DroneEvent};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
-use std::collections::{HashMap};
-use std::{fs, io};
+use std::collections::{HashMap, HashSet};
+use std::{fs, io, thread};
 use std::time::{Duration, Instant};
 use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
 use host::ServerTypes::{Content,Chat};
@@ -127,11 +127,30 @@ impl Client {
         }
 
     }
-    fn handle_command(&mut self, net_comm: NetCommand) {
-        if self.servers.is_empty() {
-            tracing::info!("No servers known, discovering servers type");
+    /// Se non ho ancora scoperto *tutti* i server,
+    /// mando la discovery e aspetto che `self.servers` contenga
+    /// tutti gli ID di `self.host.network.servers`.
+    fn ensure_all_servers_discovered(&mut self) {
+        let expected_count = self.host.network.servers.len();
+        if self.servers.len() != expected_count {
+            tracing::info!(
+                "Discovering server types from {} nodes...",
+                expected_count
+            );
             self.request_server_type();
+
+            // rimani in polling finché non hai ricevuto tutte le risposte
+            while self.servers.len() != expected_count {
+                thread::sleep(Duration::from_millis(100));
+            }
+
+            tracing::info!("Discovered all {} servers", expected_count);
         }
+    }
+
+
+    fn handle_command(&mut self, net_comm: NetCommand) {
+        self.ensure_all_servers_discovered();
 
         match net_comm {
             // Command network serializable
