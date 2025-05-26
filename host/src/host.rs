@@ -31,13 +31,15 @@ pub struct Host{
     pub network: Network,
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
+    pub log_sender: Sender<String>
 }
 impl Host{
     pub fn new(id:NodeId,
                type_host:NodeType,
                controller_send:Sender<HostEvent>,
                packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>) -> Host {
+               packet_send:HashMap<NodeId, Sender<Packet>>,
+               log_sender: Sender<String>) -> Host {
 
         let host = Self {
             id,
@@ -49,6 +51,7 @@ impl Host{
             network: Network::new(),
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
+            log_sender
         };
         host
     }
@@ -270,6 +273,7 @@ impl Network {
     }
 }
 pub trait Functionality{
+    fn send_logging(&self, message: &str);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, response: FloodResponse);
@@ -292,6 +296,13 @@ pub fn generate_unique_session_id() -> u64 {
     rng.random::<u64>()  // lo stesso qui, [gen  -->  random]
 }
 impl Functionality for Host {
+    /// Inoltra una stringa di log al simulation controller.
+    fn send_logging(&self, message: String) {
+        let log_msg = format!("{}", message);
+        if let Err(err) = self.log_sender.send(log_msg) {
+            eprintln!("Failed to forward logging to controller: {}", err);
+        }
+    }
     fn initiate_flood(&mut self) {
         // Genero subito gli ID, così li posso loggare
         let session_id = generate_unique_session_id();

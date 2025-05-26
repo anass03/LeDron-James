@@ -24,7 +24,8 @@ impl Client {
                controller_send:Sender<HostEvent>,
                controller_recv:Receiver<NetCommand>,
                packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>) ->Self{
+               packet_send:HashMap<NodeId, Sender<Packet>>,
+               log_sender: Sender<String>) ->Self{
         //configuro un subscriber all'avvio
         // tracing_subscriber::fmt()
         //     // legge livello da RUST_LOG (es. "debug" o "info")
@@ -42,12 +43,8 @@ impl Client {
         // warn! e error! per anomalie o fallimenti.
 
         //Assicura che il client sia conneso a uno o due droni
-        assert!(
-            connected_drone_ids.len() >= 1 && connected_drone_ids.len() <= 2,
-            "Client must be connected to at least one and at most two drones!"
-        );
 
-        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send);
+        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
         Self{
             host,controller_recv, servers: HashMap::new()
         }
@@ -69,7 +66,8 @@ impl Client {
                 recv(self.host.packet_recv) -> pkt => {
                     if let Ok(packet) = pkt {
                         if let Err(e) = self.handle_packet(packet) {
-                            error!("Error processing packet: {}", e);
+                            format!("Error processing packet: {}", e);
+                            self.host.send_logging(format!("Error processing packet: {}", e))
                         }
                     }
                 }
