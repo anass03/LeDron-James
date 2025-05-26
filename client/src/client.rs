@@ -85,19 +85,19 @@ impl Client {
                     //     }
                     // }
                     //
-                    self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
-                    if let Some(route) = self.host.network.find_best_route(7, 9){
-                        self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
-                    }else{
-                        self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
-                    }
-                    thread::sleep(Duration::from_secs(2));
-                    self.host.send_logging("=== find_best_route 6-8 TEST ===".to_string());
-                    if let Some(route) = self.host.network.find_best_route(6, 8){
-                        self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
-                    }else{
-                        self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
-                    }
+                    // self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
+                    // if let Some(route) = self.host.network.find_best_route(7, 9){
+                    //     self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
+                    // }else{
+                    //     self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
+                    // }
+                    // thread::sleep(Duration::from_secs(2));
+                    // self.host.send_logging("=== find_best_route 6-8 TEST ===".to_string());
+                    // if let Some(route) = self.host.network.find_best_route(6, 8){
+                    //     self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
+                    // }else{
+                    //     self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
+                    // }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
