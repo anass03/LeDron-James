@@ -191,7 +191,7 @@ pub(super) struct ChartsData{ // Each CONST sec data, NOT TOTAL
 impl Settings{
     pub(super) fn load()->Self{
         Self{
-            toml_path:"/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/init_file.toml".to_string(),
+            toml_path:"./init_file".to_string(),
         }
     }
 }

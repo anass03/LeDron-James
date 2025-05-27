@@ -54,12 +54,12 @@ impl App<'_> {
                         self.cache.text_buffer.toml_text_area = text;
                     }
                     Err(e) => {
-                        println!("Error reading file: {}", e);
+                        self.simulation_controller_data.logs.push_log(LogType::ERROR,format!("Error reading file: {:?}", e).as_str());
                     }
                 }
             }
             Err(e) => {
-                println!("Error opening file: {:?}", e);
+                self.simulation_controller_data.logs.push_log(LogType::ERROR,format!("Error opening file: {:?}", e).as_str());
                 // File doesn't exist
                 // 1 - Create file
                 // 2 - Link new created file path to settings
