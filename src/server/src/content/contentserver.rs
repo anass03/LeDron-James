@@ -32,7 +32,7 @@ impl ContentServer {
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
         }
     }
-    fn new(info: GenServer) -> Self {
+    pub fn new(info: GenServer) -> Self {
         let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
         ContentServer {
             info,
@@ -44,7 +44,7 @@ impl ContentServer {
         }
     }
 
-    fn start(&mut self) {
+    pub fn start(&mut self) {
         let receiver = self.command_receiver.clone();
         thread::spawn(move || loop {
             if let Ok(cmd) = receiver.recv() {
