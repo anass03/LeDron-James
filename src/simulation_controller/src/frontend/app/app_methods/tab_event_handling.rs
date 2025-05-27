@@ -108,6 +108,10 @@ impl App<'_> {
                                         KeyCode::Left => {
                                             self.cache.cursor -= 1;
                                         }
+                                            KeyCode::Enter => {
+                                            self.play_sound();
+                                            },
+
                                         // Missing KeyCodes to view the first one / last one, still gotta decide!
                                         _ => (), // Do nothing
                                     }

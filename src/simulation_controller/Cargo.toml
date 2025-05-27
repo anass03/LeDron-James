@@ -12,6 +12,9 @@ toml = "0.8.19"
 colored = "2.0"
 crossterm = "0.29.0"
 ratatui = "0.29.0"
+ratatui-image = "0.6.0"
+image = "0.25.6"
+rodio = "0.17"
 tui-textarea = "0.7.0"
 log = "0.4.27"
 petgraph = "0.7.1"
@@ -26,7 +29,6 @@ initializer_utils = { path = "../initializer_utils" } # FIX TO ERROR CYCLIC PACK
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
 server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
-
 
 
 
