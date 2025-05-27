@@ -7,6 +7,7 @@ use ratatui::widgets::{
     Block, BorderType, Borders, HighlightSpacing, List, ListItem, ListState, Padding, Paragraph,
     Tabs, Widget, Wrap,
 };
+use ratatui_image::picker::Picker;
 
 use super::super::super::model::{Node, Tab1};
 use wg_2024::config::Client as ClientConfig;
@@ -231,24 +232,48 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
                 .centered();
             paragraph.render(area, buf);
         }
-        Some((n,b)) => {
-            match n{
+        Some((n, b)) => {
+            match n {
                 Node::Client(_) => {
-                    match app.cache.tab1_data.selected_fn.selected{
+                    match app.cache.tab1_data.selected_fn.selected {
                         0 | 1 | 3 | 5 | 6 => {
-                            render_no_input_fn(app,area, buf);
+                            render_no_input_fn(app, area, buf);
                         }
                         2 | 4 => {
-                            render_one_input_fn(app,area, buf);
+                            render_one_input_fn(app, area, buf);
                         }
                         7 => {
-                            render_two_input_fn(app,area, buf);
+                            render_two_input_fn(app, area, buf);
                         }
                         _ => (),
                     }
                 }
                 Node::Server(_) => {
-                    //
+                    let block_image = Block::default()
+                        .title(" PAT PAT PAT ")
+                        .title_alignment(Alignment::Center)
+                        .borders(Borders::ALL);
+                    let inner_block = block_image.inner(area);
+
+                    let dyn_img = image::ImageReader::open("./assets/IMG_0400.jpg")
+                        .unwrap()
+                        .decode()
+                        .unwrap();
+                    /*
+                    // Initialize a Picker for Crossterm graphics
+                    let font_size = (8, 16); // adjust based on your terminal cell size if needed
+                    let mut picker = Picker::new(font_size, BackendType::Crossterm, None).unwrap();
+
+                    // Create a fixed backend that fits the image into the log area
+                    let fb = picker
+                        .new_static_fit(dyn_img, inner_block, Resize::Fit)
+                        .unwrap();
+
+                    // Wrap it in the FixedImage widget and render
+                    let image_widget = FixedImage::new(fb).block(block_image);
+                    image_widget.render(area, buf);
+
+                     */
                 }
                 Node::Drone(_) => {
                     //

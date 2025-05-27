@@ -235,6 +235,12 @@ impl SimulationControllerData {
         }
         None
     }
+
+    pub fn handle_log_event(&mut self){
+        for logs in self.log_receiver.try_iter(){
+            self.logs.push_log(LogType::INFO, logs.as_str());
+        }
+    }
 }
 
 fn handle_packet (packet: &Packet) {

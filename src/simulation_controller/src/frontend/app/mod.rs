@@ -66,41 +66,17 @@ impl App<'_>{
         let mut instant = Instant::now();
 
         while self.stay {
-
-            // Ascoltare i canali e passare al backend
-            // i pacchetti necessari
-            /*
-            crossbeam_channel::select_biased! {
-                recv(self.simulation_controller_data.client_event_receiver.get(&0).unwrap()) -> command => {
-                    if let Ok(command) = command {
-                        match command {
-                            HostEvent::PacketReconstructed(pck) => {
-
-                            },
-                            HostEvent::PacketSent(pck) => {
-                                match pck.pack_type{
-                                    PacketType::MsgFragment(_) => {}
-                                    PacketType::Ack(_) => {}
-                                    PacketType::Nack(_) => {}
-                                    PacketType::FloodRequest(_) => {}
-                                    PacketType::FloodResponse(_) => {}
-                                }
-                            }
-                        }
-                    }else{
-                        // Closed Channel
-                    }
-                },
-            }
-             */
-            self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str()));
+            // Listening to channels
+            self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
+            self.simulation_controller_data.handle_log_event();
             match self.simulation_controller_data.handle_client_event(){
                 None => {}
                 Some(str) => {
-                    self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str());
+                    self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str());
                 }
             }
 
+            // Terminal drawing and other basic app functions
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
             self.handle_events()?;

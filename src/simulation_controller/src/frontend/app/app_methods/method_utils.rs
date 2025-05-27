@@ -3,11 +3,14 @@ In this module you will find general not-essential methods.
 */
 use std::fs::File;
 use std::{fs, io};
-use std::io::{BufRead, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
+use std::thread::Thread;
 use ratatui::text::Text;
+use rodio::{Decoder, OutputStream, Sink};
 use tui_textarea::TextArea;
 use initializer_utils::utils::parse_and_check_config;
+use crate::backend::simulation_controller::LogType;
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 
@@ -31,10 +34,17 @@ impl App<'_> {
     }
     pub(super) fn save_text_buffer(&mut self) {
         let lines = self.cache.text_buffer.toml_text_area.clone().into_lines();
-        let mut file = File::create(Path::new(self.settings.toml_path.as_str())).unwrap();
-        for x in lines {
-            writeln!(file, "{}", x); // adds a newline after each string
+        match File::create(Path::new(self.settings.toml_path.as_str())){
+            Ok(mut file) => {
+                for x in lines {
+                    writeln!(file, "{}", x); // adds a newline after each string
+                }
+            }
+            Err(e) => {
+                self.simulation_controller_data.logs.push_log(LogType::ERROR, e.to_string().as_str());
+            }
         }
+
     }
     pub(crate) fn reload_file_to_buf(&mut self) {
         match File::open(Path::new(self.settings.toml_path.as_str())) {
@@ -65,6 +75,28 @@ impl App<'_> {
         self.cache.cursor = 0;
         self.selected_tab = self.selected_tab.prev()
     }
+
+    /*pub(crate) fn play_sound(&mut self) -> io::Result<()>{
+        std::process::Command::new("osascript")
+            .arg("-e")
+            .arg("set volume output volume 75") // 0 to 100
+            .status()?;
+
+        if let Ok((_stream, handle)) = OutputStream::try_default() {
+            let sink = Sink::try_new(&handle).unwrap();
+            sink.set_volume(75.0);
+            let file = File::open("assets/beep.mp3").unwrap(); // your audio file here
+            let source = Decoder::new(BufReader::new(file)).unwrap();
+            sink.append(source);
+            sink.detach(); // allows it to play asynchronously
+           // Thread::slee
+        }
+
+        self.simulation_controller_data.logs.push_log(LogType::DEBUG, "play_sound");
+
+        Ok(())
+    }*/
+
     // Early version of the compiler, just calls parse_config from the ledron git
     // branch and pushes it directly to the compiler
     /*pub(crate) fn compiler_beta(file_path: &str) -> Result<(), String> {
