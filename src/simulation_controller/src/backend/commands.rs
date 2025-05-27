@@ -194,7 +194,7 @@ impl SimulationControllerData {
         self.send_client_command(client_id, command)
     }
 
-    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: Message) -> Result<(), String> {
+    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: String) -> Result<(), String> {
         match self.clients.get(receiver_client_id as usize) {
             Some(_) => {
                 let command = NetCommand::Net(ClientCommand::MessageFor(receiver_client_id, message));

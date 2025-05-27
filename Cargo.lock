@@ -246,17 +246,14 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#8f19f8dcc96c928f59fc07a8dd8650a4a56afdb1"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#7ef5a055a79c5032df41c8c23014c3d7576d00a4"
 dependencies = [
  "crossbeam-channel",
  "host",
  "image",
- "petgraph 0.7.1",
  "rand 0.9.1",
  "serde",
  "serde_json",
- "tracing",
- "tracing-subscriber",
  "wg_2024",
 ]
 
@@ -760,18 +757,14 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#8f19f8dcc96c928f59fc07a8dd8650a4a56afdb1"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#7ef5a055a79c5032df41c8c23014c3d7576d00a4"
 dependencies = [
  "crossbeam-channel",
  "image",
- "log",
  "ordered-float",
- "petgraph 0.7.1",
  "rand 0.9.1",
  "serde",
  "serde_json",
- "tokio",
- "tracing",
  "wg_2024",
 ]
 
@@ -2004,7 +1997,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#9d3a61c2a38bb2d82937424712ddd5ff7fb3a088"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#a4bcdf2722a3bfb3cb62736e88d16ab635eec95d"
 dependencies = [
  "crossbeam-channel",
  "delegate",

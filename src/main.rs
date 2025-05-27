@@ -52,10 +52,17 @@ fn main() -> std::io::Result<()> {
 
     sleep(Duration::from_secs(15));
     log("Requesting registration to chat for client 6");
-    match simulation_controller_data.message_for(6, 7, Message { session_id: 0, content: vec![] }) {
+    match simulation_controller_data.message_for(6, 7, "🏀🏀🏀🏀".to_string()) {
         Ok(_) => {},
         Err(error) => {log(format!("{}", error).as_str());}
     }*/     //simulate command
+
+    sleep(Duration::from_secs(6));
+    log("Sending drone crash 3");
+    match simulation_controller_data.crash(3) {
+        Ok(_) => {},
+        Err(error) => {log(format!("{}", error).as_str());}
+    }
 
     let log_receiver = simulation_controller_data.log_receiver.clone();
     let mut logs_arc = simulation_controller_data.logs.clone();
