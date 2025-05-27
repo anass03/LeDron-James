@@ -2,6 +2,7 @@ use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
+use host::ClientCommand::ServerType;
 use host::HostEvent::PacketSent;
 use wg_internal::packet::PacketType;
 use crate::backend::simulation_controller::{log, LogType, SimulationControllerData};
@@ -156,6 +157,11 @@ impl SimulationControllerData {
             },
             None => Err(format!("Client {client_id} command sender not found")),
         }
+    }
+
+    pub fn request_server_type(&self, client_id: ClientId) -> Result<(), String> {
+        let command = NetCommand::Net(ServerType);
+        self.send_client_command(client_id, command)
     }
 
     pub fn request_files_list(&self, client_id: ClientId) -> Result<(), String> {

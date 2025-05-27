@@ -1,6 +1,5 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
-use std::thread::JoinHandle;
 use colored::Colorize;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
@@ -10,10 +9,11 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
 use host::{HostEvent, NetCommand};
-
+#[derive(Clone)]
 pub enum LogType{
     WARN, ERROR, INFO, DEBUG, FATAL
 }
+#[derive(Clone)]
 pub struct Logs{
     pub logs_memory: Vec<(LogType,String)>,
     pub log_scroll_offset: usize,
@@ -36,6 +36,7 @@ pub struct SimulationControllerData {
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
+    pub log_receiver: Receiver<String>,
     pub logs: Logs,
 }
 
@@ -48,6 +49,7 @@ impl SimulationControllerData {
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
+        log_receiver: Receiver<String>
     ) -> Self {
         let mut drones = vec![];
         for drone in config.drone {
@@ -71,6 +73,7 @@ impl SimulationControllerData {
             drone_event_receiver,
             host_event_receiver,
             packet_sender,
+            log_receiver,
             logs: Logs::default(),
         }
     }
@@ -98,7 +101,7 @@ impl Logs{
             log_scroll_offset: 0,
         }
     }
-    pub(crate) fn push_log(&mut self, type_of_log: LogType, text: &str){
+    pub/*(crate)*/ fn push_log(&mut self, type_of_log: LogType, text: &str){
         if self.logs_memory.len()>=50{
             self.logs_memory.remove(0);
             self.logs_memory.push((type_of_log, text.to_string()));
