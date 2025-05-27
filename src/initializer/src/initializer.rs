@@ -199,7 +199,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             }),
             ServerType::Content => thread::spawn(move || {
                 let mut server = LeContentServer::new(
-                    GenServer::new(
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
@@ -207,9 +206,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                     controller_server_recv,
                     packet_recv,
                     packet_send,
-                    ServerTypes::Content,
                     log_send
-                    )
                 );
                 server.run();
             }),

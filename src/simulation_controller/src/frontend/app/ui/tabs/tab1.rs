@@ -282,10 +282,10 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
                      "[3] Set PDR 1 input",
                      "[4] Crash 0 input"*/
                     match app.cache.tab1_data.selected_fn.selected {
-                        0 | 1 | 2 => {
+                        3 => {
                             render_no_input_fn(app, area, buf);
                         }
-                        3 => {
+                        0 | 1 | 2 => {
                             render_one_input_fn(app, area, buf);
                         }
                         _ => (),

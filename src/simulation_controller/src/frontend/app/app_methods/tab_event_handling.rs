@@ -410,7 +410,7 @@ impl App<'_> {
                             SelectedNode::Drone(drone_fn) => {}
                             SelectedNode::Client(client_fn) => {
                                 match client_fn {
-                                    8 => {
+                                    7 => {
                                         self.parse_and_send_message(id_origin)
                                     }
                                     _ => (),
