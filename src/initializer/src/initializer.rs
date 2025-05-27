@@ -7,7 +7,8 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
 use client::Client as LeClient;
-use server::ContentServer as LeContentServer;
+use host::ServerTypes;
+use server::{ContentServer as LeContentServer, GenServer};
 use server::ChatServer as LeChatServer;
 use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
 
@@ -198,6 +199,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             }),
             ServerType::Content => thread::spawn(move || {
                 let mut server = LeContentServer::new(
+                    GenServer::new(
                     server_id,
                     NodeType::Server,
                     connected_drone_ids,
@@ -205,7 +207,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                     controller_server_recv,
                     packet_recv,
                     packet_send,
+                    ServerTypes::Content,
                     log_send
+                    )
                 );
                 server.run();
             }),
