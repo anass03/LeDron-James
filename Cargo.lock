@@ -2360,7 +2360,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#5cc93b924924e013c0594ab90d5210d380bf6545"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#a4bcdf2722a3bfb3cb62736e88d16ab635eec95d"
 dependencies = [
  "crossbeam-channel",
  "delegate",

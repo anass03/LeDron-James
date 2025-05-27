@@ -176,23 +176,38 @@ impl App<'_> {
                                     0 | 1 | 3 | 5 | 6 => self.tab1_0input_handle(
                                         key,
                                         id,
-                                        self.cache.tab1_data.selected_fn.selected,
+                                        SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
                                     ),
                                     2 | 4 => self.tab1_1input_handle(
                                         key,
                                         id,
-                                        self.cache.tab1_data.selected_fn.selected,
+                                        SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
                                     ),
                                     7 => self.tab1_2input_handle(
                                         key,
                                         id,
-                                        self.cache.tab1_data.selected_fn.selected,
+                                        SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
                                     ),
                                     _ => self.handle_unknown(key),
                                 }
                             }
                             Node::Server(_) => self.handle_unknown(key),
-                            Node::Drone(_) => self.handle_unknown(key),
+                            Node::Drone(d) => {
+                                let id = d.id;
+                                match self.cache.tab1_data.selected_fn.selected {
+                                    0 | 1 | 2=> self.tab1_1input_handle(
+                                        key,
+                                        id,
+                                        SelectedNode::Drone(self.cache.tab1_data.selected_fn.selected),
+                                    ),
+                                    3  => self.tab1_0input_handle(
+                                        key,
+                                        id,
+                                        SelectedNode::Drone(self.cache.tab1_data.selected_fn.selected),
+                                    ),
+                                    _ => self.handle_unknown(key),
+                                }
+                            },
                         }
                     }
                 }
@@ -200,93 +215,111 @@ impl App<'_> {
             _ => {}
         }
     }
-    fn tab1_0input_handle(&mut self, key: KeyCode, id_origin: NodeId, client_fn: u8) {
+    fn tab1_0input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn:SelectedNode) {
         match key {
             KeyCode::Left => {
                 self.cache.cursor -= 1;
             }
             KeyCode::Enter => {
                 // Which fn I've selected?
-                match client_fn {
-                    0 => {
-                        // Server Type
-                        // Can't find command in the backend
-                        // match self.simulation_controller_data.
-                        self.simulation_controller_data
-                            .logs
-                            .push_log(LogType::ERROR, "Function does NOT exist")
-                    }
-                    1 => {
-                        // Files List
-                        match self
-                            .simulation_controller_data
-                            .request_files_list(id_origin)
-                        {
-                            Ok(_) => self.simulation_controller_data.logs.push_log(
-                                LogType::DEBUG,
-                                "Simulation Controller Sent Request Files List",
-                            ),
-                            Err(str) => self
-                                .simulation_controller_data
-                                .logs
-                                .push_log(LogType::ERROR, str.as_str()),
+                match node_fn{
+                    SelectedNode::Drone(drone_fn) => {
+                        match drone_fn{
+                            3 => {
+                                match self.simulation_controller_data.crash(id_origin){
+                                    Ok(_) => (),
+                                    Err(err) => {
+                                        self.simulation_controller_data.logs.push_log(LogType::ERROR, err.as_str())
+                                    }
+                                }
+                            },
+                            _ => (),
                         }
                     }
-                    3 => {
-                        // Media List
-                        match self
-                            .simulation_controller_data
-                            .request_media_list(id_origin)
-                        {
-                            Ok(_) => self.simulation_controller_data.logs.push_log(
-                                LogType::DEBUG,
-                                "Simulation Controller Sent Request Media List",
-                            ),
-                            Err(str) => self
-                                .simulation_controller_data
-                                .logs
-                                .push_log(LogType::ERROR, str.as_str()),
+                    SelectedNode::Client(client_fn) => {
+                        match client_fn {
+                            0 => {
+                                // Server Type
+                                // Can't find command in the backend
+                                // match self.simulation_controller_data.
+                                self.simulation_controller_data
+                                    .logs
+                                    .push_log(LogType::ERROR, "Function does NOT exist")
+                            }
+                            1 => {
+                                // Files List
+                                match self
+                                    .simulation_controller_data
+                                    .request_files_list(id_origin)
+                                {
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                        LogType::DEBUG,
+                                        "Simulation Controller Sent Request Files List",
+                                    ),
+                                    Err(str) => self
+                                        .simulation_controller_data
+                                        .logs
+                                        .push_log(LogType::ERROR, str.as_str()),
+                                }
+                            }
+                            3 => {
+                                // Media List
+                                match self
+                                    .simulation_controller_data
+                                    .request_media_list(id_origin)
+                                {
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                        LogType::DEBUG,
+                                        "Simulation Controller Sent Request Media List",
+                                    ),
+                                    Err(str) => self
+                                        .simulation_controller_data
+                                        .logs
+                                        .push_log(LogType::ERROR, str.as_str()),
+                                }
+                            }
+                            5 => {
+                                // Reg to Chat
+                                match self
+                                    .simulation_controller_data
+                                    .request_registration_to_chat(id_origin)
+                                {
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                        LogType::DEBUG,
+                                        "Simulation Controller Sent Request Registration to Chat",
+                                    ),
+                                    Err(str) => self
+                                        .simulation_controller_data
+                                        .logs
+                                        .push_log(LogType::ERROR, str.as_str()),
+                                }
+                            }
+                            6 => {
+                                // Client List
+                                match self
+                                    .simulation_controller_data
+                                    .request_client_list(id_origin)
+                                {
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                        LogType::DEBUG,
+                                        "Simulation Controller Sent Request Client List",
+                                    ),
+                                    Err(str) => self
+                                        .simulation_controller_data
+                                        .logs
+                                        .push_log(LogType::ERROR, str.as_str()),
+                                }
+                            }
+                            _ => (),
                         }
                     }
-                    5 => {
-                        // Reg to Chat
-                        match self
-                            .simulation_controller_data
-                            .request_registration_to_chat(id_origin)
-                        {
-                            Ok(_) => self.simulation_controller_data.logs.push_log(
-                                LogType::DEBUG,
-                                "Simulation Controller Sent Request Registration to Chat",
-                            ),
-                            Err(str) => self
-                                .simulation_controller_data
-                                .logs
-                                .push_log(LogType::ERROR, str.as_str()),
-                        }
-                    }
-                    6 => {
-                        // Client List
-                        match self
-                            .simulation_controller_data
-                            .request_client_list(id_origin)
-                        {
-                            Ok(_) => self.simulation_controller_data.logs.push_log(
-                                LogType::DEBUG,
-                                "Simulation Controller Sent Request Client List",
-                            ),
-                            Err(str) => self
-                                .simulation_controller_data
-                                .logs
-                                .push_log(LogType::ERROR, str.as_str()),
-                        }
-                    }
-                    _ => (),
+                    SelectedNode::Server(_) => {}
                 }
             }
             _ => (),
         }
     }
-    fn tab1_1input_handle(&mut self, key: KeyCode, id_origin: NodeId, client_fn: u8) {
+    fn tab1_1input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn: SelectedNode) {
         match key {
             KeyCode::Left => {
                 self.cache.cursor -= 1;
@@ -307,17 +340,40 @@ impl App<'_> {
                 match self.cache.tab1_data.selected_button {
                     0 => {
                         // ENTER
-                        match client_fn {
-                            2 => {
-                                // File ID requested
-                                self.request_file(id_origin);
+                        match node_fn{
+                            SelectedNode::Drone(drone_fn) => {
+                                match drone_fn{
+                                    0 => {
+                                        // Remove Sender
+                                        self.drone_remove_sender(id_origin)
+                                    },
+                                    1 => {
+                                        // Add Sender
+                                        self.drone_add_sender(id_origin)
+                                    },
+                                    2 => {
+                                        //  Set PDR
+                                        self.drone_set_pdr(id_origin)
+                                    },
+                                    _ => (),
+                                }
                             }
-                            4 => {
-                                // Media ID requested
-                                self.request_media(id_origin);
+                            SelectedNode::Client(client_fn) => {
+                                match client_fn {
+                                    2 => {
+                                        // File ID requested
+                                        self.request_file(id_origin);
+                                    }
+                                    4 => {
+                                        // Media ID requested
+                                        self.request_media(id_origin);
+                                    }
+                                    _ => (),
+                                }
                             }
-                            _ => (),
+                            SelectedNode::Server(_) => {}
                         }
+
                     }
                     1 => {
                         self.app_mode = AppMode::Input;
@@ -328,7 +384,7 @@ impl App<'_> {
             _ => (),
         }
     }
-    fn tab1_2input_handle(&mut self, key: KeyCode, id_origin: NodeId, client_fn: u8) {
+    fn tab1_2input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn: SelectedNode) {
         match key {
             KeyCode::Left => {
                 self.cache.cursor -= 1;
@@ -348,15 +404,19 @@ impl App<'_> {
                 // Se 2 -> INPUT MODE e inseriamo nel second buffer
                 // Se 0 -> parse dei dati e a seconda della fn selezionata inviamo
                 match self.cache.tab1_data.selected_button {
+                    // ENTER
                     0 => {
-                        // ENTER
-                        match client_fn {
-                            8 => {
-                                self.simulation_controller_data
-                                    .logs
-                                    .push_log(LogType::INFO, "Function is not available");
+                        match node_fn {
+                            SelectedNode::Drone(drone_fn) => {}
+                            SelectedNode::Client(client_fn) => {
+                                match client_fn {
+                                    8 => {
+                                        self.parse_and_send_message(id_origin)
+                                    }
+                                    _ => (),
+                                }
                             }
-                            _ => (),
+                            SelectedNode::Server(server_fn) => {}
                         }
                     }
                     1 => {
@@ -407,4 +467,7 @@ impl App<'_> {
         }
     }
     pub(super) fn handle_event_tab3(&mut self, key: KeyEvent) {}
+}
+enum SelectedNode { // Type of node selected, plus function id.
+    Drone(u8), Client(u8), Server(u8),
 }
