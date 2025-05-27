@@ -34,10 +34,17 @@ impl App<'_> {
     }
     pub(super) fn save_text_buffer(&mut self) {
         let lines = self.cache.text_buffer.toml_text_area.clone().into_lines();
-        let mut file = File::create(Path::new(self.settings.toml_path.as_str())).unwrap();
-        for x in lines {
-            writeln!(file, "{}", x); // adds a newline after each string
+        match File::create(Path::new(self.settings.toml_path.as_str())){
+            Ok(mut file) => {
+                for x in lines {
+                    writeln!(file, "{}", x); // adds a newline after each string
+                }
+            }
+            Err(e) => {
+                self.simulation_controller_data.logs.push_log(LogType::ERROR, e.to_string().as_str());
+            }
         }
+
     }
     pub(crate) fn reload_file_to_buf(&mut self) {
         match File::open(Path::new(self.settings.toml_path.as_str())) {
@@ -68,7 +75,8 @@ impl App<'_> {
         self.cache.cursor = 0;
         self.selected_tab = self.selected_tab.prev()
     }
-    pub(crate) fn play_sound(&mut self) -> io::Result<()>{
+
+    /*pub(crate) fn play_sound(&mut self) -> io::Result<()>{
         std::process::Command::new("osascript")
             .arg("-e")
             .arg("set volume output volume 75") // 0 to 100
@@ -87,7 +95,8 @@ impl App<'_> {
         self.simulation_controller_data.logs.push_log(LogType::DEBUG, "play_sound");
 
         Ok(())
-    }
+    }*/
+
     // Early version of the compiler, just calls parse_config from the ledron git
     // branch and pushes it directly to the compiler
     /*pub(crate) fn compiler_beta(file_path: &str) -> Result<(), String> {
