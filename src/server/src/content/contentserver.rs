@@ -1,29 +1,24 @@
 use std::collections::HashMap;
 use std::{fs, thread};
-use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, PacketType};
+use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
 use delegate::delegate;
-use wg_2024::controller::DroneEvent;
-use crate::utils::handle_server_control_loop;
 
 pub struct ContentServer {
     info: GenServer,
-    files: Vec<u8>,
-    media: Vec<u8>,
-}
-
-pub trait ContentServerBehavior: MediaServer + TextServer {
-    fn handling_packets(&mut self, packet: Result<Packet, crossbeam_channel::RecvError>);
+    files: Vec<usize>,
+    media: Vec<usize>,
+    sessions: HashMap<usize, (Receiver<ServerTypes>, Sender<ServerToClient>)>,
+    command_receiver: Receiver<ClientCommand>,
+    command_sender: Sender<ClientCommand>,
 }
 
 impl ContentServer {
     delegate! {
         to self.info.host {
-            //fn log<S: AsRef<str>>(&self, message: S);
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
@@ -37,52 +32,25 @@ impl ContentServer {
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
         }
     }
-
-    pub fn new(
-        id: NodeId,
-        type_host: wg_2024::packet::NodeType,
-        connected_drone_ids: Vec<NodeId>,
-        controller_send: Sender<HostEvent>,
-        controller_recv: Receiver<NetCommand>,
-        packet_recv: Receiver<Packet>,
-        packet_send: HashMap<NodeId, Sender<Packet>>,
-        log_sender: Sender<String>,
-    ) -> Self {
-        Self {
-            info: GenServer::new(
-                id,
-                type_host,
-                connected_drone_ids,
-                controller_send,
-                controller_recv,
-                packet_recv,
-                packet_send,
-                ServerTypes::Content,
-                log_sender
-            ),
+    fn new(info: GenServer) -> Self {
+        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded();
+        ContentServer {
+            info,
             files: Vec::new(),
             media: Vec::new(),
+            sessions: HashMap::new(),
+            command_receiver: cmd_rx,
+            command_sender: cmd_tx,
         }
     }
 
-    pub fn run(&mut self) {
-        self.initiate_flood();
-        //self.log("Starting Content Server...");
-        loop {
-            crossbeam_channel::select_biased! {
-                recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets(packet);
-                }
-                default(Duration::from_millis(100)) => {
-                    let controller_recv = self.info.controller_recv.clone();
-                    handle_server_control_loop(&controller_recv, |cmd| {
-                        if let NetCommand::ControllerShortcut(_) = cmd {
-                            self.initiate_flood();
-                        }
-                    });
-                }
+    fn start(&mut self) {
+        let receiver = self.command_receiver.clone();
+        thread::spawn(move || loop {
+            if let Ok(cmd) = receiver.recv() {
+                // gestione del comando
             }
-        }
+        });
     }
 
     fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
@@ -102,19 +70,18 @@ impl ContentServer {
         }
     }
 
-    fn count_files(&mut self) {
-        self.media = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/".into());
-        self.files = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/files/".into());
-    }
-
-    fn count_media(&self, folder_path: String) -> Vec<u8> {
+    /// Raccoglie gli ID dei file (nomi numerici senza estensione) nella cartella specificata.
+    fn count_media(&self, folder_path: String) -> Vec<usize> {
         match fs::read_dir(folder_path) {
             Ok(entries) => entries
                 .filter_map(|entry| entry.ok())
                 .filter_map(|entry| {
                     let path = entry.path();
                     if path.is_file() {
-                        path.file_name().and_then(|name| name.to_str().map(|s| s.parse().ok())).flatten()
+                        path.file_name()
+                            .and_then(|name| name.to_str()
+                                .map(|s| s.parse::<usize>().ok()))
+                            .flatten()
                     } else {
                         None
                     }
@@ -122,6 +89,10 @@ impl ContentServer {
                 .collect(),
             Err(_) => Vec::new(),
         }
+    }
+    fn count_files(&mut self) {
+        self.media = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/".into());
+        self.files = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/files/".into());
     }
 
     fn handle_command(&mut self, cmd: ClientCommand, destination: NodeId) {
@@ -131,7 +102,7 @@ impl ContentServer {
             }
             ClientCommand::FilesList => {
                 self.count_files();
-                self.send_response(ServerToClient::FilesList(Self::vec_u8_to_usize(self.files.clone())), destination);
+                self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
             ClientCommand::File(id) => {
                 if let Ok(data) = Self::convert_file(id.to_string()) {
@@ -142,7 +113,7 @@ impl ContentServer {
             }
             ClientCommand::MediaList => {
                 self.count_files();
-                self.send_response(ServerToClient::MediaList(Self::vec_u8_to_usize(self.media.clone())), destination);
+                self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
             ClientCommand::Media(id) => {
                 if let Ok(image) = Self::process_image(id.to_string()) {
@@ -153,33 +124,6 @@ impl ContentServer {
             }
             _ => {
                 self.send_response(ServerToClient::ErrNotFound, destination);
-            }
-        }
-    }
-    fn vec_u8_to_usize(vec: Vec<u8>) -> Vec<usize> {
-        vec.into_iter().map(|b| b as usize).collect()
-    }
-
-}
-
-impl ContentServerBehavior for ContentServer {
-    fn handling_packets(&mut self, packet: Result<Packet, crossbeam_channel::RecvError>) {
-        if let Ok(packet) = packet {
-            match packet.clone().pack_type {
-                PacketType::Nack(nack) => {
-                    self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id)
-                }
-                PacketType::Ack(ack) => self.handle_ack(ack, packet.session_id),
-                PacketType::FloodResponse(r) => self.process_flood_response(r),
-                PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
-                PacketType::MsgFragment(fragment) => {
-                    if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
-                        match serde_json::from_slice::<ClientCommand>(&data) {
-                            Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                            Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
-                        }
-                    }
-                }
             }
         }
     }
