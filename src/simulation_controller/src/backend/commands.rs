@@ -1,3 +1,4 @@
+use colored::Colorize;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -11,6 +12,7 @@ impl SimulationControllerData {
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
+        self.logs.push_log(LogType::DEBUG, format!("[Simulation Controller] sending drone crash to drone: {drone_id}").as_str());
         let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
@@ -126,19 +128,19 @@ impl SimulationControllerData {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
-                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
                 DroneEvent::PacketDropped(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
-                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
                 DroneEvent::ControllerShortcut(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
-                    self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
             }
         }
@@ -195,14 +197,8 @@ impl SimulationControllerData {
     }
 
     pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: String) -> Result<(), String> {
-        match self.clients.get(receiver_client_id as usize) {
-            Some(_) => {
                 let command = NetCommand::Net(ClientCommand::MessageFor(receiver_client_id, message));
                 self.send_client_command(sender_client_id, command)
-            },
-            None => Err(format!("Client {receiver_client_id} not found")),
-        }
-
     }
 
     pub fn controller_shortcut(&self, client_id: ClientId, packet: Packet) -> Result<(), String> {
@@ -229,7 +225,8 @@ impl SimulationControllerData {
                     })
                 },
                 HostEvent::PacketSent(packet) => {
-                    Some(format!("Packet Sent: {:?}", packet))
+                    //Some(format!("💥Packet Sent: {:?}", packet))
+                    None
                 },
             }
         }
