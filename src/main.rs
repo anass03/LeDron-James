@@ -57,12 +57,12 @@ fn main() -> std::io::Result<()> {
         Err(error) => {log(format!("{}", error).as_str());}
     }*/     //simulate command
 
-    sleep(Duration::from_secs(6));
+    /*sleep(Duration::from_secs(6));
     log("Sending drone crash 3");
     match simulation_controller_data.crash(3) {
         Ok(_) => {},
         Err(error) => {log(format!("{}", error).as_str());}
-    }
+    }*/     //simulate command
 
     let log_receiver = simulation_controller_data.log_receiver.clone();
     let mut logs_arc = simulation_controller_data.logs.clone();
