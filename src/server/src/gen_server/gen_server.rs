@@ -18,7 +18,7 @@ pub struct GenServer {
 
 pub trait GenServerBehavior {
     fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
-    fn servertype(&mut self, request: ClientCommand, destination: NodeId);
+    fn servertype(&mut self) -> Result<ServerTypes, String>;
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
 }
 
@@ -68,20 +68,17 @@ impl GenServerBehavior for GenServer {
         }
     }
 
-    fn servertype(&mut self, request: ClientCommand, destination: NodeId) {
-        if let ServerType = request {
+    fn servertype(&mut self) -> Result<ServerTypes, String> {
             if let NodeType::Server = self.host.type_host {
                 let response = match self.server_type {
                     ServerTypes::Chat => ServerTypes::Chat,
                     ServerTypes::Content => ServerTypes::Content,
                 };
-                if let Ok(data) = serde_json::to_vec(&host::ServerToClient::ServerType(response)) {
-                    self.create_message(data, destination);
-                } else {
-                    self.send_logging(format!("Failed to serialize ServerType response"));
-                }
+                Ok(response)
+            }else{
+                Err(format!("Unknown type {}", self.host.id))
             }
-        }
+            
     }
 
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {

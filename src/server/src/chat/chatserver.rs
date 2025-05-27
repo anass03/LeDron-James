@@ -6,7 +6,6 @@ use host::{ClientCommand, ServerToClient, Message, Functionality, ServerTypes, g
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
-use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
 
@@ -27,7 +26,7 @@ impl ChatServer {
         }
         to self.info {
             fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
-            fn servertype(&mut self, request: ClientCommand, destination: NodeId);
+            fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
         }
     }
@@ -63,17 +62,19 @@ impl ChatServer {
         self.send_logging("Starting Chat Server...".to_string());
         loop {
             crossbeam_channel::select_biased! {
-                recv(self.info.host.packet_recv) -> packet => {
-                    self.handling_packets(packet);
+                recv(self.info.controller_recv) -> cmd => {
+                    if let Ok(command) = cmd {
+                       // self.handle_command(command);
+                    }
                 }
-                default(Duration::from_millis(100)) => {
-                    let controller_recv = self.info.controller_recv.clone();
-                    handle_server_control_loop(&controller_recv, |cmd| {
-                        if let NetCommand::ControllerShortcut(_) = cmd {
-                            self.initiate_flood();
-                        }
-                    });
+                
+                recv(self.info.host.packet_recv) -> pkt => {
+                    if let Ok(packet) = pkt {
+                         self.handling_packets(Ok(packet)) 
+                    }
                 }
+                
+                default(Duration::from_millis(10)) => {}
             }
         }
     }
@@ -86,7 +87,7 @@ impl ChatServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                  self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
                 }
             }
             Err(e) => {
@@ -95,25 +96,29 @@ impl ChatServer {
         }
     }
 
-    fn handle_command(&mut self, cmd: ClientCommand, source: NodeId) {
+    fn handle_command(&mut self, cmd: ClientCommand, destination: NodeId) {
         match cmd {
             ClientCommand::ServerType => {
-                self.send_response(ServerToClient::ServerType(ServerTypes::Chat), source);
+                if let Ok(server_type)=self.servertype(){
+                    self.send_response(ServerToClient::ServerType(server_type),destination);
+                }else{
+                    self.send_logging(format!("Failed to send ServerToClient::ServerType"));
+                }
             }
             ClientCommand::RegistrationToChat => {
-                if !self.client_list.contains(&source) {
-                    self.client_list.push(source);
-                    self.send_logging(format!("Registered new client to chat: {}", source));
+                if !self.client_list.contains(&destination) {
+                    self.client_list.push(destination);
+                    self.send_logging(format!("Registered new client to chat: {}", destination));
                 }
             }
             ClientCommand::ClientList => {
-                self.send_response(ServerToClient::ClientList(self.client_list.clone()), source);
+                self.send_response(ServerToClient::ClientList(self.client_list.clone()), destination);
             }
             ClientCommand::MessageFor(dest, msg) => {
-                self.send_response(ServerToClient::MessageFrom(source, msg), dest);
+                self.send_response(ServerToClient::MessageFrom(destination, msg), dest);
             }
             _ => {
-                self.send_response(ServerToClient::ErrNotFound, source);
+                self.send_response(ServerToClient::ErrNotFound, destination);
             }
         }
     }
