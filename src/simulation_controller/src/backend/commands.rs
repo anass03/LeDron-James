@@ -1,18 +1,15 @@
-use colored::Colorize;
-use wg_2024::controller::{DroneCommand, DroneEvent};
+use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, Message, NetCommand, ServerToClient};
+use host::{ClientCommand, ClientId, FileId, HostEvent, MediaId, NetCommand, ServerToClient};
 use host::ClientCommand::ServerType;
-use host::HostEvent::PacketSent;
-use wg_internal::packet::PacketType;
-use crate::backend::simulation_controller::{log, LogType, SimulationControllerData};
+use crate::backend::simulation_controller::{LogType, SimulationControllerData};
 
 impl SimulationControllerData {
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
-        self.logs.push_log(LogType::DEBUG, format!("[Simulation Controller] sending drone crash to drone: {drone_id}").as_str());
+        self.logs.push_log(LogType::DEBUG, format!("[Simulation Controller] - Sending drone crash to drone: {drone_id}").as_str());
         let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
@@ -21,10 +18,10 @@ impl SimulationControllerData {
                         /*//removing all connected channels
                         for connected_node in self.drones.*/
                     },
-                    Err(e) => Err(e.to_string()),
+                    Err(e) => Err(format!("[Simulation Controller] - Error sending crash command - {}", e.to_string())),
                 }
             },
-            None => Err(format!("Drone {drone_id} command sender not found"))
+            None => Err(format!("[Simulation Controller] - Drone {drone_id} command sender not found"))
         }
     }
 
@@ -54,19 +51,19 @@ impl SimulationControllerData {
                                                     Err(e) => Err(e.to_string()),
                                                 }
                                             },
-                                            None => Err(format!("Drone {sender_id} command sender not found")),
+                                            None => Err(format!("[Simulation Controller] - Drone {sender_id} command sender not found")),
                                         }
                                     },
                                     Err(e) => Err(e.to_string())
                                 }
                             },
-                            None => Err(format!("Drone {node_id} command sender not found")),
+                            None => Err(format!("[Simulation Controller] - Drone {node_id} command sender not found")),
                         }
                     },
-                    None => Err(format!("Drone {node_id} packet sender not found")),
+                    None => Err(format!("[Simulation Controller] - Drone {node_id} packet sender not found")),
                 }
             },
-            None => Err(format!("Drone {sender_id} packet sender not found")),
+            None => Err(format!("[Simulation Controller] - Drone {sender_id} packet sender not found")),
         }
     }
 
@@ -89,13 +86,13 @@ impl SimulationControllerData {
                                     Err(e) => Err(e.to_string()),
                                 }
                             },
-                            None => Err(format!("Drone {sender_id} command sender not found")),
+                            None => Err(format!("[Simulation Controller] - Drone {sender_id} command sender not found")),
                         }
                     },
                     Err(e) => Err(e.to_string())
                 }
             },
-            None => Err(format!("Drone {node_id} command sender not found")),
+            None => Err(format!("[Simulation Controller] - Drone {node_id} command sender not found")),
         }
     }
 
@@ -104,7 +101,7 @@ impl SimulationControllerData {
         if new_pdr >= 0.0 && new_pdr <= 1.0 {
             valid_pdr = new_pdr;
         } else {
-            return Err(format!("Invalid pdr value: {} | 0.0 < pdr < 1.0", new_pdr));
+            return Err(format!("[Simulation Controller] - Invalid pdr value: {} | 0.0 < pdr < 1.0", new_pdr));
         }
         let command = DroneCommand::SetPacketDropRate(new_pdr);
         self.drone_command_sender.get(&drone_id).unwrap().send(DroneCommand::SetPacketDropRate(new_pdr)).expect("error setting pdr");
@@ -115,14 +112,14 @@ impl SimulationControllerData {
                     Err(e) => Err(e.to_string()),
                 }
             },
-            None => Err(format!("Drone {drone_id} command sender not found")),
+            None => Err(format!("[Simulation Controller] - Drone {drone_id} command sender not found")),
         }
     }
 
     /// - Drone Events
 
     pub fn handle_drone_event(&mut self) -> Result<(), String> {
-        for receiver in self.drone_event_receiver.try_iter() {
+        /*for receiver in self.drone_event_receiver.try_iter() {
             match receiver {
                 DroneEvent::PacketSent(packet) => {
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
@@ -143,7 +140,7 @@ impl SimulationControllerData {
                     //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
             }
-        }
+        }*/
         Ok(())
     }
 
@@ -157,7 +154,7 @@ impl SimulationControllerData {
                     Err(e) => Err(e.to_string()),
                 }
             },
-            None => Err(format!("Client {client_id} command sender not found")),
+            None => Err(format!("[Simulation Controller] - Client {client_id} command sender not found")),
         }
     }
 
@@ -213,18 +210,18 @@ impl SimulationControllerData {
             return match received {
                 HostEvent::PacketReconstructed(server_to_client) => {
                     Some(match server_to_client {
-                        ServerToClient::ServerType(server_type) => format!("Server type: {:?}", server_type),
-                        ServerToClient::FilesList(file_list) => format!("Files list received: {:?}", file_list),
-                        ServerToClient::File(file_id, file) => format!("File {} received: {:?}", file_id, file),
-                        ServerToClient::MediaList(media_list) => format!("Media list received: {:?}", media_list),
-                        ServerToClient::Media(media_id, image) => format!("File {} received: {:?}", media_id, image),
-                        ServerToClient::ClientList(client_list) => format!("Client list received: {:?}", client_list),
-                        ServerToClient::MessageFrom(client_id, message) => format!("Message from Client {} received: {:?}", client_id, message),
-                        ServerToClient::ErrNotFound => "Err Not Found".to_owned(),
-                        ServerToClient::ErrClientId => "Err Client Id Not Found".to_owned(),
+                        ServerToClient::ServerType(server_type) => format!("[Simulation Controller] - Server type: {:?}", server_type),
+                        ServerToClient::FilesList(file_list) => format!("[Simulation Controller] - Files list received: {:?}", file_list),
+                        ServerToClient::File(file_id, file) => format!("[Simulation Controller] - File {} received: {:?}", file_id, file),
+                        ServerToClient::MediaList(media_list) => format!("[Simulation Controller] - Media list received: {:?}", media_list),
+                        ServerToClient::Media(media_id, image) => format!("[Simulation Controller] - File {} received: {:?}", media_id, image),
+                        ServerToClient::ClientList(client_list) => format!("[Simulation Controller] - Client list received: {:?}", client_list),
+                        ServerToClient::MessageFrom(client_id, message) => format!("[Simulation Controller] - Message from Client {} received: {:?}", client_id, message),
+                        ServerToClient::ErrNotFound => "[Simulation Controller] - Err Not Found".to_owned(),
+                        ServerToClient::ErrClientId => "[Simulation Controller] - Err Client Id Not Found".to_owned(),
                     })
                 },
-                HostEvent::PacketSent(packet) => {
+                HostEvent::PacketSent(_packet) => {
                     //Some(format!("💥Packet Sent: {:?}", packet))
                     None
                 },
@@ -240,12 +237,12 @@ impl SimulationControllerData {
     }
 }
 
-fn handle_packet (packet: &Packet) {
-    match packet.clone().pack_type {
+fn handle_packet (_packet: &Packet) {
+    /*match packet.clone().pack_type {
         PacketType::MsgFragment(fragment) => {}
         PacketType::Ack(ack) => {}
         PacketType::Nack(nack) => {}
         PacketType::FloodRequest(flood_request) => {}
         PacketType::FloodResponse(flood_response) => {}
-    }
+    }*/
 }

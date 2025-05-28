@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
-use simulation_controller::backend::simulation_controller::{log, LogType, Logs, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::{log, Logs, SimulationControllerData};
 use initializer::initializer::initialize;
 
 fn main() -> std::io::Result<()> {
@@ -18,7 +18,7 @@ fn main() -> std::io::Result<()> {
         log_receiver: unbounded().1,
         logs: Logs { logs_memory: vec![], log_scroll_offset: 0 },
     };
-    match initialize("/Volumes/SSD FILIPPO/UNI/Advanced Programming/Drone Project/LeDron-James/init_file.toml") {
+    match initialize("init_file.toml") {
         Ok((simulation_controller, handles)) => {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;

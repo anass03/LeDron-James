@@ -1,4 +1,4 @@
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use rand::{rng, Rng};
 use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
@@ -56,6 +56,7 @@ pub struct Drone {
     pub controller_send: Sender<DroneEvent>,          // Send Events to Sim. Controller
     pub controller_recv: Receiver<DroneCommand>,      // Receive from Sim. Controller
     cache: Cache, // We memorize the Flood Requests and crashings
+    log_sender: Sender<String>
 }
 
 impl wg_2024::drone::Drone for Drone {
@@ -79,6 +80,7 @@ impl wg_2024::drone::Drone for Drone {
                 crashed: false,
                 logging_enabled: false,
             },
+            log_sender: unbounded().0
         }
     }
     fn run(&mut self) {
@@ -106,10 +108,13 @@ impl wg_2024::drone::Drone for Drone {
     }
 }
 impl Drone {
+    pub fn add_log_channel(&mut self, log_sender: Sender<String>) {
+        self.log_sender = log_sender;
+    }
     fn log<S: AsRef<str>>(&self, message: S) {
-        #[cfg(feature = "log")]
-        if self.cache.logging_enabled {
-            println!("LeDron ID {} - {}", self.id, message.as_ref());
+        //#[cfg(feature = "log")]
+        if let Err(err) = self.log_sender.send(format!("[LeDron] ID {} - {}", self.id, message.as_ref())) {
+            eprintln!("Failed to forward logging to controller: {}", err);
         }
     }
     pub fn logging_enabled(&mut self, log: bool) {

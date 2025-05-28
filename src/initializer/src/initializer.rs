@@ -84,6 +84,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     //simulation controller has a single receiver for all drone events, while the sender is cloned
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
+    let (log_sender, log_receiver) = unbounded();
     for drone in config.drone.iter() {
 
         // creating the actual drone channel for commands
@@ -102,7 +103,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-
+        let log_send = log_sender.clone();
         /// - spawning the thread of the drone and collecting the handle in a vector
         handles.insert(drone.id, thread::spawn(move || {
             let mut drone = LeDron::new(
@@ -113,6 +114,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 drone_packet_send,
                 drone_clone.pdr,
             );
+            drone.add_log_channel(log_send);
             /// - running the drone
             drone.run();
         }));
@@ -120,7 +122,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - Initializing the clients
     let (host_event_send, host_event_recv) = unbounded();
-    let (log_sender, log_receiver) = unbounded();
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();
