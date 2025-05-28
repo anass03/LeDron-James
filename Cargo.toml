@@ -9,6 +9,7 @@ host = { git = "https://github.com/anass03/LeDron-James", branch = "client", pac
 serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 crossbeam-channel = "0.5.13"
+server = { path = "src/server" }
 [workspace]
 members = [
     "src/client",

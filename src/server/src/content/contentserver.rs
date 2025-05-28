@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::{fs, thread};
+use std::{env, fs, io};
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
@@ -7,7 +8,7 @@ use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, 
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
 use delegate::delegate;
-use crate::utils::handle_server_control_loop;
+use regex::Regex;
 
 pub struct ContentServer {
     info: GenServer,
@@ -103,30 +104,54 @@ impl ContentServer {
         }
     }
 
-    fn count_media(&self, folder_path: String) -> Vec<usize> {
-        match fs::read_dir(folder_path) {
-            Ok(entries) => entries
-                .filter_map(|entry| entry.ok())
-                .filter_map(|entry| {
-                    let path = entry.path();
-                    if path.is_file() {
-                        path.file_name()
-                            .and_then(|name| name.to_str()
-                                .map(|s| s.parse::<usize>().ok()))
-                            .flatten()
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            Err(_) => Vec::new(),
+    pub fn count_files(&mut self) {
+        // 1) prendo il percorso del crate corrente, es. ".../mio-progetto/src"
+        let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+
+        // 2) risalgo di un livello fino alla radice del workspace/progetto
+        let project_root = crate_dir
+            .parent()
+            .expect("Impossibile risalire al project root");
+
+        // 3) scendo dentro server/src/images e server/src/files
+        let images_dir = project_root.join("server").join("src").join("images");
+        let files_dir  = project_root.join("server").join("src").join("files");
+
+        // il resto rimane invariato
+        if let Ok(files) = self.list_media_ids(&images_dir) {
+            self.media = files;
+            println!("media -> {:?}", self.media);
+        }
+        if let Ok(files) = self.list_media_ids(&files_dir) {
+            self.files = files;
+            println!("files -> {:?}", self.files);
         }
     }
 
-    /// Aggiorna `media` e `files` con i vettori di ID (Vec<usize>)
-    fn count_files(&mut self) {
-        self.media = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/".into());
-        self.files = self.count_media("https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/files/".into());
+    pub fn list_media_ids<P: AsRef<Path>>(&self, folder_path: P) -> io::Result<Vec<usize>> {
+        let mut ids = Vec::new();
+        for entry in fs::read_dir(&folder_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                if let Some(stem) = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                {
+                    // Prendo solo i caratteri numerici dallo stem
+                    let digits: String = stem.chars()
+                        .filter(|c| c.is_ascii_digit())
+                        .collect();
+                    if !digits.is_empty() {
+                        if let Ok(id) = digits.parse::<usize>() {
+                            ids.push(id);
+                        }
+                    }
+                }
+            }
+        }
+        ids.sort_unstable();
+        Ok(ids)
     }
     fn handle_command(&mut self, cmd: ClientCommand, destination: NodeId) {
         match cmd {
@@ -138,7 +163,7 @@ impl ContentServer {
                 }
             }
             ClientCommand::FilesList => {
-                self.count_files();
+                // self.count_files();
                 self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
             ClientCommand::File(id) => {
@@ -149,7 +174,7 @@ impl ContentServer {
                 }
             }
             ClientCommand::MediaList => {
-                self.count_files();
+                // self.count_files();
                 self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
             ClientCommand::Media(id) => {
@@ -192,5 +217,33 @@ impl ContentServerBehavior for ContentServer {
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
 
+
+
 #[test]
-fn main() {}
+fn main() {
+    // let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    // 
+    // let images_dir = crate_root.join("src").join("images");
+    // let files_dir  = crate_root.join("src").join("files");
+    // 
+    // match ContentServer::list_media_ids(&images_dir) {
+    //     Ok(ids) => {
+    //         println!("Trovati {} file in {:?}: {:?}", ids.len(), images_dir, ids);
+    //         // self.media = ids;
+    //     }
+    //     Err(e) => {
+    //         eprintln!("Errore leggendo {:?}: {}", images_dir, e);
+    //     }
+    // }
+    // 
+    // match ContentServer::list_media_ids(&files_dir) {
+    //     Ok(ids) => {
+    //         println!("Trovati {} file in {:?}: {:?}", ids.len(), files_dir, ids);
+    //         // self.files = ids;
+    //     }
+    //     Err(e) => {
+    //         eprintln!("Errore leggendo {:?}: {}", files_dir, e);
+    //     }
+    // }
+
+}

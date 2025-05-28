@@ -1,5 +1,6 @@
 
-mod content;
+pub mod content;
+
 mod chat;
 mod gen_server;
 mod utils;

@@ -8,13 +8,16 @@ wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
 image = "0.25.5"
 host = { git = "https://github.com/anass03/LeDron-James", branch = "client", package = "host" }
 rand = "0.9.0-beta.1"
+scraper = "0.12"
 crossbeam-channel = "0.5.13"
 petgraph = "0.6.5"
 delegate = "0.13.1"
 url = "2.5.4"
-reqwest = { version = "0.11", features = ["blocking"] }
+reqwest = { version = "0.11", features = ["blocking", "json"] }
 tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde_json = "1.0.133"
 log = "0.4.27"
+serde = { version = "1.0.219", features = ["derive"] }
+regex = "1.11.1"

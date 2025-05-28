@@ -1,4 +1,5 @@
-mod contentserver;
+pub mod contentserver;
+
 mod textserver;
 mod mediaserver;
 

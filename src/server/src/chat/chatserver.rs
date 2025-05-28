@@ -6,6 +6,7 @@ use host::{ClientCommand, ServerToClient, Message, Functionality, ServerTypes, g
 use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
+use tracing_subscriber::fmt::format;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
 
@@ -109,18 +110,26 @@ impl ChatServer {
                 if !self.client_list.contains(&destination) {
                     self.client_list.push(destination);
                     self.send_logging(format!("Registered new client to chat: {}", destination));
+                }else{
+                    self.send_logging(format!("Registration from {} already exists!", destination));
                 }
             }
             ClientCommand::ClientList => {
                 self.send_response(ServerToClient::ClientList(self.client_list.clone()), destination);
             }
             ClientCommand::MessageFor(dest, msg) => {
-                self.send_response(ServerToClient::MessageFrom(destination, msg), dest);
+                match self.check_if_in_client_list(destination) {
+                    true => {self.send_response(ServerToClient::MessageFrom(destination, msg), dest);}
+                    false => {self.send_logging("You're not registered to client chat".to_string())}
+                }
             }
             _ => {
                 self.send_response(ServerToClient::ErrNotFound, destination);
             }
         }
+    }
+    fn check_if_in_client_list(&mut self, id: NodeId) -> bool {
+        self.client_list.contains(&id)
     }
 
     fn handling_packets(&mut self, packet: Result<Packet, crossbeam_channel::RecvError>) {

@@ -1,18 +1,9 @@
-use serde::{Serialize, Deserialize};
-#[derive(Serialize, Deserialize,Debug)]
-struct Example {
-    id: u32,
-    name: String,
+// Legge e stampa gli ID dei file
+use std::env;
+use std::path::PathBuf;
+
+use server::content::contentserver::ContentServer;
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    Ok(())
 }
-
-fn main() {
-    let data = Example { id: 42, name: "Test".to_string() };
-
-    // Serializzazione in JSON
-    let serialized = serde_json::to_string(&data).unwrap();
-    println!("Serialized: {}", serialized);
-
-    // Deserializzazione da JSON
-    let deserialized: Example = serde_json::from_str(&serialized).unwrap();
-    println!("Deserialized: {:?}", deserialized);
-}
+    
