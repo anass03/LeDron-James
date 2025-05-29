@@ -142,7 +142,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             let mut client = LeClient::new(
                 client_id,
                 NodeType::Client,
-                connected_drone_ids,
                 host_event_send,
                 controller_client_recv,
                 packet_recv,

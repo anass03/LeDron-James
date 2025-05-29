@@ -19,7 +19,7 @@ impl App<'_>{
             Ok((n,str)) => {
                 match self.simulation_controller_data.message_for(id, n as u8, str){
                     Ok(_) => (),
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
                 }
             }
             Err(_) => {}
@@ -34,10 +34,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.add_sender(id, n as u8){
                     Ok(_) => (),
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
                 }
             }
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
         }
     }
     pub(super) fn drone_remove_sender(&mut self, id:NodeId){
@@ -45,10 +45,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.remove_sender(id, n as u8){
                     Ok(_) => (),
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
                 }
             }
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
         }
     }
     pub(super) fn drone_set_pdr(&mut self, id:NodeId){
@@ -56,10 +56,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.set_pdr(id, n){
                     Ok(_) => (),
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
                 }
             }
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
         }
     }
     /// Client
@@ -68,7 +68,7 @@ impl App<'_>{
         match self.parse_1input(){
             Ok(n) => {
                 match self.simulation_controller_data.request_media(id, n as MediaId){
-                    Ok(_) => {self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Simulation Controller Sent Request Media ID {n}").as_str())},
+                    Ok(_) => {self.simulation_controller_data.log(LogType::DEBUG, format!("Sent Request Media ID {n}"))},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
             }
@@ -79,18 +79,18 @@ impl App<'_>{
         match self.parse_1input(){
             Ok(n) => {
                 match self.simulation_controller_data.request_file(id, n as usize){
-                    Ok(_) => {self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Simulation Controller Sent Request File ID {n}").as_str())},
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Ok(_) => {self.simulation_controller_data.log(LogType::DEBUG, format!("Sent Request File ID {n}"))},
+                    Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
                 }
             }
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {self.simulation_controller_data.log(LogType::ERROR, str)}
         }
     }
     fn parse_1input(&mut self)->Result<f32, String>{
         let lines = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
         match lines.get(0){
             None => {
-                Err("Simulation Controller - Couldn't parse any number".to_string())
+                Err("[Simulation Controller] - Couldn't parse any number".to_string())
             }
             Some(str) => {
                 match f32::from_str(str){
@@ -109,7 +109,7 @@ impl App<'_>{
         let lines_first = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
         match lines_first.get(0){
             None => {
-                Err("Simulation Controller - Couldn't parse any number".to_string())
+                Err("[Simulation Controller] - Couldn't parse any number".to_string())
             }
             Some(str) => {
                 match f32::from_str(str){
@@ -123,7 +123,7 @@ impl App<'_>{
                             .into_lines();
 
                         if lines_second.is_empty(){
-                            Err("Simulation Controller - Couldn't parse any text".to_string())
+                            Err("[Simulation Controller] - Couldn't parse any text".to_string())
                         }else{
                             // join them into a single String separated by '\n'
                             let second_string = lines_second.join("\n");

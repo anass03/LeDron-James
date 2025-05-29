@@ -72,7 +72,7 @@ impl App<'_>{
             match self.simulation_controller_data.handle_client_event(){
                 None => {}
                 Some(str) => {
-                    self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str());
+                    self.simulation_controller_data.log(LogType::INFO, str);
                 }
             }
 

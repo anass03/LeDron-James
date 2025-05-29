@@ -531,9 +531,22 @@ impl Drone {
                 }
             }
             None => {
-                let channeltosend = self
+                /*let channeltosend = self
                     .packet_send
-                    .get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);     //error here (panic)
+                    .get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]); */    //error here (panic)
+                let maybe_next_hop = packet
+                    .routing_header
+                    .hops
+                    .get(packet.routing_header.hop_index);
+
+                let channeltosend = maybe_next_hop.and_then(|next_hop| self.packet_send.get(next_hop));
+                if maybe_next_hop.is_none() {
+                    self.log(format!(
+                        "Invalid hop_index {} for hops len {}",
+                        packet.routing_header.hop_index,
+                        packet.routing_header.hops.len()
+                    ));
+                }
                 match channeltosend {
                     Some(ch) => {
                         match ch.send(packet.clone()) {
