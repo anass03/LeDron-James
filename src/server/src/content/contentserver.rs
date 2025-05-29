@@ -70,6 +70,7 @@ impl ContentServer {
         self.initiate_flood();
         self.send_logging(format!("Starting Content Server..."));
         loop {
+            self.send_logging(format!("Content Server waiting..."));
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
                     if let Ok(command) = cmd {
