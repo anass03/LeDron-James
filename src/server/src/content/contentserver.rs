@@ -8,6 +8,7 @@ use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, 
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
 use delegate::delegate;
+use host::ServerTypes::Content;
 use regex::Regex;
 
 pub struct ContentServer {
@@ -110,15 +111,18 @@ impl ContentServer {
         
         let files_dir  = manifest_dir.join("src/content/files");
         let images_dir = manifest_dir.join("src/content/images");
-        
+        self.send_logging(format!("Files directory: {}", files_dir.to_string_lossy()));
+        self.send_logging(format!("Images directory: {}", images_dir.to_string_lossy()));
         // il resto rimane invariato
-        if let Ok(files) = self.list_media_ids(&images_dir) {
-            self.media = files;
-            println!("media -> {:?}", self.media);
+        if let Ok(media) = self.list_media_ids(&images_dir) {
+            self.media = media;
+            self.send_logging(format!("media -> {:?}", self.media));
+            // println!("media -> {:?}", media);
         }
         if let Ok(files) = self.list_media_ids(&files_dir) {
             self.files = files;
-            println!("files -> {:?}",self.files);
+            self.send_logging(format!("files -> {:?}", self.files));
+            // println!("files -> {:?}",files);
         }
     }
 
@@ -215,5 +219,4 @@ impl TextServer for ContentServer {}
 
 #[test]
 fn main() {
-
 }
