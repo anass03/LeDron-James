@@ -100,7 +100,7 @@ impl Client {
                     // }
                     // each 60s clean session
                     let timeout  = Duration::from_secs(300);
-                    self.host.cleanup_expired_sessions(timeout);
+                    //self.host.cleanup_expired_sessions(timeout);
 
                 }
 
