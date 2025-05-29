@@ -119,7 +119,10 @@ impl ChatServer {
             }
             ClientCommand::MessageFor(dest, msg) => {
                 match self.check_if_in_client_list(destination) {
-                    true => {self.send_response(ServerToClient::MessageFrom(destination, msg), dest);}
+                    true => {match self.check_if_in_client_list(dest) {
+                        true => {self.send_response(ServerToClient::MessageFrom(destination, msg), dest)}
+                        false => {self.send_logging("The destination is not registered to client chat".to_string())}
+                    }}
                     false => {self.send_logging("You're not registered to client chat".to_string())}
                 }
             }

@@ -105,18 +105,12 @@ impl ContentServer {
     }
 
     pub fn count_files(&mut self) {
-        // 1) prendo il percorso del crate corrente, es. ".../mio-progetto/src"
-        let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
-        // 2) risalgo di un livello fino alla radice del workspace/progetto
-        let project_root = crate_dir
-            .parent()
-            .expect("Impossibile risalire al project root");
-
-        // 3) scendo dentro server/src/images e server/src/files
-        let images_dir = project_root.join("server").join("src").join("images");
-        let files_dir  = project_root.join("server").join("src").join("files");
-
+        // // CARGO_MANIFEST_DIR → ".../LeDron-James/src/server"
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        
+        let files_dir  = manifest_dir.join("src/content/files");
+        let images_dir = manifest_dir.join("src/content/images");
+        
         // il resto rimane invariato
         if let Ok(files) = self.list_media_ids(&images_dir) {
             self.media = files;
@@ -124,7 +118,7 @@ impl ContentServer {
         }
         if let Ok(files) = self.list_media_ids(&files_dir) {
             self.files = files;
-            println!("files -> {:?}", self.files);
+            println!("files -> {:?}",self.files);
         }
     }
 
@@ -221,29 +215,5 @@ impl TextServer for ContentServer {}
 
 #[test]
 fn main() {
-    // let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    // 
-    // let images_dir = crate_root.join("src").join("images");
-    // let files_dir  = crate_root.join("src").join("files");
-    // 
-    // match ContentServer::list_media_ids(&images_dir) {
-    //     Ok(ids) => {
-    //         println!("Trovati {} file in {:?}: {:?}", ids.len(), images_dir, ids);
-    //         // self.media = ids;
-    //     }
-    //     Err(e) => {
-    //         eprintln!("Errore leggendo {:?}: {}", images_dir, e);
-    //     }
-    // }
-    // 
-    // match ContentServer::list_media_ids(&files_dir) {
-    //     Ok(ids) => {
-    //         println!("Trovati {} file in {:?}: {:?}", ids.len(), files_dir, ids);
-    //         // self.files = ids;
-    //     }
-    //     Err(e) => {
-    //         eprintln!("Errore leggendo {:?}: {}", files_dir, e);
-    //     }
-    // }
 
 }
