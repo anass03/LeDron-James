@@ -294,10 +294,13 @@ pub fn generate_unique_session_id() -> u64 {
 impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
-        let log_msg = format!("[Host] ID {} - {}",self.id, message);
+        let role = if self.network.servers.contains(&self.id) { "Server" } else { "Client" };
+        let log_msg = format!("[{}] ID {} - {}", role, self.id, message.as_ref());
+
         if let Err(err) = self.log_sender.send(log_msg) {
             eprintln!("Failed to forward logging to controller: {}", err);
         }
+
     }
     fn initiate_flood(&mut self) {
         // Genero subito gli ID, così li posso loggare
