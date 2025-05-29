@@ -24,7 +24,7 @@ pub trait TextServer {
 
         let files_dir  = manifest_dir.join("src/content/files");
         let id_num = id;
-                let bytes = Self::read_file_any(files_dir, id_num, &["txt", "pdf"])?;
+        let bytes = Self::read_file_any(files_dir, id_num, &["txt", "pdf"])?;
         Ok(bytes)
     }
 }

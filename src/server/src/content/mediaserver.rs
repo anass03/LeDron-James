@@ -28,11 +28,9 @@ pub trait MediaServer {
 
             let images_dir  = manifest_dir.join("src/content/images");
             let id_num = id;
-                let data = Self::read_file_any(images_dir, id_num, &["png", "jpeg", "jpg"])?;
+            let data = Self::read_file_any(images_dir, id_num, &["png", "jpeg", "jpg"])?;
             // Decodifica da bytes a DynamicImage
-            let img = ImageReader::new(Cursor::new(data))
-            .with_guessed_format()?
-            .decode()?;
+            let img = ImageReader::new(Cursor::new(data)).with_guessed_format()?.decode()?;
             let width = img.width();
             let height = img.height();
             let rgba = img.to_rgba8();

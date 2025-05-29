@@ -1,23 +1,21 @@
 use std::collections::HashMap;
-use std::fmt::format;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
-use host::{ClientCommand, Functionality, Host, Message, generate_unique_session_id, RecSessionData, HostEvent, NetCommand};
+use wg_2024::packet::{Fragment, NodeType, Packet};
+use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand, FileId, MediaId, ClientId};
 use host::ServerTypes;
-use host::ClientCommand::ServerType;
-use log::log;
+use serde::{Deserialize, Serialize};
 
 pub struct GenServer {
     pub host: Host,
-    pub controller_recv: Receiver<NetCommand>,
+    pub controller_recv: Receiver<HostCommand>,
     pub server_type: ServerTypes,
 }
 
 pub trait GenServerBehavior {
-    fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
+    fn handle_sim_command(&mut self, cmd: HostCommand);
     fn servertype(&mut self) -> Result<ServerTypes, String>;
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
 }
@@ -27,7 +25,6 @@ impl GenServer {
         to self.host {
             pub fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
             pub fn send_logging(&self, message: String);
-            //fn log<S: AsRef<str>>(&self, message: S);
         }
     }
 
@@ -36,7 +33,7 @@ impl GenServer {
         type_host: NodeType,
         connected_drone_ids: Vec<NodeId>,
         controller_send: Sender<HostEvent>,
-        controller_recv: Receiver<NetCommand>,
+        controller_recv: Receiver<HostCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         server_type: ServerTypes,
@@ -57,17 +54,32 @@ impl GenServer {
 }
 
 impl GenServerBehavior for GenServer {
-    fn create_message(&mut self, data: Vec<u8>, destination: NodeId) {
-        let message = Message {
-            session_id: generate_unique_session_id(),
-            content: data,
-        };
-        match self.host.build_msg_fragment(destination, message) {
-            Ok(_) => self.send_logging(format!("Server ID {} - message built successfully", self.host.id)),
-            Err(e) => self.send_logging(format!("Failed to build message: {}", e)),
+    fn handle_sim_command(&mut self, cmd: HostCommand){
+        match cmd {
+            HostCommand::AddSender(id, sender) => {
+                let current = self.host.packet_send.len();
+                if self.host.packet_send.contains_key(&id) {
+                    self.host.send_logging("Channel already present!".to_string());
+                } else if current >= 2 {
+                    self.host.send_logging("Cannot add more than 2 channels: limit reached".to_string());
+                } else {
+                    self.host.packet_send.insert(id, sender);
+                    self.host.send_logging("Successfully added sender!".to_string());
+                }
+            }
+            HostCommand::RemoveSender(id) => {
+                let current = self.host.packet_send.len();
+                if !self.host.packet_send.contains_key(&id) {
+                    self.host.send_logging("Channel not found!".to_string());
+                } else if current <= 1 {
+                    self.host.send_logging("Cannot remove last channel: at least one connection required".to_string());
+                } else {
+                    self.host.packet_send.remove(&id);
+                    self.host.send_logging("Successfully removed sender!".to_string());
+                }
+            }
         }
     }
-
     fn servertype(&mut self) -> Result<ServerTypes, String> {
             if let NodeType::Server = self.host.type_host {
                 let response = match self.server_type {
@@ -82,56 +94,60 @@ impl GenServerBehavior for GenServer {
     }
 
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
-        let lock_result = self.host.received_fragments.lock();
-        let mut received_fragments = match lock_result {
-            Ok(guard) => guard,
-            Err(poisoned) => {
-                self.send_logging(format!("Mutex poisoned while accessing received_fragments"));
-                poisoned.into_inner() // oppure return None; per uscire dal metodo
-            }
-        };
-        let session_data = received_fragments
-            .entry(packet.session_id)
-            .or_insert_with(|| RecSessionData {
-                buffer: vec![None; fragment.total_n_fragments as usize],
+        let session_id = packet.session_id;
+        let idx = fragment.fragment_index as usize;
+        let total = fragment.total_n_fragments as usize;
+
+        // inizializza se necessario
+        let mut received = self.host.received_fragments.lock().unwrap();
+        let session = received.entry(session_id).or_insert_with(|| {
+            RecSessionData {
+                buffer: vec![None; total],
                 last_activity: Instant::now(),
-                pending: fragment.total_n_fragments as usize,
-            });
-        let index = fragment.fragment_index as usize;
-        session_data.last_activity = Instant::now();
-
-        if index >= session_data.buffer.len() {
-            /*self.host.log(format!(
-                "Invalid fragment index: {} (session ID: {})",
-                fragment.fragment_index, packet.session_id
-            ));*/
-            return None;
-        }
-
-        if session_data.buffer[index].is_some() {
-            /*self.host.log(format!(
-                "Duplicate fragment received: {} (session ID: {})",
-                fragment.fragment_index, packet.session_id
-            ));*/
-            return None;
-        }
-
-        session_data.buffer[index] = Some(fragment.clone());
-        session_data.pending = session_data.pending.saturating_sub(1);
-
-        let ack_packet = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
-        self.host.send_packet(ack_packet, None);
-
-        if session_data.pending == 0 {
-            //self.host.log(format!("All fragments received for session ID: {}", packet.session_id));
-            let mut content = Vec::with_capacity(fragment.total_n_fragments as usize * FRAGMENT_DSIZE);
-            for frag in session_data.buffer.iter().filter_map(|f| f.as_ref()) {
-                content.extend_from_slice(&frag.data[..frag.length as usize]);
+                pending: total,  // <— inizializzo qui
             }
-            received_fragments.remove(&packet.session_id);
-            return Some(content);
+        });
+
+        // aggiorna timestamp
+        session.last_activity = Instant::now();
+
+        // memorizza solo se nuovo
+        if idx < session.buffer.len() && session.buffer[idx].is_none() {
+            session.buffer[idx] = Some(fragment.clone());
+            session.pending = session.pending.saturating_sub(1);
+
+            self.host.send_logging(format!(
+                "Received fragment, pending: {}, host: {}, session: {}",
+                self.host.id,
+                session_id,session.pending
+            ));
         }
 
+        // invia ACK
+        let ack = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        let _ = self.host.send_packet(ack, None);
+
+        // se finito, reassembly e rimozione
+        if session.pending == 0 {
+            self.host.send_logging( format!(
+                "All fragments received host={} session={}",
+                self.host.id,
+                session_id,
+            ));
+
+            self.host.send_logging(
+                format!("host: {}, session: {}, All fragments received",
+                        self.host.id, session_id));
+
+            let data = session.buffer
+                .iter()
+                .filter_map(|f| f.as_ref())
+                .flat_map(|f| f.data[..f.length as usize].iter().cloned())
+                .collect::<Vec<u8>>();
+
+            received.remove(&session_id);
+            return Some(data);
+        }
         None
     }
 }

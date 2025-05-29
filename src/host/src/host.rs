@@ -6,14 +6,10 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use petgraph::algo::dijkstra;
-use petgraph::graph::{DiGraph, NodeIndex};
-use tracing::{info, warn, error, debug};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use ordered_float::OrderedFloat;
-use crate::host;
 
 pub type FileId = usize;
 pub type MediaId = usize;
@@ -105,8 +101,8 @@ impl Network {
             let pdr = if sent == 0 {
                 0.0
             } else {
-                // PDR = (sent - lost) / sent
-                (sent.saturating_sub(lost)) as f64 / sent as f64
+                // PDR = lost / sent
+                (lost as f64) / (sent as f64)
             };
 
             // Aggiorna ogni arco uscente dal drone
@@ -298,10 +294,13 @@ pub fn generate_unique_session_id() -> u64 {
 impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
-        let log_msg = format!("{}", message);
+        let role = if self.network.servers.contains(&self.id) { "Server" } else { "Client" };
+        let log_msg = format!("[{}] ID {} - {}", role, self.id, message.as_ref());
+
         if let Err(err) = self.log_sender.send(log_msg) {
             eprintln!("Failed to forward logging to controller: {}", err);
         }
+
     }
     fn initiate_flood(&mut self) {
         // Genero subito gli ID, così li posso loggare
@@ -344,65 +343,72 @@ impl Functionality for Host {
         let initiator = flood_request.initiator_id;
         let flood_id = flood_request.flood_id;
         let session_id = packet.session_id;
+        let host = host_id;
 
         self.send_logging(format!(
-            "Host {}: Handling FloodRequest from initiator {} with flood_id {} and session_id {}",
-            host_id, initiator, flood_id, session_id
+            "Handling FloodRequest host={} initiator={} flood_id={} session={}",
+            host,
+            initiator,
+            flood_id,
+            session_id,
         ));
-
-        let seen_flood_ids = self.flood_cache.entry(initiator).or_default();
-
         let mut fr = flood_request.clone();
 
+        // 1) Controllo se ho già visto questo flood_id dall'initiator
+        let seen_flood_ids = self.flood_cache.entry(initiator).or_default();
+
         if seen_flood_ids.contains(&flood_id) {
-            self.send_logging("Duplicate FloodRequest detected".to_string());
+            self.send_logging(format!("Path trace before adding myself: {:?}", fr.path_trace));
 
             fr.increment(host_id, self.type_host);
-
-            let mut response_pkt = fr.generate_response(session_id);
-
-            if response_pkt.routing_header.hop_index < response_pkt.routing_header.hops.len() {
-                let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
-                self.send_logging(format!(
-                    "Host {}: Sending FloodResponse to next hop {:?}. Neighbors: {:?}",
-                    host_id,
-                    next_hop,
-                    self.packet_send.keys().collect::<Vec<_>>()
-                ));
-            } else {
-                self.send_logging(format!(
-                    "Host {}: Invalid hop_index in generated FloodResponse: dropping",
-                    host_id
-                ));
-                return;
-            }
-
-            let result = self.send_packet(response_pkt, None);
+            let host = host_id;
             self.send_logging(format!(
-                "Host {}: FloodResponse sent for duplicate request. Result: {:?}",
-                host_id, result
+                "FloodRequest already seen, sending response immediately host={} initiator={} flood_id={}",
+                host,
+                initiator,
+                flood_id,
+            ));
+            self.send_logging(format!("Path trace after adding myself: {:?}", fr.path_trace));
+            let mut response_pkt = fr.generate_response(session_id);
+            response_pkt.routing_header.hop_index += 1;
+
+            let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
+
+            self.send_logging(format!(
+                "Attempting to send FloodResponse to next hop host={} next_hop={} neighbors={:?}",
+                host_id, next_hop, self.packet_send.keys().collect::<Vec<_>>(),
+            ));
+            let result = self.send_packet(response_pkt, None);
+
+            self.send_logging(format!(
+                "Sent FloodResponse for duplicate FloodRequest host={}, result={}",
+                host_id, result,
             ));
             return;
         }
 
+        // 2) Registriamo il flood_id come visto
         seen_flood_ids.push(flood_id);
 
+        // 3) Verifico chi ha inviato il pacchetto
         let from = match flood_request.path_trace.last() {
             Some(&(node_id, _)) => node_id,
             None => {
-                self.send_logging("Received FloodRequest with empty path-trace: dropping packet".to_string());
+                self.send_logging("Received FloodRequest with empty path-trace! Dropping packet.".to_string());
                 return;
             }
         };
-
+        let host = host_id;
         self.send_logging(format!(
-            "Host {}: FloodRequest arrived from neighbor {}",
-            host_id, from
+            "FloodRequest arrived from neighbor host={} from={}",
+            host,
+            from
         ));
-
+        self.send_logging(format!("Path trace before adding myself: {:?}", fr.path_trace));
+        // 4) Aggiorno path_trace
         fr.increment(host_id, self.type_host);
-        self.send_logging(format!("Updated path_trace: {:?}", fr.path_trace));
-
+        self.send_logging(format!("Path trace after adding myself: {:?}", fr.path_trace));
+        // 5) Inoltro a tutti i vicini (escluso chi me l'ha mandato)
         let neighbors: Vec<_> = self
             .packet_send
             .iter()
@@ -410,55 +416,42 @@ impl Functionality for Host {
             .collect();
 
         if neighbors.is_empty() {
+            // 6a) Fine linea: genero immediatamente FloodResponse
+            self.send_logging(format!("No other neighbors: replying flood immediately host={}", host_id));
+            let mut resp_pkt = fr.generate_response(session_id);
+            resp_pkt.routing_header.hop_index+=1;
+            let next_hop = resp_pkt.routing_header.hops[resp_pkt.routing_header.hop_index];
             self.send_logging(format!(
-                "Host {}: No other neighbors: sending FloodResponse immediately",
-                host_id
+                "Attempting to send FloodResponse to next hop host={} next_hop={} neighbors={:?}",
+                host_id,
+                next_hop,
+                self.packet_send.keys().collect::<Vec<_>>(),
             ));
+            let result = self.send_packet(resp_pkt, None);
 
-            let mut response_pkt = fr.generate_response(session_id);
-
-            if response_pkt.routing_header.hop_index < response_pkt.routing_header.hops.len() {
-                let next_hop = response_pkt.routing_header.hops[response_pkt.routing_header.hop_index];
-                self.send_logging(format!(
-                    "Host {}: Sending FloodResponse to next hop {:?}. Neighbors: {:?}",
-                    host_id,
-                    next_hop,
-                    self.packet_send.keys().collect::<Vec<_>>()
-                ));
-            } else {
-                self.send_logging(format!(
-                    "Host {}: Invalid hop_index in generated FloodResponse from leaf node: dropping",
-                    host_id
-                ));
-                return;
-            }
-
-            let result = self.send_packet(response_pkt, None);
             self.send_logging(format!(
-                "Host {}: FloodResponse sent from leaf node. Result: {:?}",
-                host_id, result
+                "FloodResponse sent from leaf node host={}, result={}",
+                host_id, result,
             ));
         } else {
+            // 6b) Inoltro ai vicini disponibili
             self.send_logging(format!(
-                "Host {}: Forwarding FloodRequest to {} neighbors",
+                "Forwarding FloodRequest to neighbors host={} count={}",
                 host_id,
-                neighbors.len()
+                neighbors.len(),
             ));
-
             for (&nbr, ch) in neighbors {
-                let mut branch_fr = fr.clone();
-                branch_fr.increment(host_id, self.type_host);
-
+                self.send_logging(format!("Forwarding to neighbor host={} neighbor={}",  host_id, nbr));
                 let fwd_pkt = Packet::new_flood_request(
                     packet.routing_header.clone(),
                     session_id,
-                    branch_fr,
+                    fr.clone(),
                 );
-
                 let result = self.send_packet(fwd_pkt, Some(ch));
+
                 self.send_logging(format!(
-                    "Host {}: ForwardFloodRequest to neighbor {} result: {:?}",
-                    host_id, nbr, result
+                    "ForwardFloodRequest result host={} neighbor={} result={}",
+                    host_id, nbr, result,
                 ));
             }
         }
@@ -530,6 +523,20 @@ impl Functionality for Host {
                         next_id,
                     ));
                 }
+                // ——— Aggiungi anche l'arco inverso ———
+                if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
+                    // evita doppioni
+                    if !inv_edges.iter().any(|e| e.to == curr_id) {
+                        inv_edges.push(Edge { to: curr_id, weight: 0.0 });
+                        self.send_logging(format!(
+                            "Recorded adjacency edge host={} from={} to={}",
+                            host_id,
+                            next_id,
+                            curr_id,
+                        ));
+                    }
+                }
+
             } else {
                 self.send_logging(format!(
                     "Current node missing from network.nodes host={} node={}",
@@ -542,7 +549,7 @@ impl Functionality for Host {
         // self.network.recalc_pdr();
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
-        self.send_logging("Sending packet...".to_string());
+        self.send_logging(format!("Sending packet... host={}", self.id));
 
         let next_channel = channel.or_else(|| {
             self.packet_send
@@ -565,7 +572,7 @@ impl Functionality for Host {
                 }
             },
             None => {
-                self.send_logging("No valid channel found for sending packet.".to_string());
+                self.send_logging(format!("No valid channel found for sending packet. host={}", self.id));
                 if let Err(e) = self.sendto_controller(packet) {
                     self.send_logging(format!("Error, notifying controller: {}", e));
                 }
@@ -898,26 +905,9 @@ impl Functionality for Host {
         Packet::new_ack(routing_header, packet.session_id, fragment_index.unwrap_or(0))
     }
 }
-
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ClientCommand{
-    ServerType,
-    //content-server
-    FilesList,
-    File(FileId),
-
-    MediaList,
-    Media(MediaId),
-
-    //chat-server
-    RegistrationToChat,
-    ClientList,
-    MessageFor(ClientId, Message),
-
-}
-pub enum NetCommand {
-    Net(ClientCommand),
-    ControllerShortcut(Packet),
+pub enum HostCommand {
+    AddSender(NodeId, Sender<Packet>),
+    RemoveSender(NodeId),
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerToClient{
@@ -930,7 +920,7 @@ pub enum ServerToClient{
     Media(MediaId, Image),
 
     ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, Message),
+    MessageFrom(ClientId, String),
 
     ErrNotFound,
     ErrClientId

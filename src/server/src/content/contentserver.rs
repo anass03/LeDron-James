@@ -1,16 +1,14 @@
 use std::collections::HashMap;
 use std::{env, fs, io};
-use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
-use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
+use host::{ServerToClient, ServerTypes, generate_unique_session_id, Message, Functionality, HostEvent, HostCommand,ClientNetCommand};
 use delegate::delegate;
-use host::ServerTypes::Content;
-use regex::Regex;
+
 
 pub struct ContentServer {
     info: GenServer,
@@ -18,9 +16,11 @@ pub struct ContentServer {
     media: Vec<usize>,
 }
 
+
 pub trait ContentServerBehavior: MediaServer + TextServer {
-    fn handling_packets(&mut self, packet: Result<Packet, crossbeam_channel::RecvError>);
+    fn handling_packets(&mut self, packet: Packet);
 }
+
 
 impl ContentServer {
     delegate! {
@@ -33,18 +33,19 @@ impl ContentServer {
             fn send_logging(&self, message: String);
         }
         to self.info {
-            fn create_message(&mut self, data: Vec<u8>, destination: NodeId);
+            fn handle_sim_command(&mut self, cmd: HostCommand);
             fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
         }
     }
 
+    
     pub fn new(
         id: NodeId,
         type_host: NodeType,
         connected_drone_ids: Vec<NodeId>,
         controller_send: Sender<HostEvent>,
-        controller_recv: Receiver<NetCommand>,
+        controller_recv: Receiver<HostCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         log_sender: Sender<String>,
@@ -66,6 +67,7 @@ impl ContentServer {
         }
     }
 
+    
     pub fn run(&mut self) {
         self.initiate_flood();
         self.send_logging(format!("Starting Content Server..."));
@@ -73,21 +75,20 @@ impl ContentServer {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
                     if let Ok(command) = cmd {
-                       // self.handle_command(command);
+                       self.handle_sim_command(command);
                     }
                 }
-                
                 recv(self.info.host.packet_recv) -> pkt => {
                     if let Ok(packet) = pkt {
-                         self.handling_packets(Ok(packet)) 
+                         self.handling_packets(packet)
                     }
                 }
-                
                 default(Duration::from_millis(10)) => {}
             }
         }
     }
 
+    
     fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         match serde_json::to_vec(&response) {
             Ok(data) => {
@@ -96,36 +97,34 @@ impl ContentServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!("[Server] ID {} - Failed to send response to {}: {}",self.info.host.id, destination, e));
+                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
                 }
             }
             Err(e) => {
-                self.send_logging(format!("[Server] ID {} - Failed to serialize ServerToClient: {}",self.info.host.id, e));
+                self.send_logging(format!(" Failed to serialize ServerToClient: {}", e));
             }
         }
     }
 
+    
     pub fn count_files(&mut self) {
-        // // CARGO_MANIFEST_DIR → ".../LeDron-James/src/server"
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        
         let files_dir  = manifest_dir.join("src/content/files");
         let images_dir = manifest_dir.join("src/content/images");
-        self.send_logging(format!("[Server] ID {} - Files directory: {}",self.info.host.id, files_dir.to_str().unwrap().to_string()));
-        self.send_logging(format!("[Server] ID {} - Images directory: {}",self.info.host.id, images_dir.to_str().unwrap().to_string()));
+        self.send_logging(format!(" Files directory: {}", files_dir.to_str().unwrap().to_string()));
+        self.send_logging(format!(" Images directory: {}", images_dir.to_str().unwrap().to_string()));
         // il resto rimane invariato
         if let Ok(media) = self.list_media_ids(&images_dir) {
             self.media = media;
-            self.send_logging(format!("[Server] ID {} - media -> {:?}",self.info.host.id, self.media));
-            // println!("media -> {:?}", media);
+            self.send_logging(format!(" media -> {:?}", self.media));
         }
         if let Ok(files) = self.list_media_ids(&files_dir) {
             self.files = files;
-            self.send_logging(format!("[Server] ID {} - files -> {:?}",self.info.host.id, self.files));
-            // println!("files -> {:?}",files);
+            self.send_logging(format!(" files -> {:?}", self.files));
         }
     }
 
+    
     pub fn list_media_ids<P: AsRef<Path>>(&self, folder_path: P) -> io::Result<Vec<usize>> {
         let mut ids = Vec::new();
         for entry in fs::read_dir(&folder_path)? {
@@ -151,31 +150,33 @@ impl ContentServer {
         ids.sort_unstable();
         Ok(ids)
     }
-    fn handle_command(&mut self, cmd: ClientCommand, destination: NodeId) {
+    
+    
+    fn handle_command(&mut self, cmd: ClientNetCommand, destination: NodeId) {
         match cmd {
-            ClientCommand::ServerType => {
+            ClientNetCommand::ServerType => {
                 if let Ok(server_type)=self.servertype(){
                     self.send_response(ServerToClient::ServerType(server_type),destination);
                 }else{
                     self.send_logging(format!("[Server] ID {} - Failed to send ServerToClient::ServerType",self.info.host.id));
                 }
             }
-            ClientCommand::FilesList => {
+            ClientNetCommand::FilesList => {
                  self.count_files();
                 self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
-            ClientCommand::File(id) => {
+            ClientNetCommand::File(id) => {
                 if let Ok(data) = Self::convert_file(id) {
                     self.send_response(ServerToClient::File(id, data), destination);
                 } else {
                     self.send_response(ServerToClient::ErrNotFound, destination);
                 }
             }
-            ClientCommand::MediaList => {
+            ClientNetCommand::MediaList => {
                  self.count_files();
                 self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
-            ClientCommand::Media(id) => {
+            ClientNetCommand::Media(id) => {
                 if let Ok(image) = Self::process_image(id) {
                     self.send_response(ServerToClient::Media(id, image), destination);
                 } else {
@@ -187,30 +188,30 @@ impl ContentServer {
             }
         }
     }
-}
-
-impl ContentServerBehavior for ContentServer {
-    fn handling_packets(&mut self, packet: Result<Packet, crossbeam_channel::RecvError>) {
-        if let Ok(packet) = packet {
-            match packet.clone().pack_type {
-                PacketType::Nack(nack) => {
-                    self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id)
-                }
-                PacketType::Ack(ack) => self.handle_ack(ack, packet.session_id),
-                PacketType::FloodResponse(r) => self.process_flood_response(r),
-                PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
-                PacketType::MsgFragment(fragment) => {
-                    if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
-                        match serde_json::from_slice::<ClientCommand>(&data) {
-                            Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                            Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
-                        }
+    
+    
+    fn handling_packets(&mut self, packet: Packet) {
+        match packet.clone().pack_type {
+            PacketType::Nack(nack) => {
+                self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id)
+            }
+            PacketType::Ack(ack) => self.handle_ack(ack, packet.session_id),
+            PacketType::FloodResponse(r) => self.process_flood_response(r),
+            PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
+            PacketType::MsgFragment(fragment) => {
+                if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
+                    match serde_json::from_slice::<ClientNetCommand>(&data) {
+                        Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
+                        Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
                     }
+                }else {
+                    self.send_logging("The packet is not complete and server is waiting".to_string());
                 }
             }
         }
     }
 }
+
 
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
