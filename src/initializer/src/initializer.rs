@@ -7,10 +7,9 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
 use client::Client as LeClient;
-use host::ServerTypes;
-use server::{ContentServer as LeContentServer, GenServer};
+use server::{ContentServer as LeContentServer};
 use server::ChatServer as LeChatServer;
-use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerType {
@@ -26,9 +25,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             config = temp;
         },
         Err(e) => {
-            // Possibilità di recupero generando una nuova toml oppure inizializzando solo
-            // il simulation_controller che poi si preouccuperà di rifar
-            // partire la simulazione
             return Err(e.to_string());
         }
     }
@@ -53,7 +49,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     }
 
     for client in config.client.iter() {
-        // for each client in the config we create the packet sender and receiver and we insert them
+        // for each client in the config we create the packet sender and receiver, and we insert them
         // in the related hashmap
         let (s, r) = unbounded();
         packet_senders.insert(client.id, s);
@@ -61,7 +57,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     }
 
     for server in config.server.iter() {
-        // for each server in the config we create the packet sender and receiver and we insert them
+        // for each server in the config we create the packet sender and receiver, and we insert them
         // in the related hashmap
         let (s, r) = unbounded();
         packet_senders.insert(server.id, s);

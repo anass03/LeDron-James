@@ -1,6 +1,5 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
-use colored::Colorize;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -110,7 +109,4 @@ impl Logs{
             self.log_scroll_offset += 1;
         }
     }
-}
-pub fn log(txt: &str) {
-    println!("{} - {}",Colorize::on_green("SimulationController"), Colorize::on_green(txt))
 }

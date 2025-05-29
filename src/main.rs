@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
-use simulation_controller::backend::simulation_controller::{log, Logs, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::{Logs, SimulationControllerData};
 use initializer::initializer::initialize;
 
 fn main() -> std::io::Result<()> {
@@ -23,7 +23,7 @@ fn main() -> std::io::Result<()> {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;
         },
-        Err(error) => {log(format!("{}", error).as_str());}
+        Err(error) => {println!("[Simulation Controller] - Failed to initialize: {}", error);}
     }
 
     let mut terminal = ratatui::init();
@@ -34,7 +34,7 @@ fn main() -> std::io::Result<()> {
 
     for (node_id, handle) in thread_handles {
         handle.join().unwrap();
-        log(&format!("Closing thread of node: {:?}", node_id));
+        println!("[Simulation Controller] - Closing thread of node: {:?}", node_id);
     }
 
     app_result

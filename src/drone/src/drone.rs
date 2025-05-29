@@ -130,14 +130,14 @@ impl Drone {
                     self.handle_packet(packet);
                 }
                 PacketType::FloodRequest(_) => {
-                    self.log("Dropping packet...");
+                    self.log("[crashed] Dropping packet...");
                     self.send_packet(
                         Self::build_packet_nack(packet, ErrorInRouting(self.id), None),
                         None,
                     );
                 }
                 PacketType::MsgFragment(fragment_id) => {
-                    self.log("Dropping packet...");
+                    self.log("[crashed] Dropping packet...");
                     self.send_packet(
                         Self::build_packet_nack(
                             packet,
@@ -301,20 +301,21 @@ impl Drone {
             }
             DroneCommand::SetPacketDropRate(newpdr) => {
                 self.pdr = newpdr;
+                self.log(format!("PDR set to: {}", newpdr));
             }
             DroneCommand::AddSender(nodeid, senderchannel) => {
                 match self.packet_send.insert(nodeid, senderchannel) {
                     Some(_) => {
-                        self.log("Added sender channel");
+                        self.log("Channel already present!");
                     }
                     None => {
-                        self.log("Failed to add sender channel");
+                        self.log("Successfully added sender!");        //changed
                     }
                 }
             }
             DroneCommand::RemoveSender(nodeid) => match self.packet_send.remove(&nodeid) {
-                Some(_) => self.log("Successfully removed!"),
-                None => self.log("Failed to remove sender!"),
+                Some(_) => self.log("Successfully removed sender!"),
+                None => self.log("No sender found to be removed!"),
             },
         }
     } // Simple function that handles the Simulation Controller commands sent to the drone
@@ -457,7 +458,7 @@ impl Drone {
         };
         return_packet
     }
-    fn build_packet_nack(
+    /*fn build_packet_nack(
         packet: Packet,
         nack_id: NackType,
         optional_fragment_index: Option<u64>,
@@ -466,12 +467,45 @@ impl Drone {
             session_id: packet.session_id,
             routing_header: {
                 let mut old_srh = packet.routing_header;
-                old_srh = old_srh.sub_route(0..=old_srh.hop_index).unwrap();
+                old_srh = old_srh.sub_route(0..=old_srh.hop_index).unwrap();        //problem here (panic)
                 old_srh.reverse();
                 old_srh.hop_index = 1;
                 //println!("Building Nack [{:?}]...", nack_id);
                 old_srh
             },
+            pack_type: PacketType::Nack(Nack {
+                fragment_index: optional_fragment_index.unwrap_or(0),
+                nack_type: nack_id,
+            }),
+        }
+    }*/
+
+    fn build_packet_nack(
+        packet: Packet,
+        nack_id: NackType,
+        optional_fragment_index: Option<u64>,
+    ) -> Packet {
+        let mut routing_header = packet.routing_header;
+
+        if routing_header.hop_index < routing_header.hops.len() {
+            if let Some(mut sub_route) = routing_header.sub_route(0..=routing_header.hop_index) {
+                sub_route.reverse();
+                sub_route.hop_index = 1;
+                routing_header = sub_route;
+            } else {
+                //self.log("Failed to build sub_route for Nack packet: invalid range.");
+            }
+        } else {
+            /*self.log(&format!(
+                "Invalid hop_index {} out of bounds for hops length {}",
+                routing_header.hop_index,
+                routing_header.hops.len()
+            ));*/
+        }
+
+        Packet {
+            session_id: packet.session_id,
+            routing_header,
             pack_type: PacketType::Nack(Nack {
                 fragment_index: optional_fragment_index.unwrap_or(0),
                 nack_type: nack_id,
@@ -499,7 +533,7 @@ impl Drone {
             None => {
                 let channeltosend = self
                     .packet_send
-                    .get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);
+                    .get(&packet.clone().routing_header.hops[packet.routing_header.hop_index]);     //error here (panic)
                 match channeltosend {
                     Some(ch) => {
                         match ch.send(packet.clone()) {

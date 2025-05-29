@@ -14,9 +14,21 @@ impl SimulationControllerData {
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
-                    Ok(_) => {Ok(())
-                        /*//removing all connected channels
-                        for connected_node in self.drones.*/
+                    Ok(_) => {
+                        //removing all neighboring channels
+                        let mut neighbors = vec![];
+                        match self.drones.get((drone_id as usize) - 1) {
+                            Some(drone) => {
+                                for neighbor in drone.connected_node_ids.iter() {
+                                    neighbors.push(*neighbor);
+                                }
+                            },
+                            None => { return Err(format!("[Simulation Controller] Drone {drone_id} does not exist")); }
+                        }
+                        for neighbor in neighbors.iter() {
+                            self.remove_sender(drone_id, *neighbor)?
+                        }
+                        Ok(())
                     },
                     Err(e) => Err(format!("[Simulation Controller] - Error sending crash command - {}", e.to_string())),
                 }
@@ -25,7 +37,14 @@ impl SimulationControllerData {
         }
     }
 
+
     pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+        /*match self.drones.get((node_id as usize) - 1) {
+            Some(drone) => {
+                    self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Drone {node_id} neighbors: {:?}", drone.connected_node_ids).as_str())
+            },
+            None => { return Err(format!("[Simulation Controller] Drone {node_id} does not exist")); }
+        }*/
         //checking if packet sender for forward node exists
         match self.packet_sender.get(&sender_id) {
             Some(forward_packet_sender) => {
@@ -47,14 +66,30 @@ impl SimulationControllerData {
                                             Some(backward_command_sender) => {
                                                 //trying to send command backwards
                                                 match backward_command_sender.send(backwards_command) {
-                                                    Ok(()) => Ok(()),
-                                                    Err(e) => Err(e.to_string()),
+                                                    Ok(()) => {
+                                                        //adding neighbors to connected_node_ids vector
+                                                        for mut drone in self.drones.iter_mut() {
+                                                            if drone.id == node_id && !drone.connected_node_ids.contains(&sender_id) {
+                                                                drone.connected_node_ids.push(sender_id);
+                                                            }
+                                                            if drone.id == sender_id && !drone.connected_node_ids.contains(&node_id){
+                                                                drone.connected_node_ids.push(node_id);
+                                                            }
+                                                        }
+                                                        /*match self.drones.get((node_id as usize) - 1) {
+                                                            Some(drone) => {
+                                                                self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Drone {node_id} updated neighbors: {:?}", drone.connected_node_ids).as_str())
+                                                            },
+                                                            None => { return Err(format!("[Simulation Controller] Drone {node_id} does not exist")); }
+                                                        }*/
+                                                        Ok(()) },
+                                                    Err(e) => Err(format!("[Simulation Controller] - {}", e.to_string())),
                                                 }
                                             },
                                             None => Err(format!("[Simulation Controller] - Drone {sender_id} command sender not found")),
                                         }
                                     },
-                                    Err(e) => Err(e.to_string())
+                                    Err(e) => Err(format!("[Simulation Controller] - {}", e.to_string())),
                                 }
                             },
                             None => Err(format!("[Simulation Controller] - Drone {node_id} command sender not found")),
@@ -82,7 +117,17 @@ impl SimulationControllerData {
                             Some(backward_command_sender) => {
                                 //trying to send command backwards
                                 match backward_command_sender.send(backwards_command) {
-                                    Ok(()) => Ok(()),
+                                    Ok(()) => {
+                                        //removing neighbors from connected_node_ids vector
+                                        for mut drone in self.drones.iter_mut() {
+                                            if drone.id == node_id && drone.connected_node_ids.contains(&sender_id) {
+                                                drone.connected_node_ids.retain(|x| *x != sender_id);
+                                            }
+                                            if drone.id == sender_id && drone.connected_node_ids.contains(&node_id){
+                                                drone.connected_node_ids.retain(|x| *x != node_id);
+                                            }
+                                        }
+                                        Ok(()) },
                                     Err(e) => Err(e.to_string()),
                                 }
                             },
@@ -103,12 +148,13 @@ impl SimulationControllerData {
         } else {
             return Err(format!("[Simulation Controller] - Invalid pdr value: {} | 0.0 < pdr < 1.0", new_pdr));
         }
-        let command = DroneCommand::SetPacketDropRate(new_pdr);
-        self.drone_command_sender.get(&drone_id).unwrap().send(DroneCommand::SetPacketDropRate(new_pdr)).expect("error setting pdr");
+        let command = DroneCommand::SetPacketDropRate(valid_pdr);
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
-                    Ok(()) => Ok(()),
+                    Ok(()) => {
+                        self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Changing Drone {drone_id} pdr to: {valid_pdr}").as_str());
+                        Ok(()) },
                     Err(e) => Err(e.to_string()),
                 }
             },
@@ -141,6 +187,10 @@ impl SimulationControllerData {
                 },
             }
         }*/
+
+        /*for drone in self.drones.iter() {
+            self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Drone {} neighbors: {:?}",drone.id, drone.connected_node_ids).as_str())
+        }*/
         Ok(())
     }
 
@@ -151,7 +201,7 @@ impl SimulationControllerData {
             Some(client_command_sender) => {
                 match client_command_sender.send(command) {
                     Ok(()) => Ok(()),
-                    Err(e) => Err(e.to_string()),
+                    Err(e) => Err(format!("[Simulation Controller] - {}", e.to_string())),
                 }
             },
             None => Err(format!("[Simulation Controller] - Client {client_id} command sender not found")),
@@ -237,12 +287,12 @@ impl SimulationControllerData {
     }
 }
 
-fn handle_packet (_packet: &Packet) {
-    /*match packet.clone().pack_type {
+/*fn handle_packet (_packet: &Packet) {
+    match packet.clone().pack_type {
         PacketType::MsgFragment(fragment) => {}
         PacketType::Ack(ack) => {}
         PacketType::Nack(nack) => {}
         PacketType::FloodRequest(flood_request) => {}
         PacketType::FloodResponse(flood_response) => {}
-    }*/
-}
+    }
+}*/
