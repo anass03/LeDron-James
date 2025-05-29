@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::{env, fs, io};
+use std::fmt::format;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, Packet, PacketType};
+use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ClientCommand, ServerToClient, ServerTypes, generate_unique_session_id, Message, NetCommand, Functionality, HostEvent};
 use delegate::delegate;
@@ -24,7 +25,6 @@ pub trait ContentServerBehavior: MediaServer + TextServer {
 impl ContentServer {
     delegate! {
         to self.info.host {
-            //fn log<S: AsRef<str>>(&self, message: S);
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
@@ -41,7 +41,7 @@ impl ContentServer {
 
     pub fn new(
         id: NodeId,
-        type_host: wg_2024::packet::NodeType,
+        type_host: NodeType,
         connected_drone_ids: Vec<NodeId>,
         controller_send: Sender<HostEvent>,
         controller_recv: Receiver<NetCommand>,
@@ -61,14 +61,14 @@ impl ContentServer {
                 ServerTypes::Content,
                 log_sender
             ),
-            files: Vec::new(),
-            media: Vec::new(),
+            files: vec![],
+            media: vec![],
         }
     }
 
     pub fn run(&mut self) {
         self.initiate_flood();
-        self.send_logging("Starting Content Server...".to_string());
+        self.send_logging(format!("Starting Content Server..."));
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
@@ -96,11 +96,11 @@ impl ContentServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                    self.send_logging(format!("[Server id={}] Failed to send response to {}: {}",self.info.host.id, destination, e));
                 }
             }
             Err(e) => {
-                self.send_logging(format!("Failed to serialize ServerToClient: {}", e));
+                self.send_logging(format!("[Server id={}] Failed to serialize ServerToClient: {}",self.info.host.id, e));
             }
         }
     }
@@ -111,17 +111,17 @@ impl ContentServer {
         
         let files_dir  = manifest_dir.join("src/content/files");
         let images_dir = manifest_dir.join("src/content/images");
-        self.send_logging(format!("Files directory: {}", files_dir.to_string_lossy()));
-        self.send_logging(format!("Images directory: {}", images_dir.to_string_lossy()));
+        self.send_logging(format!("[Server id={}] Files directory: {}",self.info.host.id, files_dir.to_str().unwrap().to_string()));
+        self.send_logging(format!("[Server id={}] Images directory: {}",self.info.host.id, images_dir.to_str().unwrap().to_string()));
         // il resto rimane invariato
         if let Ok(media) = self.list_media_ids(&images_dir) {
             self.media = media;
-            self.send_logging(format!("media -> {:?}", self.media));
+            self.send_logging(format!("[Server id={}] media -> {:?}",self.info.host.id, self.media));
             // println!("media -> {:?}", media);
         }
         if let Ok(files) = self.list_media_ids(&files_dir) {
             self.files = files;
-            self.send_logging(format!("files -> {:?}", self.files));
+            self.send_logging(format!("[Server id={}] files -> {:?}",self.info.host.id, self.files));
             // println!("files -> {:?}",files);
         }
     }
@@ -157,7 +157,7 @@ impl ContentServer {
                 if let Ok(server_type)=self.servertype(){
                     self.send_response(ServerToClient::ServerType(server_type),destination);
                 }else{
-                    self.send_logging(format!("Failed to send ServerToClient::ServerType"));
+                    self.send_logging(format!("[Server id={}] Failed to send ServerToClient::ServerType",self.info.host.id));
                 }
             }
             ClientCommand::FilesList => {

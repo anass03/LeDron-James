@@ -60,7 +60,7 @@ impl ChatServer {
 
     pub fn run(&mut self) {
         self.initiate_flood();
-        self.send_logging("Starting Chat Server...".to_string());
+        self.send_logging(format!("Starting Chat Server..."));
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
@@ -88,11 +88,11 @@ impl ChatServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                    self.send_logging(format!("[Server id={}]  Failed to send response to {}: {}",self.info.host.id, destination, e));
                 }
             }
             Err(e) => {
-                self.send_logging(format!("Failed to serialize ServerToClient: {}", e));
+                self.send_logging(format!("[Server id={}] Failed to serialize ServerToClient: {}",self.info.host.id, e));
             }
         }
     }
@@ -100,18 +100,18 @@ impl ChatServer {
     fn handle_command(&mut self, cmd: ClientCommand, destination: NodeId) {
         match cmd {
             ClientCommand::ServerType => {
-                if let Ok(server_type)=self.servertype(){
-                    self.send_response(ServerToClient::ServerType(server_type),destination);
-                }else{
-                    self.send_logging(format!("Failed to send ServerToClient::ServerType"));
+                if let Ok(server_type) = self.servertype() {
+                    self.send_response(ServerToClient::ServerType(server_type), destination);
+                } else {
+                    self.send_logging(format!("[Server id={}] Failed to send ServerToClient::ServerType", self.info.host.id));
                 }
             }
             ClientCommand::RegistrationToChat => {
                 if !self.client_list.contains(&destination) {
                     self.client_list.push(destination);
-                    self.send_logging(format!("Registered new client to chat: {}", destination));
+                    self.send_logging(format!("[Server id={}] Registered new client to chat: {}",self.info.host.id, destination));
                 }else{
-                    self.send_logging(format!("Registration from {} already exists!", destination));
+                    self.send_logging(format!("[Server id={}] Registration from {} already exists!",self.info.host.id, destination));
                 }
             }
             ClientCommand::ClientList => {
@@ -121,9 +121,9 @@ impl ChatServer {
                 match self.check_if_in_client_list(destination) {
                     true => {match self.check_if_in_client_list(dest) {
                         true => {self.send_response(ServerToClient::MessageFrom(destination, msg), dest)}
-                        false => {self.send_logging("The destination is not registered to client chat".to_string())}
+                        false => {self.send_logging(format!("[Server id={}] The destination is not registered to client chat",self.info.host.id));}
                     }}
-                    false => {self.send_logging("You're not registered to client chat".to_string())}
+                    false => {self.send_logging(format!("[Server id={}] You're not registered to client chat",self.info.host.id))}
                 }
             }
             _ => {
