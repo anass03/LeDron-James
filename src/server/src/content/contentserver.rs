@@ -161,7 +161,7 @@ impl ContentServer {
                 }
             }
             ClientCommand::FilesList => {
-                // self.count_files();
+                 self.count_files();
                 self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
             ClientCommand::File(id) => {
@@ -172,7 +172,7 @@ impl ContentServer {
                 }
             }
             ClientCommand::MediaList => {
-                // self.count_files();
+                 self.count_files();
                 self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
             ClientCommand::Media(id) => {
