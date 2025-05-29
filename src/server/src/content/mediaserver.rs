@@ -1,38 +1,45 @@
 use std::error::Error;
+use std::{fs, io};
 use reqwest;
 use std::io::Cursor;
+use std::path::{Path, PathBuf};
 use image::ImageReader;
 use image::DynamicImage;
-use host::Image;
+use host::{Image, MediaId};
 
 pub trait MediaServer {
-    fn load_image_from_url(url: &str) -> Result<DynamicImage, Box<dyn Error>> {
-        let response = reqwest::blocking::get(url)?;
-        if !response.status().is_success() {
-            Err(format!("Failed to fetch image: HTTP {}", response.status()).into())
-        } else {
-            let image_data = response.bytes()?;
-            let cursor = Cursor::new(image_data);
-            let img = ImageReader::new(cursor)
-                .with_guessed_format()?
-                .decode()?;
-            Ok(img)
+    fn read_file_any<P: AsRef<Path>>(folder: P, id: usize, exts: &[&str]) -> io::Result<Vec<u8>> {
+        let base: &Path = folder.as_ref();
+        for ext in exts {
+            let candidate = base.join(format!("i{}.{}", id, ext));
+            if candidate.exists() {
+                return fs::read(candidate);
+            }
         }
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Nessun file {} con estensioni {:?} in {:?}", id, exts, base),
+        ))
     }
+    
+        /// Carica un’immagine PNG/JPEG locale con nome numerico 
+        fn process_image(id: MediaId) -> Result<Image, Box<dyn Error>> {
+            let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 
-    fn process_image(id: String) -> Result<Image, Box<dyn Error>> {
-        let base_path = "https://raw.githubusercontent.com/leooon3/LeDron-James/tree/server/src/server/images/";
-        let file_name = format!("{}.jpg", id);
-        let path = format!("{}{}", base_path, file_name);
-        let img = Self::load_image_from_url(&path)?;
-        let width = img.width();
-        let height = img.height();
-        let img = img.to_rgba8();
-        let raw_bytes = img.to_vec();
-        Ok(Image {
+            let images_dir  = manifest_dir.join("src/content/images");
+            let id_num = id;
+                let data = Self::read_file_any(images_dir, id_num, &["png", "jpeg", "jpg"])?;
+            // Decodifica da bytes a DynamicImage
+            let img = ImageReader::new(Cursor::new(data))
+            .with_guessed_format()?
+            .decode()?;
+            let width = img.width();
+            let height = img.height();
+            let rgba = img.to_rgba8();
+            Ok(Image {
             width,
             height,
-            data: raw_bytes,
-        })
-    }
+            data: rgba.to_vec(),
+            })
+        }
 }

@@ -96,11 +96,11 @@ impl ContentServer {
                     content: data,
                 };
                 if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!("[Server id={}] Failed to send response to {}: {}",self.info.host.id, destination, e));
+                    self.send_logging(format!("[Server] ID {} - Failed to send response to {}: {}",self.info.host.id, destination, e));
                 }
             }
             Err(e) => {
-                self.send_logging(format!("[Server id={}] Failed to serialize ServerToClient: {}",self.info.host.id, e));
+                self.send_logging(format!("[Server] ID {} - Failed to serialize ServerToClient: {}",self.info.host.id, e));
             }
         }
     }
@@ -111,17 +111,17 @@ impl ContentServer {
         
         let files_dir  = manifest_dir.join("src/content/files");
         let images_dir = manifest_dir.join("src/content/images");
-        self.send_logging(format!("[Server id={}] Files directory: {}",self.info.host.id, files_dir.to_str().unwrap().to_string()));
-        self.send_logging(format!("[Server id={}] Images directory: {}",self.info.host.id, images_dir.to_str().unwrap().to_string()));
+        self.send_logging(format!("[Server] ID {} - Files directory: {}",self.info.host.id, files_dir.to_str().unwrap().to_string()));
+        self.send_logging(format!("[Server] ID {} - Images directory: {}",self.info.host.id, images_dir.to_str().unwrap().to_string()));
         // il resto rimane invariato
         if let Ok(media) = self.list_media_ids(&images_dir) {
             self.media = media;
-            self.send_logging(format!("[Server id={}] media -> {:?}",self.info.host.id, self.media));
+            self.send_logging(format!("[Server] ID {} - media -> {:?}",self.info.host.id, self.media));
             // println!("media -> {:?}", media);
         }
         if let Ok(files) = self.list_media_ids(&files_dir) {
             self.files = files;
-            self.send_logging(format!("[Server id={}] files -> {:?}",self.info.host.id, self.files));
+            self.send_logging(format!("[Server] ID {} - files -> {:?}",self.info.host.id, self.files));
             // println!("files -> {:?}",files);
         }
     }
@@ -157,7 +157,7 @@ impl ContentServer {
                 if let Ok(server_type)=self.servertype(){
                     self.send_response(ServerToClient::ServerType(server_type),destination);
                 }else{
-                    self.send_logging(format!("[Server id={}] Failed to send ServerToClient::ServerType",self.info.host.id));
+                    self.send_logging(format!("[Server] ID {} - Failed to send ServerToClient::ServerType",self.info.host.id));
                 }
             }
             ClientCommand::FilesList => {
@@ -165,7 +165,7 @@ impl ContentServer {
                 self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
             ClientCommand::File(id) => {
-                if let Ok(data) = Self::convert_file(id.to_string()) {
+                if let Ok(data) = Self::convert_file(id) {
                     self.send_response(ServerToClient::File(id, data), destination);
                 } else {
                     self.send_response(ServerToClient::ErrNotFound, destination);
@@ -176,7 +176,7 @@ impl ContentServer {
                 self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
             ClientCommand::Media(id) => {
-                if let Ok(image) = Self::process_image(id.to_string()) {
+                if let Ok(image) = Self::process_image(id) {
                     self.send_response(ServerToClient::Media(id, image), destination);
                 } else {
                     self.send_response(ServerToClient::ErrNotFound, destination);
