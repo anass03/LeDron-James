@@ -4,7 +4,7 @@ use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
 use std::{thread};
 use std::time::{Duration, Instant};
-use host::{ClientCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
 
@@ -166,10 +166,10 @@ impl Client {
             // Command network serializable
             NetCommand::Net(cmd) => {
                 match cmd {
-                    ClientCommand::FilesList => {
+                    HostCommand::FilesList => {
                         self.host.send_logging("Preparing FilesList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&ClientCommand::FilesList) {
+                            match serde_json::to_vec(&HostCommand::FilesList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -191,10 +191,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::File(id) => {
+                    HostCommand::File(id) => {
                         self.host.send_logging(format!("Preparing File({}) request", id));
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&ClientCommand::File(id)) {
+                            match serde_json::to_vec(&HostCommand::File(id)) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -215,10 +215,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::MediaList => {
+                    HostCommand::MediaList => {
                         self.host.send_logging("Preparing MediaList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&ClientCommand::MediaList) {
+                            match serde_json::to_vec(&HostCommand::MediaList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -239,10 +239,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::Media(id) => {
+                    HostCommand::Media(id) => {
                         self.host.send_logging(format!("Preparing Media({}) request", id));
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&ClientCommand::Media(id)) {
+                            match serde_json::to_vec(&HostCommand::Media(id)) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -263,10 +263,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::RegistrationToChat => {
+                    HostCommand::RegistrationToChat => {
                         self.host.send_logging("Preparing RegistrationToChat request".to_string());
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                        match serde_json::to_vec(&ClientCommand::RegistrationToChat) {
+                        match serde_json::to_vec(&HostCommand::RegistrationToChat) {
                             Ok(content) => {
                                 let message = Message {
                                     session_id: generate_unique_session_id(),
@@ -287,10 +287,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::ClientList => {
+                    HostCommand::ClientList => {
                         self.host.send_logging("Preparing ClientList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                            match serde_json::to_vec(&ClientCommand::ClientList) {
+                            match serde_json::to_vec(&HostCommand::ClientList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -311,10 +311,10 @@ impl Client {
                         }
                     }
 
-                    ClientCommand::MessageFor(client_id, msg) => {
+                    HostCommand::MessageFor(client_id, msg) => {
                         self.host.send_logging(format!("Preparing MessageFor({}, …) request", client_id));
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                            match serde_json::to_vec(&ClientCommand::MessageFor(client_id, String::from(msg))) {
+                            match serde_json::to_vec(&HostCommand::MessageFor(client_id, String::from(msg))) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -332,6 +332,28 @@ impl Client {
                             }
                         } else {
                             self.host.send_logging(format!("No chat server available for MessageFor({})", client_id));
+                        }
+                    }
+                    HostCommand::AddSender(id, sender) => {
+                        let current = self.host.packet_send.len();
+                        if self.host.packet_send.contains_key(&id) {
+                            self.host.send_logging("Channel already present!".to_string());
+                        } else if current >= 2 {
+                            self.host.send_logging("Cannot add more than 2 channels: limit reached".to_string());
+                        } else {
+                            self.host.packet_send.insert(id, sender);
+                            self.host.send_logging("Successfully added sender!".to_string());
+                        }
+                    }
+                    HostCommand::RemoveSender(id) => {
+                        let current = self.host.packet_send.len();
+                        if !self.host.packet_send.contains_key(&id) {
+                            self.host.send_logging("Channel not found!".to_string());
+                        } else if current <= 1 {
+                            self.host.send_logging("Cannot remove last channel: at least one connection required".to_string());
+                        } else {
+                            self.host.packet_send.remove(&id);
+                            self.host.send_logging("Successfully removed sender!".to_string());
                         }
                     }
                     _ => {
@@ -464,7 +486,7 @@ impl Client {
         for server_id in self.host.network.servers.clone() {
             self.host.send_logging(format!("Requesting server type from node {}", server_id));
 
-            match serde_json::to_vec(&ClientCommand::ServerType) {
+            match serde_json::to_vec(&HostCommand::ServerType) {
                 Ok(content) => {
                     let message = Message {
                         session_id: generate_unique_session_id(),

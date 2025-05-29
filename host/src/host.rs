@@ -904,23 +904,27 @@ impl Functionality for Host {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum ClientCommand{
-    ServerType,
-    //content-server
-    FilesList,
-    File(FileId),
+pub enum HostCommand {
+    //client command
+        ServerType,
+        //content-server
+        FilesList,
+        File(FileId),
 
-    MediaList,
-    Media(MediaId),
+        MediaList,
+        Media(MediaId),
 
-    //chat-server
-    RegistrationToChat,
-    ClientList,
-    MessageFor(ClientId, String),
+        //chat-server
+        RegistrationToChat,
+        ClientList,
+        MessageFor(ClientId, String),
 
+    //client/server command
+        AddSender(NodeId, Sender<Packet>),
+        RemoveSender(NodeId),
 }
 pub enum NetCommand {
-    Net(ClientCommand),
+    Net(HostCommand),
     ControllerShortcut(Packet),
 }
 #[derive(Serialize, Deserialize, Debug)]
