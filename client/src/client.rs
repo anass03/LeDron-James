@@ -4,21 +4,21 @@ use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
 use std::{thread};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, NetCommand, HostEvent, SendingCodes};
+use serde::{Deserialize, Serialize};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
 
 pub struct Client {
     host: Host,
-    controller_recv:Receiver<NetCommand>,
+    controller_recv:Receiver<ClientCommand>,
     servers: HashMap<ServerTypes, NodeId>
 }
 impl Client {
     pub fn new(id:NodeId,
                type_host:NodeType,
-               connected_drone_ids: Vec<NodeId>,
                controller_send:Sender<HostEvent>,
-               controller_recv:Receiver<NetCommand>,
+               controller_recv:Receiver<ClientCommand>,
                packet_recv:Receiver<Packet>,
                packet_send:HashMap<NodeId, Sender<Packet>>,
                log_sender: Sender<String>) ->Self{
@@ -156,27 +156,25 @@ impl Client {
 
 
 
-    fn handle_command(&mut self, net_comm: NetCommand) {
+    fn handle_command(&mut self, client_command: ClientCommand) {
         if let Err(e) = self.ensure_all_servers_discovered() {
             self.host.send_logging(format!("Error during discovery: {}", e));
             return;
         }
 
-        match net_comm {
-            // Command network serializable
-            NetCommand::Net(cmd) => {
-                match cmd {
-                    HostCommand::FilesList => {
+        match client_command {
+            ClientCommand::Net(net_command) => {
+                match net_command {
+                    ClientNetCommand::FilesList => {
                         self.host.send_logging("Preparing FilesList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&HostCommand::FilesList) {
+                            match serde_json::to_vec(&ClientNetCommand::FilesList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
                                         content,
                                     };
                                     if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-
                                         self.host.send_logging(format!("Failed to send FilesList to server {}: {}", server_id, err));
                                     } else {
                                         self.host.send_logging(format!("FilesList sent to server {}", server_id));
@@ -191,10 +189,10 @@ impl Client {
                         }
                     }
 
-                    HostCommand::File(id) => {
+                    ClientNetCommand::File(id) => {
                         self.host.send_logging(format!("Preparing File({}) request", id));
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&HostCommand::File(id)) {
+                            match serde_json::to_vec(&ClientNetCommand::File(id)) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -215,10 +213,10 @@ impl Client {
                         }
                     }
 
-                    HostCommand::MediaList => {
+                    ClientNetCommand::MediaList => {
                         self.host.send_logging("Preparing MediaList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&HostCommand::MediaList) {
+                            match serde_json::to_vec(&ClientNetCommand::MediaList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -239,10 +237,10 @@ impl Client {
                         }
                     }
 
-                    HostCommand::Media(id) => {
+                    ClientNetCommand::Media(id) => {
                         self.host.send_logging(format!("Preparing Media({}) request", id));
                         if let Some(&server_id) = self.servers.get(&Content) {
-                            match serde_json::to_vec(&HostCommand::Media(id)) {
+                            match serde_json::to_vec(&ClientNetCommand::Media(id)) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -263,34 +261,34 @@ impl Client {
                         }
                     }
 
-                    HostCommand::RegistrationToChat => {
+                    ClientNetCommand::RegistrationToChat => {
                         self.host.send_logging("Preparing RegistrationToChat request".to_string());
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                        match serde_json::to_vec(&HostCommand::RegistrationToChat) {
-                            Ok(content) => {
-                                let message = Message {
-                                    session_id: generate_unique_session_id(),
-                                    content,
-                                };
-                                if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                    self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", server_id, err));
-                                } else {
-                                    self.host.send_logging(format!("RegistrationToChat sent to server {}", server_id));
+                            match serde_json::to_vec(&ClientNetCommand::RegistrationToChat) {
+                                Ok(content) => {
+                                    let message = Message {
+                                        session_id: generate_unique_session_id(),
+                                        content,
+                                    };
+                                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                                        self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", server_id, err));
+                                    } else {
+                                        self.host.send_logging(format!("RegistrationToChat sent to server {}", server_id));
+                                    }
+                                }
+                                Err(e) => {
+                                    self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
                                 }
                             }
-                            Err(e) => {
-                                self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
-                            }
-                        }
                         } else {
                             self.host.send_logging(format!("No chat server available for RegistrationToChat host={}", self.host.id));
                         }
                     }
 
-                    HostCommand::ClientList => {
+                    ClientNetCommand::ClientList => {
                         self.host.send_logging("Preparing ClientList request".to_string());
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                            match serde_json::to_vec(&HostCommand::ClientList) {
+                            match serde_json::to_vec(&ClientNetCommand::ClientList) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -311,10 +309,10 @@ impl Client {
                         }
                     }
 
-                    HostCommand::MessageFor(client_id, msg) => {
+                    ClientNetCommand::MessageFor(client_id, msg) => {
                         self.host.send_logging(format!("Preparing MessageFor({}, …) request", client_id));
                         if let Some(&server_id) = self.servers.get(&Chat) {
-                            match serde_json::to_vec(&HostCommand::MessageFor(client_id, String::from(msg))) {
+                            match serde_json::to_vec(&ClientNetCommand::MessageFor(client_id, String::from(msg))) {
                                 Ok(content) => {
                                     let message = Message {
                                         session_id: generate_unique_session_id(),
@@ -334,6 +332,14 @@ impl Client {
                             self.host.send_logging(format!("No chat server available for MessageFor({})", client_id));
                         }
                     }
+                    _ => {
+                        self.host.send_logging(format!("Received NetCommand variant with no action: {:?}", net_command));
+                    }
+                }
+
+            }
+            ClientCommand::Internal(host_command) => {
+                match host_command {
                     HostCommand::AddSender(id, sender) => {
                         let current = self.host.packet_send.len();
                         if self.host.packet_send.contains_key(&id) {
@@ -356,14 +362,9 @@ impl Client {
                             self.host.send_logging("Successfully removed sender!".to_string());
                         }
                     }
-                    _ => {
-                        self.host.send_logging(format!("Received NetCommand variant with no action: {:?}", cmd));
-                    }
                 }
             }
-
-            // Shortcut inviato dal controller interno
-            NetCommand::ControllerShortcut(packet) => {
+            ClientCommand::ControllerShortcut(packet) => {
                 self.host.send_logging("Handling ControllerShortcut packet".to_string());
                 if let Err(e) = self.handle_packet(packet) {
                     self.host.send_logging(format!("Error processing ControllerShortcut packet: {}", e));
@@ -486,7 +487,7 @@ impl Client {
         for server_id in self.host.network.servers.clone() {
             self.host.send_logging(format!("Requesting server type from node {}", server_id));
 
-            match serde_json::to_vec(&HostCommand::ServerType) {
+            match serde_json::to_vec(&ClientNetCommand::ServerType) {
                 Ok(content) => {
                     let message = Message {
                         session_id: generate_unique_session_id(),
@@ -563,4 +564,28 @@ impl Client {
         None
     }
 
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ClientNetCommand {
+    //client command
+    ServerType,
+    //content-server
+    FilesList,
+    File(FileId),
+
+    MediaList,
+    Media(MediaId),
+
+    //chat-server
+    RegistrationToChat,
+    ClientList,
+    MessageFor(ClientId, String),
+}
+pub enum ClientCommand {
+    /// Wraps a network-level command
+    Net(ClientNetCommand),
+    /// A local internal management command
+    Internal(HostCommand),
+    /// Packet shortcut delivered by the SimulationController
+    ControllerShortcut(Packet),
 }

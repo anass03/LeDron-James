@@ -294,7 +294,7 @@ pub fn generate_unique_session_id() -> u64 {
 impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
-        let log_msg = format!("{}", message);
+        let log_msg = format!("[Host] ID {} - {}",self.id, message);
         if let Err(err) = self.log_sender.send(log_msg) {
             eprintln!("Failed to forward logging to controller: {}", err);
         }
@@ -902,30 +902,9 @@ impl Functionality for Host {
         Packet::new_ack(routing_header, packet.session_id, fragment_index.unwrap_or(0))
     }
 }
-
-#[derive(Serialize, Deserialize, Debug)]
 pub enum HostCommand {
-    //client command
-        ServerType,
-        //content-server
-        FilesList,
-        File(FileId),
-
-        MediaList,
-        Media(MediaId),
-
-        //chat-server
-        RegistrationToChat,
-        ClientList,
-        MessageFor(ClientId, String),
-
-    //client/server command
-        AddSender(NodeId, Sender<Packet>),
-        RemoveSender(NodeId),
-}
-pub enum NetCommand {
-    Net(HostCommand),
-    ControllerShortcut(Packet),
+    AddSender(NodeId, Sender<Packet>),
+    RemoveSender(NodeId),
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ServerToClient{
