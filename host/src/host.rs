@@ -295,7 +295,7 @@ impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
         let role = if self.network.servers.contains(&self.id) { "Server" } else { "Client" };
-        let log_msg = format!("[{}] ID {} - {}", role, self.id, message.as_ref());
+        let log_msg = format!("[{}] ID {} - {}", role, self.id, message);
 
         if let Err(err) = self.log_sender.send(log_msg) {
             eprintln!("Failed to forward logging to controller: {}", err);
@@ -904,6 +904,22 @@ impl Functionality for Host {
         routing_header.reverse();
         Packet::new_ack(routing_header, packet.session_id, fragment_index.unwrap_or(0))
     }
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ClientNetCommand {
+    //client command
+    ServerType,
+    //content-server
+    FilesList,
+    File(FileId),
+
+    MediaList,
+    Media(MediaId),
+
+    //chat-server
+    RegistrationToChat,
+    ClientList,
+    MessageFor(ClientId, String),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),

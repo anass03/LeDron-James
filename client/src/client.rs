@@ -5,7 +5,7 @@ use std::collections::{HashMap};
 use std::{thread};
 use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
-use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
 
@@ -565,22 +565,7 @@ impl Client {
     }
 
 }
-#[derive(Serialize, Deserialize, Debug)]
-pub enum ClientNetCommand {
-    //client command
-    ServerType,
-    //content-server
-    FilesList,
-    File(FileId),
 
-    MediaList,
-    Media(MediaId),
-
-    //chat-server
-    RegistrationToChat,
-    ClientList,
-    MessageFor(ClientId, String),
-}
 pub enum ClientCommand {
     /// Wraps a network-level command
     Net(ClientNetCommand),
