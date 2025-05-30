@@ -1,10 +1,50 @@
+use std::fmt::{Display, Formatter};
 use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, ClientNetCommand, FileId, HostEvent, MediaId, ServerToClient};
+use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, ServerToClient};
 use client::ClientCommand;
 use host::ClientNetCommand::{FilesList, ServerType};
 use crate::backend::simulation_controller::{LogType, SimulationControllerData};
+
+#[derive(Default, Clone, Copy)]
+enum NodeType {
+    #[default]
+    Drone,
+    Client,
+    Server,
+}
+
+impl Display for NodeType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeType::Drone => f.write_str("Drone"),
+            NodeType::Client => f.write_str("Client"),
+            NodeType::Server => f.write_str("Server"),
+        }
+    }
+}
+
+impl NodeType {
+    fn from(sim: & SimulationControllerData, node_id: NodeId) -> NodeType {
+        for drone in sim.drones.iter() {
+            if drone.id == node_id {
+                return NodeType::Drone;
+            }
+        }
+        for client in sim.clients.iter() {
+            if client.id == node_id {
+                return NodeType::Client;
+            }
+        }
+        for server in sim.servers.iter() {
+            if server.id == node_id {
+                return NodeType::Server;
+            }
+        }
+        NodeType::default()
+    }
+}
 
 impl SimulationControllerData {
 
@@ -38,6 +78,64 @@ impl SimulationControllerData {
         }
     }
 
+    fn mono_add_sender(&mut self, first_type: NodeType, first_id: NodeId, second_type: NodeType, second_id: NodeId) -> Result<(), String> {
+        self.log(LogType::DEBUG, format!("{first_type} + {second_type}"));
+        //checking if packet sender for forward node exists
+        match self.packet_sender.get(&second_id) {
+            Some(forward_packet_sender) => {
+                //checking if packet sender for backwards node exists
+                match first_type {
+                    NodeType::Drone => {
+                        match self.drone_command_sender.get(&first_id) {
+                            Some(forward_drone_command_sender) => {
+                                let forward_command = DroneCommand::AddSender(second_id, forward_packet_sender.clone());
+                                //trying to send command forward
+                                match forward_drone_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} sender to {first_type} {first_id}"));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Drone {first_id} command sender not found")),
+                        }
+                    },
+                    NodeType::Client => {
+                        match self.client_command_sender.get(&first_id) {
+                            Some(forward_client_command_sender) => {
+                                let forward_command = ClientCommand::Internal(HostCommand::AddSender(second_id, forward_packet_sender.clone()));
+                                //trying to send command forward
+                                match forward_client_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} sender to {first_type} {first_id}"));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Client {first_id} command sender not found💥")),
+                        }
+                    },
+                    NodeType::Server => {
+                        match self.server_command_sender.get(&first_id) {
+                            Some(forward_server_command_sender) => {
+                                let forward_command = HostCommand::AddSender(second_id, forward_packet_sender.clone());
+                                //trying to send command forward
+                                match forward_server_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} sender to {first_type} {first_id}"));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Server {first_id} command sender not found")),
+                        }
+                    }
+                }
+            },
+            None => return Err(format!("{second_type} {second_id} packet sender not found")),
+        }
+        Ok(())
+    }
 
     pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
         /*match self.drones.get((node_id as usize) - 1) {
@@ -46,61 +144,11 @@ impl SimulationControllerData {
             },
             None => { return Err(format!("[Simulation Controller] Drone {node_id} does not exist")); }
         }*/
-        //checking if packet sender for forward node exists
-        match self.packet_sender.get(&sender_id) {
-            Some(forward_packet_sender) => {
-                //preparing AddSender command forward
-                let forward_command = DroneCommand::AddSender(sender_id, forward_packet_sender.clone());
-                //checking if packet sender for backwards node exists
-                match self.packet_sender.get(&node_id) {
-                    Some(backwards_packet_sender) => {
-                        //preparing AddSender command backwards
-                        let backwards_command = DroneCommand::AddSender(node_id, backwards_packet_sender.clone());
-                        //if the two commands are ready, check if command sender for forward node exists
-                        match self.drone_command_sender.get(&node_id) {
-                            Some(forward_drone_command_sender) => {
-                                //trying to send command forward
-                                match forward_drone_command_sender.send(forward_command) {
-                                    Ok(()) => {
-                                        //if successful, check if command sender for backwards node exists
-                                        match self.drone_command_sender.get(&sender_id) {
-                                            Some(backward_command_sender) => {
-                                                //trying to send command backwards
-                                                match backward_command_sender.send(backwards_command) {
-                                                    Ok(()) => {
-                                                        //adding neighbors to connected_node_ids vector
-                                                        for mut drone in self.drones.iter_mut() {
-                                                            if drone.id == node_id && !drone.connected_node_ids.contains(&sender_id) {
-                                                                drone.connected_node_ids.push(sender_id);
-                                                            }
-                                                            if drone.id == sender_id && !drone.connected_node_ids.contains(&node_id){
-                                                                drone.connected_node_ids.push(node_id);
-                                                            }
-                                                        }
-                                                        /*match self.drones.get((node_id as usize) - 1) {
-                                                            Some(drone) => {
-                                                                self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Drone {node_id} updated neighbors: {:?}", drone.connected_node_ids).as_str())
-                                                            },
-                                                            None => { return Err(format!("[Simulation Controller] Drone {node_id} does not exist")); }
-                                                        }*/
-                                                        Ok(()) },
-                                                    Err(e) => Err(e.to_string()),
-                                                }
-                                            },
-                                            None => Err(format!("Drone {sender_id} command sender not found")),
-                                        }
-                                    },
-                                    Err(e) => Err(e.to_string()),
-                                }
-                            },
-                            None => Err(format!("Drone {node_id} command sender not found")),
-                        }
-                    },
-                    None => Err(format!("Drone {node_id} packet sender not found")),
-                }
-            },
-            None => Err(format!("Drone {sender_id} packet sender not found")),
-        }
+        let forward_node_type = NodeType::from(&self, node_id);
+        let backwards_node_type = NodeType::from(&self, sender_id);
+
+        self.mono_add_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
+        self.mono_add_sender(backwards_node_type, sender_id, forward_node_type, node_id)
     }
 
     pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {

@@ -32,7 +32,7 @@ pub struct SimulationControllerData {
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
-    pub server_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+    pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
@@ -45,7 +45,7 @@ impl SimulationControllerData {
         config: Config,
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
         client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
-        server_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+        server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
