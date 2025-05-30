@@ -106,7 +106,7 @@ impl Logs{
         }
     }
     pub/*(crate)*/ fn push_log(&mut self, type_of_log: LogType, text: &str){
-        if self.logs_memory.len()>=50{
+        if self.logs_memory.len()>=200{
             self.logs_memory.remove(0);
             self.logs_memory.push((type_of_log, text.to_string()));
         }else{

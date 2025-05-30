@@ -151,43 +151,64 @@ impl SimulationControllerData {
         self.mono_add_sender(backwards_node_type, sender_id, forward_node_type, node_id)
     }
 
-    pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
-
-        let forward_command = DroneCommand::RemoveSender(sender_id);
-        let backwards_command = DroneCommand::RemoveSender(node_id);
-        //checking if command sender for forward node exists
-        match self.drone_command_sender.get(&node_id) {
-            Some(forward_drone_command_sender) => {
-                //trying to send command forward
-                match forward_drone_command_sender.send(forward_command) {
-                    Ok(()) => {
-                        //if successful, check if command sender for backwards node exists
-                        match self.drone_command_sender.get(&sender_id) {
-                            Some(backward_command_sender) => {
-                                //trying to send command backwards
-                                match backward_command_sender.send(backwards_command) {
-                                    Ok(()) => {
-                                        //removing neighbors from connected_node_ids vector
-                                        for mut drone in self.drones.iter_mut() {
-                                            if drone.id == node_id && drone.connected_node_ids.contains(&sender_id) {
-                                                drone.connected_node_ids.retain(|x| *x != sender_id);
-                                            }
-                                            if drone.id == sender_id && drone.connected_node_ids.contains(&node_id){
-                                                drone.connected_node_ids.retain(|x| *x != node_id);
-                                            }
-                                        }
-                                        Ok(()) },
-                                    Err(e) => Err(e.to_string()),
-                                }
+    fn mono_remove_sender(&mut self, first_type: NodeType, first_id: NodeId, second_type: NodeType, second_id: NodeId) -> Result<(), String> {
+        self.log(LogType::DEBUG, format!("{first_type} - {second_type}"));
+        match first_type {
+            NodeType::Drone => {
+                match self.drone_command_sender.get(&first_id) {
+                    Some(forward_drone_command_sender) => {
+                        let forward_command = DroneCommand::RemoveSender(second_id);
+                        //trying to send command forward
+                        match forward_drone_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} sender from {first_type} {first_id}"));
                             },
-                            None => Err(format!("Drone {sender_id} command sender not found")),
+                            Err(e) => return Err(e.to_string()),
                         }
                     },
-                    Err(e) => Err(e.to_string())
+                    None => return Err(format!("Drone {first_id} command sender not found")),
                 }
             },
-            None => Err(format!("Drone {node_id} command sender not found")),
+            NodeType::Client => {
+                match self.client_command_sender.get(&first_id) {
+                    Some(forward_client_command_sender) => {
+                        let forward_command = ClientCommand::Internal(HostCommand::RemoveSender(second_id));
+                        //trying to send command forward
+                        match forward_client_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} sender from {first_type} {first_id}"));
+                            },
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    },
+                    None => return Err(format!("Client {first_id} command sender not found💥")),
+                }
+            },
+            NodeType::Server => {
+                match self.server_command_sender.get(&first_id) {
+                    Some(forward_server_command_sender) => {
+                        let forward_command = HostCommand::RemoveSender(second_id);
+                        //trying to send command forward
+                        match forward_server_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} sender from {first_type} {first_id}"));
+                            },
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    },
+                    None => return Err(format!("Server {first_id} command sender not found")),
+                }
+            }
         }
+        Ok(())
+    }
+
+    pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+        let forward_node_type = NodeType::from(&self, node_id);
+        let backwards_node_type = NodeType::from(&self, sender_id);
+
+        self.mono_remove_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
+        self.mono_remove_sender(backwards_node_type, sender_id, forward_node_type, node_id)
     }
 
     pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) -> Result<(), String> {
