@@ -1,4 +1,4 @@
-use crossbeam_channel::{tick, Receiver, Sender};
+use crossbeam_channel::{select_biased, tick, unbounded, Receiver, Sender};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
@@ -12,7 +12,7 @@ use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaL
 pub struct Client {
     host: Host,
     controller_recv:Receiver<ClientCommand>,
-    servers: HashMap<ServerTypes, NodeId>
+    servers: HashMap<ServerTypes, NodeId>,
 }
 impl Client {
     pub fn new(id:NodeId,
@@ -25,91 +25,59 @@ impl Client {
 
         let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
         Self{
-            host,controller_recv, servers: HashMap::new()
+            host,controller_recv, servers: HashMap::new(),
         }
     }
 
     pub fn run(&mut self) {
-        let cleanup_tick   = tick(Duration::from_secs(15));
+        let cleanup_tick = tick(Duration::from_secs(15));
+        // “never‐timer” che non invierà mai un Instant
+        let (_never_tx, never_timer): (Sender<Instant>, Receiver<Instant>) = unbounded();
+
         self.host.initiate_flood();
+
         loop {
-            crossbeam_channel::select_biased! {
-                // 1) always prioritize controller command
+            select_biased!{
+                // 1) comandi dal controller
                 recv(self.controller_recv) -> cmd => {
                     if let Ok(command) = cmd {
                         self.handle_command(command);
                     }
-                }
+                },
 
-                // 2) and then arriving packets
+                // 2) pacchetti in arrivo
                 recv(self.host.packet_recv) -> pkt => {
                     if let Ok(packet) = pkt {
                         if let Err(e) = self.handle_packet(packet) {
                             self.host.send_logging(format!("Error processing packet: {}", e));
                         }
                     }
-                }
+                },
 
-                // 3) timer for cleaning
+                // 3) debounce‐timer (fire solo se flood_scheduled è true)
+                recv(self
+                .host
+                .flood_timer
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| never_timer.clone())) -> _ => {
+                    if self.host.flood_scheduled{
+                         self.host.flood_scheduled = false;
+                        self.host.flood_timer = None;
+                        self.host.send_logging("Debounced flood triggered".to_string());
+                        self.host.initiate_flood();
+                    }
+                },
+
+                // 4) cleanup periodico
                 recv(cleanup_tick) -> _ => {
-                    // ... dove vuoi vedere la rete stampata, ad esempio alla fine di process_flood_response …
-                    // println!("=== Discovered Network (outgoing edges) ===");
-                    // for (&node_id, &(_, ref edges)) in &self.host.network.nodes {
-                    //     let neighs: Vec<_> = edges.iter().map(|e| e.to).collect();
-                    //     println!("Node {} -> {:?}", node_id, neighs);
-                    // }
-                    //
-                    // println!("=== Discovered Network (incoming edges) ===");
-                    // for (&node_id, _) in &self.host.network.nodes {
-                    //     // trova tutti i nodi che puntano a `node_id`
-                    //     let incoming: Vec<_> = self
-                    //         .host
-                    //         .network
-                    //         .nodes
-                    //         .iter()
-                    //         .filter_map(|(&other, &(_, ref edges))| {
-                    //             if edges.iter().any(|e| e.to == node_id) {
-                    //                 Some(other)
-                    //             } else {
-                    //                 None
-                    //             }
-                    //         })
-                    //         .collect();
-                    //     println!("Node {} -> {:?}", node_id, incoming);
-                    // }
-
-                    // self.host.send_logging(format!("=== All links FROM CLIENT VIEW host={} ===",self.host.id));
-                    // for (&from, &(_, ref edges)) in &self.host.network.nodes {
-                    //     for edge in edges {
-                    //         self.host.send_logging(format!("{} - {}", from, edge.to));
-                    //     }
-                    // }
-                    //
-                    // self.host.send_logging("=== find_best_route 7-9 TEST ===".to_string());
-                    // if let Some(route) = self.host.network.find_best_route(7, 9){
-                    //     self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
-                    // }else{
-                    //     self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
-                    // }
-                    // thread::sleep(Duration::from_secs(2));
-                    // self.host.send_logging("=== find_best_route 6-8 TEST ===".to_string());
-                    // if let Some(route) = self.host.network.find_best_route(6, 8){
-                    //     self.host.send_logging(format!("✅ Route: {:?} host={}", route, self.host.id));
-                    // }else{
-                    //     self.host.send_logging(format!("❌ No route found! host={}", self.host.id));
-                    // }
-                    // each 60s clean session
-                    let timeout  = Duration::from_secs(300);
-                    //self.host.cleanup_expired_sessions(timeout);
-
-                }
-
-                // 4) otherwise wait a bit to avoid busy‑spin
-                default(Duration::from_millis(10)) => {}
+                    let timeout = Duration::from_secs(300);
+                    // self.host.cleanup_expired_sessions(timeout);
+                },
             }
         }
-
     }
+
     /// Se non ho ancora scoperto *tutti* i server,
     /// mando la discovery e aspetto che `self.servers` contenga
     /// tutti gli ID di `self.host.network.servers`.

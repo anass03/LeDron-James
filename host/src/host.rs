@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{after, Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -27,7 +27,15 @@ pub struct Host{
     pub network: Network,
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
-    pub log_sender: Sender<String>
+    pub log_sender: Sender<String>,
+
+    // *** CAMPUS PER IL DEBOUNCE ***
+    pub flood_scheduled: bool,
+    pub flood_timer: Option<Receiver<Instant>>,
+
+    // *** CONTATORE DI FLOOD PER SESSIONE ***
+    max_flood_attempts: u8,
+    flood_attempts: HashMap<u64, u8>,  // session_id -> tentativi
 }
 impl Host{
     pub fn new(id:NodeId,
@@ -47,7 +55,11 @@ impl Host{
             network: Network::new(),
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
-            log_sender
+            log_sender,
+            flood_scheduled: false,
+            flood_timer: None,
+            max_flood_attempts: 5,
+            flood_attempts: HashMap::new(),
         };
         host
     }
@@ -270,6 +282,7 @@ impl Network {
 }
 pub trait Functionality{
     fn send_logging(&self, message: String);
+    fn schedule_flood(&mut self);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, response: FloodResponse);
@@ -301,6 +314,17 @@ impl Functionality for Host {
             eprintln!("Failed to forward logging to controller: {}", err);
         }
 
+    }
+    /// Al posto di chiamare initiate_flood() direttamente, uso questo
+    fn schedule_flood(&mut self) {
+        // Se ho già schedulato un flood, ignoro
+        if self.flood_scheduled {
+            return;
+        }
+        self.flood_scheduled = true;
+        // Il channel `after` manderà un messaggio dopo 100ms
+        self.flood_timer = Some(after(Duration::from_millis(100)));
+        self.send_logging("Flood scheduled (debounced)".to_string());
     }
     fn initiate_flood(&mut self) {
         // Genero subito gli ID, così li posso loggare
@@ -606,30 +630,43 @@ impl Functionality for Host {
             ack.fragment_index,
         ));
         let mut sent = self.sent_fragments.lock().unwrap();
-        if let Some(session) = sent.get_mut(&session_id) {
-            if idx < session.buffer.len() && session.buffer[idx].is_some() {
-                session.buffer[idx] = None;
-                session.pending = session.pending.saturating_sub(1);
-                session.last_activity = Instant::now();
-                self.send_logging(format!(
-                    "ACK processed, pending-- host={} session={} pending={}",
-                    self.id,
-                    session_id,
-                    session.pending,
-                ));
-            } else {
-                self.send_logging(format!(
-                    "ACK for nonexistent or already confirmed fragment host={} session={} fragment={}",
-                    self.id,
-                    session_id,
-                    ack.fragment_index,
+        match sent.get_mut(&session_id){
+            None => { self.send_logging(format!(
+                    "ACK for unknown session host={} session={}",
+                    self.id, session_id,
                 ));
             }
-        } else {
-            self.send_logging(format!(
-                "ACK for unknown session host={} session={}",
-                self.id, session_id,
-            ));
+            Some(session) => {
+                match session.buffer.get(idx){
+                    None => {
+                        self.send_logging(format!(
+                            "received ACK for nonexistent fragment host={} session={} fragment={}",
+                            self.id,
+                            session_id,
+                            ack.fragment_index,
+                        ));
+                    }
+                    Some(None) => {
+                        self.send_logging(format!(
+                            "received ACK for already confirmed fragment host={} session={} fragment={}",
+                            self.id,
+                            session_id,
+                            ack.fragment_index,
+                        ));
+                    }
+                    Some(Some(_)) => {
+                        session.buffer[idx] = None;
+                        session.pending = session.pending.saturating_sub(1);
+                        session.last_activity = Instant::now();
+                        self.send_logging(format!(
+                            "ACK processed, host={} session={} pending={}",
+                            self.id,
+                            session_id,
+                            session.pending,
+                        ));
+                    }
+                }
+            }
         }
     }
     fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64) {
@@ -661,8 +698,8 @@ impl Functionality for Host {
                                 session_id,
                                 frag_idx,
                                 bad,
-                            ));if let Some(new_route) = self.network.find_alternate_route(host, session.destination, &session.route)
-                            {
+                            ));
+                            if let Some(new_route) = self.network.find_alternate_route(host, session.destination, &session.route) {
                                 self.send_logging(format!("Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}", host, session_id, frag_idx, new_route));
                                 session.route = new_route.clone();
                                 let header = SourceRoutingHeader::new(new_route, 0);
@@ -676,17 +713,40 @@ impl Functionality for Host {
                                     res,
                                 ));
                             } else {
-                                drop(sent);
-                                self.send_logging(format!(
-                                    "No alternate route, re-initiating flood host={} session={}",
-                                    host,
-                                    session_id,
-                                ));self.initiate_flood();
+                                // prima di tutto, chiudi eventuali lock rimasti
+                                drop(sent); // se serve davvero
+
+                                // 1) aggiorno e leggo il contatore in un blocco separato
+                                let (cnt, should_abort) = {
+                                    let entry = self.flood_attempts.entry(session_id).or_insert(0);
+                                    *entry += 1;
+                                    let cnt = *entry;
+                                    let should_abort = cnt > self.max_flood_attempts;
+                                    (cnt, should_abort)
+                                };
+
+                                // 2) ora il borrow mutabile di `flood_attempts` è finito, posso fare qualunque cosa con `&self`
+                                //    senza errori di borrow checker
+                                if should_abort {
+                                    self.send_logging(format!(
+                                        "Session {} failed after {} floods → aborting",
+                                        session_id, cnt
+                                    ));
+                                    let mut sent_map = self.sent_fragments.lock().unwrap();
+                                    sent_map.remove(&session_id);
+                                } else {
+                                    self.send_logging(format!(
+                                        "No alternate route for session {}, scheduling flood attempt {}/{}",
+                                        session_id, cnt, self.max_flood_attempts
+                                    ));
+                                    self.schedule_flood();
+                                }
+
                             }
                         }
                         NackType::DestinationIsDrone => {
                             self.send_logging(format!(
-                                "DestinationIsDrone NACK—dropping fragment host={} session={} fragment={}",
+                                "DestinationIsDrone NACK — dropping fragment host={} session={} fragment={}",
                                 host,
                                 session_id,
                                 frag_idx,
