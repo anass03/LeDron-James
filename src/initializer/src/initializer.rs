@@ -69,11 +69,8 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - preparing command channels hashmaps
     let mut drone_command_senders = HashMap::new();
-    //let mut drone_event_receivers = HashMap::new();
     let mut client_command_senders = HashMap::new();
-    //let mut client_event_receivers = HashMap::new();
     let mut server_command_senders = HashMap::new();
-    //let mut server_event_receivers = HashMap::new();
     // these hashmaps will contain the senders and receivers paired with each NodeId
 
     /// - Initializing the drones

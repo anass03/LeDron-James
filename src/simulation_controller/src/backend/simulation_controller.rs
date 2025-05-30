@@ -87,7 +87,7 @@ impl Logs{
     pub(super) fn default()->Self{
         Self{
             logs_memory: vec![
-                (LogType::INFO,  "[2025-04-18 12:00:01] Server started on port 8080".into()),
+                /*(LogType::INFO,  "[2025-04-18 12:00:01] Server started on port 8080".into()),
                 (LogType::DEBUG, "[2025-04-18 12:00:02] Connected to database successfully".into()),
                 (LogType::INFO,  "[2025-04-18 12:00:05] New client connected: 192.168.1.24".into()),
                 (LogType::WARN,  "[2025-04-18 12:00:08] High memory usage detected".into()),
@@ -100,12 +100,12 @@ impl Logs{
                 (LogType::DEBUG, "[2025-04-18 12:00:28] Heartbeat ping sent to 5 clients".into()),
                 (LogType::ERROR, "[2025-04-18 12:00:30] Unexpected token in lin from 10.0.0.12".into()),
                 (LogType::DEBUG, "[2025-04-18 12:00:34] Polling external services (3 targets)".into()),
-                (LogType::INFO,  "[2025-04-18 12:00:36] Graceful shutdown initiated".into()),
+                (LogType::INFO,  "[2025-04-18 12:00:36] Graceful shutdown initiated".into()),*/
             ],
             log_scroll_offset: 0,
         }
     }
-    pub/*(crate)*/ fn push_log(&mut self, type_of_log: LogType, text: &str){
+    pub fn push_log(&mut self, type_of_log: LogType, text: &str){
         if self.logs_memory.len()>=200{
             self.logs_memory.remove(0);
             self.logs_memory.push((type_of_log, text.to_string()));

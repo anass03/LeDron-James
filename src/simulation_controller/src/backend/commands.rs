@@ -1,4 +1,7 @@
 use std::fmt::{Display, Formatter};
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -6,6 +9,7 @@ use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, 
 use client::ClientCommand;
 use host::ClientNetCommand::{FilesList, ServerType};
 use crate::backend::simulation_controller::{LogType, SimulationControllerData};
+
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -332,9 +336,55 @@ impl SimulationControllerData {
                     Some(match server_to_client {
                         ServerToClient::ServerType(server_type) => format!("Server type: {:?}", server_type),
                         ServerToClient::FilesList(file_list) => format!("Files list received: {:?}", file_list),
-                        ServerToClient::File(file_id, file) => format!("File {} received: {:?}", file_id, file),
+                        ServerToClient::File(file_id, file) => {
+                            // Infer file type
+                            let kind = infer::get(&file);
+                            let extension = kind
+                                .map(|k| k.extension())
+                                .unwrap_or("txt"); // default to .bin if unknown
+
+                            // Construct filename based on file ID and inferred extension
+                            let filename = format!("file_{}.{}", file_id, extension);
+                            let path = PathBuf::from("assets").join(&filename);
+
+                            // Write file
+                            fs::write(&path, &file).expect("file not downloaded");
+
+                            // Open with system default application
+                            #[cfg(target_os = "windows")]
+                            {
+                                let path_str = path.to_str().unwrap();
+                                let quoted_path = format!("\"{}\"", path_str);
+                                Command::new("cmd")
+                                    .args(&["/C", "start", "\"\"", &quoted_path])
+                                    .spawn()
+                                    .expect("Unable to open file on Windows");
+                            }
+
+                            #[cfg(target_os = "macos")]
+                            {
+                                Command::new("open")
+                                    .arg(&path)
+                                    .spawn()
+                                    .expect("Unable to open file on macOS");
+                            }
+
+                            #[cfg(target_os = "linux")]
+                            {
+                                Command::new("xdg-open")
+                                    .arg(&path)
+                                    .spawn()
+                                    .expect("Unable to open file on Linux");
+                            }
+
+                            format!("File {} received, saved as {} and opened", file_id, filename)
+                        },
                         ServerToClient::MediaList(media_list) => format!("Media list received: {:?}", media_list),
-                        ServerToClient::Media(media_id, image) => format!("File {} received: {:?}", media_id, image),
+                        ServerToClient::Media(media_id, image) => {
+                            let path = format!("assets/image_{}.jpg", media_id);
+                            std::fs::write(&path, &image.data).expect("Errore nel salvataggio immagine");
+                            format!("Immagine {} salvata come {}", media_id, path)
+                        },
                         ServerToClient::ClientList(client_list) => format!("Client list received: {:?}", client_list),
                         ServerToClient::MessageFrom(client_id, message) => format!("Message from Client {} received: {:?}", client_id, message),
                         ServerToClient::ErrNotFound => "Err Not Found".to_owned(),
