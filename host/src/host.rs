@@ -709,23 +709,23 @@ impl Functionality for Host {
                                 frag_idx,
                                 bad,
                             ));
-                            if let Some(new_route) = self.network.find_alternate_route(host, session.destination, &session.route) {
-                                self.send_logging(format!("Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}", host, session_id, frag_idx, new_route));
-                                session.route = new_route.clone();
-                                let header = SourceRoutingHeader::new(new_route, 0);
-                                let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-                                let res = self.send_packet(pkt, None);
-                                self.send_logging(format!(
-                                    "Retransmission result host={} session={} fragment={} result={}",
-                                    host,
-                                    session_id,
-                                    frag_idx,
-                                    res,
-                                ));
-                            } else {
+                            loop {
+                                if let Some(new_route) = self.network.find_alternate_route(host, session.destination, &session.route) {
+                                    self.send_logging(format!("Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}", host, session_id, frag_idx, new_route));
+                                    session.route = new_route.clone();
+                                    let header = SourceRoutingHeader::new(new_route, 0);
+                                    let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+                                    let res = self.send_packet(pkt, None);
+                                    self.send_logging(format!(
+                                        "Retransmission result host={} session={} fragment={} result={}",
+                                        host,
+                                        session_id,
+                                        frag_idx,
+                                        res,
+                                    ));
+                                    break;
+                                }
                                 // prima di tutto, chiudi eventuali lock rimasti
-                                drop(sent); // se serve davvero
-
                                 // 1) aggiorno e leggo il contatore in un blocco separato
                                 let (cnt, should_abort) = {
                                     let entry = self.flood_attempts.entry(session_id).or_insert(0);
@@ -751,8 +751,8 @@ impl Functionality for Host {
                                     ));
                                     self.initiate_flood();
                                 }
-
                             }
+
                         }
                         NackType::DestinationIsDrone => {
                             self.send_logging(format!(
