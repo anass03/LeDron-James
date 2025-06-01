@@ -579,6 +579,8 @@ impl Functionality for Host {
             self.packet_send
                 .get(&packet.routing_header.hops[packet.routing_header.hop_index])
         });
+        let route = packet.routing_header.hops.clone();
+        self.send_logging(format!("😂 Route={:?}", route));
 
         let result = match next_channel {
             Some(ch) => match ch.send(packet.clone()) {
@@ -596,11 +598,10 @@ impl Functionality for Host {
                 }
             },
             None => {
-                self.send_logging(format!("No valid channel found for sending packet. host={}", self.id));
                 if let Err(e) = self.sendto_controller(packet) {
                     self.send_logging(format!("Error, notifying controller: {}", e));
                 }
-                SendingCodes::NoNextHop("Neighbour not found".to_string())
+                SendingCodes::NoNextHop(format!("No valid channel found for sending packet. host={}", self.id))
             }
         };
 

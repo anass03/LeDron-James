@@ -498,8 +498,7 @@ impl Client {
 
             self.host.send_logging(format!(
                 "Received fragment, pending: {}, host: {}, session: {}",
-                self.host.id,
-                session_id,session.pending
+                session.pending,self.host.id, session_id,
             ));
         }
 
