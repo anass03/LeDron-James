@@ -327,6 +327,15 @@ impl Functionality for Host {
         self.send_logging("Flood scheduled (debounced)".to_string());
     }
     fn initiate_flood(&mut self) {
+        if self.packet_send.is_empty() {
+            self.send_logging(format!("No neighbors to flood to host={}",  self.id));
+            // Siamo in errore di rete: MA siccome non ho inviato alcun FloodRequest,
+            // devo _azzerare_ flood_scheduled e il flood_timer, altrimenti
+            // il select li vede sempre pronti e richiama all’infinito questa funzione.
+            self.flood_scheduled = false;
+            self.flood_timer = None;
+            return;
+        }
         // Genero subito gli ID, così li posso loggare
         let session_id = generate_unique_session_id();
         let flood_id = generate_unique_flood_id();
@@ -730,7 +739,7 @@ impl Functionality for Host {
                                 //    senza errori di borrow checker
                                 if should_abort {
                                     self.send_logging(format!(
-                                        "Session {} failed after {} floods → aborting",
+                                        "❌ NET DISCONNECTED, Session {} failed after {} floods → aborting",
                                         session_id, cnt
                                     ));
                                     let mut sent_map = self.sent_fragments.lock().unwrap();
