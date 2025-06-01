@@ -682,14 +682,14 @@ impl Functionality for Host {
     fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64) {
         let host = self.id;
         let frag_idx = nack.fragment_index;
-        // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti.
-        //    Li clono in variabili locali e poi droppo (chiudo) subito il lock.
+
+        // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
+        //    quindi droppo subito il lock.
         let (fragment, mut current_route, destination) = {
             let mut sent = self.sent_fragments.lock().unwrap();
             if let Some(session) = sent.get_mut(&session_id) {
                 match session.buffer.get(frag_idx as usize) {
                     Some(Some(f)) => {
-                        // Clono tutto quello che mi serve _prima_ di chiudere il lock:
                         let frag_clone = f.clone();
                         let route_clone = session.route.clone();
                         let dest = session.destination;
@@ -721,7 +721,7 @@ impl Functionality for Host {
                 return;
             }
         };
-        // a questo punto il MutexGuard su sent_fragments è già stato droppato
+        // Qui il MutexGuard su sent_fragments è già stato droppato.
 
         match nack.nack_type {
             NackType::Dropped => {
@@ -740,44 +740,42 @@ impl Functionality for Host {
                     host, session_id, frag_idx, bad
                 ));
 
-                // 3) Loop: finché non trovo una rotta alternativa o arrivo a 5 flood, riprovo
-                loop {
-                    // Provo a trovare una rotta alternativa SUL clone di current_route
-                    if let Some(new_route) = self.network.find_alternate_route(host, destination, &current_route) {
-                        self.send_logging(format!(
-                            "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
-                            host, session_id, frag_idx, new_route
-                        ));
+                // 3) Provo subito una rotta alternativa sulla route corrente
+                if let Some(new_route) =
+                    self.network.find_alternate_route(host, destination, &current_route)
+                {
+                    self.send_logging(format!(
+                        "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
+                        host, session_id, frag_idx, new_route
+                    ));
 
-                        // 3.a) Apro il lock _solo_ per aggiornare session.route
-                        {
-                            let mut sent = self.sent_fragments.lock().unwrap();
-                            if let Some(session) = sent.get_mut(&session_id) {
-                                session.route = new_route.clone();
-                                session.last_activity = Instant::now();
-                            } else {
-                                // La sessione è già stata rimossa nel frattempo: esco
-                                self.send_logging(format!(
-                                    "Session {} già rimossa, non ritrasmetto",
-                                    session_id
-                                ));
-                                break;
-                            }
-                        } // qui il lock viene droppato
+                    // 3.a) Apro il lock solo per aggiornare session.route
+                    {
+                        let mut sent = self.sent_fragments.lock().unwrap();
+                        if let Some(session) = sent.get_mut(&session_id) {
+                            session.route = new_route.clone();
+                            session.last_activity = Instant::now();
+                        } else {
+                            // La sessione è già stata rimossa nel frattempo: esco
+                            self.send_logging(format!(
+                                "Session {} già rimossa, non ritrasmetto",
+                                session_id
+                            ));
+                            return;
+                        }
+                    } // il lock viene droppato qui
 
-                        // 3.b) Invio il frammento sulla nuova rotta
-                        current_route = new_route.clone();
-                        let header = SourceRoutingHeader::new(new_route.clone(), 0);
-                        let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-                        let res = self.send_packet(pkt, None);
-                        self.send_logging(format!(
-                            "Retransmission result host={} session={} fragment={} result={:?}",
-                            host, session_id, frag_idx, res
-                        ));
-                        break;
-                    }
-
-                    // 3.c) Se non c'è rotta alternativa, incremento il contatore di flood_attempts
+                    // 3.b) Invio il frammento sulla nuova rotta
+                    current_route = new_route.clone();
+                    let header = SourceRoutingHeader::new(new_route.clone(), 0);
+                    let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+                    let res = self.send_packet(pkt, None);
+                    self.send_logging(format!(
+                        "Retransmission result host={} session={} fragment={} result={:?}",
+                        host, session_id, frag_idx, res
+                    ));
+                } else {
+                    // 3.c) Non c'è rotta alternativa: incremento flood_attempts e valuto se abortire o floodare
                     let cnt = {
                         let entry = self.flood_attempts.entry(session_id).or_insert(0);
                         *entry += 1;
@@ -785,22 +783,21 @@ impl Functionality for Host {
                     };
 
                     if cnt > self.max_flood_attempts {
-                        // 3.d) Superata la soglia: abortisco la sessione una volta per tutte
+                        // 3.d) Superata la soglia: rete scollegata, rimuovo la sessione
                         self.send_logging(format!(
-                            "❌ NET DISCONNECTED, Session {} failed after {} floods → aborting",
-                            session_id, cnt - 1  // cnt-1 perché cnt è già stato incrementato oltre la soglia
+                            "❌ NET DISCONNECTED, session {} fallita dopo {} flood → aborting",
+                            session_id,
+                            cnt - 1 // cnt-1 perché cnt è già stato incrementato oltre la soglia
                         ));
                         let mut sent = self.sent_fragments.lock().unwrap();
                         sent.remove(&session_id);
-                        break;
                     } else {
-                        // 3.e) Altrimenti pianifico un nuovo flood e poi esco dal loop
+                        // 3.e) Pianifico un solo flood, poi esco
                         self.send_logging(format!(
-                            "No alternate route for session {}, scheduling flood attempt {}/{}",
+                            "No alternate route per session {}, scheduling flood attempt {}/{}",
                             session_id, cnt, self.max_flood_attempts
                         ));
                         self.initiate_flood();
-                        break;
                     }
                 }
             }
@@ -812,8 +809,8 @@ impl Functionality for Host {
                 ));
             }
         }
-
     }
+
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
         self.send_logging(format!(
             "Starting fragmentation host={} session={} dest={}",
