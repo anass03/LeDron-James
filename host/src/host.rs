@@ -749,7 +749,7 @@ impl Functionality for Host {
                                         "No alternate route for session {}, scheduling flood attempt {}/{}",
                                         session_id, cnt, self.max_flood_attempts
                                     ));
-                                    self.schedule_flood();
+                                    self.initiate_flood();
                                 }
 
                             }
