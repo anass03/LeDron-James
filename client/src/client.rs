@@ -503,7 +503,8 @@ impl Client {
         }
 
         // invia ACK
-        let ack = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        let mut ack = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        ack.routing_header.hop_index += 1;
         let _ = self.host.send_packet(ack, None);
 
         // se finito, reassembly e rimozione
