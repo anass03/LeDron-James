@@ -632,7 +632,7 @@ impl Functionality for Host {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
             let drop_rate = 1.0 - pdr.clamp(0.0, 1.0);
             self.send_logging(format!(
-                "Drone {}: pdr = {:.3}, drop_rate = {:.3}",
+                "Drone {}: pdr = {:.3}, reliability = {:.3}",
                 drone_id, pdr, drop_rate
             ));
         }
@@ -908,7 +908,19 @@ impl Functionality for Host {
                 self.id, message.session_id, i, result
             ));
             if let SendingCodes::SuccessfullySent(_) = result {
-                self.network.pdr_helper(header.hops.as_slice());
+                let drone_hops: Vec<NodeId> = header
+                    .hops
+                    .iter()
+                    .filter(|&&nid| {
+                        matches!(
+                self.network.nodes.get(&nid).map(|(ty, _)| ty),
+                Some(NodeType::Drone)
+            )
+                    })
+                    .copied()
+                    .collect();
+
+                self.network.pdr_helper(&drone_hops);
                 self.send_logging(format!(
                     "PDR updated host={} header hops={:?} fragment={}",
                     self.id,
