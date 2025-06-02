@@ -7,10 +7,9 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
 use drone::Drone as LeDron;
 use client::Client as LeClient;
-use host::ServerTypes;
-use server::{ContentServer as LeContentServer, GenServer};
+use server::{ContentServer as LeContentServer};
 use server::ChatServer as LeChatServer;
-use simulation_controller::backend::simulation_controller::{log, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerType {
@@ -26,9 +25,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             config = temp;
         },
         Err(e) => {
-            // Possibilità di recupero generando una nuova toml oppure inizializzando solo
-            // il simulation_controller che poi si preouccuperà di rifar
-            // partire la simulazione
             return Err(e.to_string());
         }
     }
@@ -53,7 +49,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     }
 
     for client in config.client.iter() {
-        // for each client in the config we create the packet sender and receiver and we insert them
+        // for each client in the config we create the packet sender and receiver, and we insert them
         // in the related hashmap
         let (s, r) = unbounded();
         packet_senders.insert(client.id, s);
@@ -61,7 +57,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     }
 
     for server in config.server.iter() {
-        // for each server in the config we create the packet sender and receiver and we insert them
+        // for each server in the config we create the packet sender and receiver, and we insert them
         // in the related hashmap
         let (s, r) = unbounded();
         packet_senders.insert(server.id, s);
@@ -73,17 +69,15 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - preparing command channels hashmaps
     let mut drone_command_senders = HashMap::new();
-    //let mut drone_event_receivers = HashMap::new();
     let mut client_command_senders = HashMap::new();
-    //let mut client_event_receivers = HashMap::new();
     let mut server_command_senders = HashMap::new();
-    //let mut server_event_receivers = HashMap::new();
     // these hashmaps will contain the senders and receivers paired with each NodeId
 
     /// - Initializing the drones
     //simulation controller has a single receiver for all drone events, while the sender is cloned
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
+    let (log_sender, log_receiver) = unbounded();
     for drone in config.drone.iter() {
 
         // creating the actual drone channel for commands
@@ -102,7 +96,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-
+        let log_send = log_sender.clone();
         /// - spawning the thread of the drone and collecting the handle in a vector
         handles.insert(drone.id, thread::spawn(move || {
             let mut drone = LeDron::new(
@@ -113,6 +107,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 drone_packet_send,
                 drone_clone.pdr,
             );
+            drone.add_log_channel(log_send);
             /// - running the drone
             drone.run();
         }));
@@ -120,7 +115,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - Initializing the clients
     let (host_event_send, host_event_recv) = unbounded();
-    let (log_sender, log_receiver) = unbounded();
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();
@@ -145,7 +139,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             let mut client = LeClient::new(
                 client_id,
                 NodeType::Client,
-                connected_drone_ids,
                 host_event_send,
                 controller_client_recv,
                 packet_recv,
@@ -199,14 +192,14 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             }),
             ServerType::Content => thread::spawn(move || {
                 let mut server = LeContentServer::new(
-                    server_id,
-                    NodeType::Server,
-                    connected_drone_ids,
-                    host_event_send,
-                    controller_server_recv,
-                    packet_recv,
-                    packet_send,
-                    log_send
+                server_id,
+                NodeType::Server,
+                connected_drone_ids,
+                host_event_send,
+                controller_server_recv,
+                packet_recv,
+                packet_send,
+                log_send
                 );
                 server.run();
             }),

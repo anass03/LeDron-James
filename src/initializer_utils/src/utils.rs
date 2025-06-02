@@ -156,23 +156,3 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
         Err(errors.join("\n"))
     }
 }
-
-// Deprecated
-/*fn parse_config(file: &str) -> Result<(), String> {
-    match std::fs::read_to_string(file){
-        Ok(file_str) => {
-            match toml::from_str::<Config>(&file_str){
-                Ok(_) => {
-                    Ok(()) // Vediamo come sistemare il parse config, e collegare la funziine
-
-                },
-                Err(error) => {
-                    Err(error.to_string())
-                }
-            }
-        }
-        Err(e) => {
-            Err(e.to_string())
-        }
-    }
-}*/
