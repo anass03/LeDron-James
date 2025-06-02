@@ -123,6 +123,7 @@ impl SimulationControllerData {
         for receiver in self.drone_event_receiver.try_iter() {
             match receiver {
                 DroneEvent::PacketSent(packet) => {
+                    self.stats.received_packet();
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
@@ -135,6 +136,7 @@ impl SimulationControllerData {
                     self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
                 },
                 DroneEvent::ControllerShortcut(packet) => {
+                    self.stats.received_packet();
                     let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                     handle_packet(&packet);
                     let session_id = packet.session_id;
@@ -212,7 +214,7 @@ impl SimulationControllerData {
 
     // /// - Client Events
 
-    pub fn handle_client_event(&self) -> Option<String> {
+    pub fn handle_client_event(&mut self) -> Option<String> {
         for received in self.host_event_receiver.try_iter() {
             return match received {
                 HostEvent::PacketReconstructed(server_to_client) => {
@@ -229,6 +231,7 @@ impl SimulationControllerData {
                     })
                 },
                 HostEvent::PacketSent(packet) => {
+                    self.stats.received_packet();
                     Some(format!("Packet Sent: {:?}", packet))
                 },
             }

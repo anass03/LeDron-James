@@ -18,7 +18,10 @@ impl App<'_>{
         match self.parse_2input(){
             Ok((n,str)) => {
                 match self.simulation_controller_data.message_for(id, n as u8, str){
-                    Ok(_) => (),
+                    Ok(_) => {self.simulation_controller_data.logs.push_log(
+                        LogType::DEBUG,
+                        format!("Simulation Controller Sent Send Message to Client ID: {:?}", id).as_str(),
+                    )},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
             }
@@ -33,7 +36,10 @@ impl App<'_>{
         match self.parse_1input() {
             Ok(n) => {
                 match self.simulation_controller_data.add_sender(id, n as u8){
-                    Ok(_) => (),
+                    Ok(_) => {self.simulation_controller_data.logs.push_log(
+                        LogType::DEBUG,
+                        format!("Simulation Controller Sent Add Sender to Drone ID: {:?}", id).as_str(),
+                    )},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
             }
@@ -44,7 +50,10 @@ impl App<'_>{
         match self.parse_1input() {
             Ok(n) => {
                 match self.simulation_controller_data.remove_sender(id, n as u8){
-                    Ok(_) => (),
+                    Ok(_) => {self.simulation_controller_data.logs.push_log(
+                        LogType::DEBUG,
+                        format!("Simulation Controller Sent Remove Sender to Drone ID: {:?}", id).as_str(),
+                    )},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
             }
@@ -55,7 +64,10 @@ impl App<'_>{
         match self.parse_1input(){
             Ok(n) => {
                 match self.simulation_controller_data.set_pdr(id, n){
-                    Ok(_) => (),
+                    Ok(_) => {self.simulation_controller_data.logs.push_log(
+                        LogType::DEBUG,
+                        format!("Simulation Controller Sent Set PDR to Drone ID: {:?}", id).as_str(),
+                    )},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
             }

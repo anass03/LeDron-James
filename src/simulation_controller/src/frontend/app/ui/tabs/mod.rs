@@ -148,7 +148,7 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
 
     let style = Style::default().fg(Color::White).add_modifier(Modifier::ITALIC);
 
-    let packets = Paragraph::new("Total packets exchanged: 34198").style(style).alignment(Alignment::Center);
+    let packets = Paragraph::new(format!("Total packets exchanged: {}",app.simulation_controller_data.stats.total_packet_exchanged)).style(style).alignment(Alignment::Center);
     let conns = Paragraph::new("Total active connections: 12").style(style).alignment(Alignment::Center);
     let net = Paragraph::new("Network reliability: 95%").style(style).alignment(Alignment::Center);
 

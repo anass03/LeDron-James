@@ -69,6 +69,7 @@ impl App<'_>{
             // Listening to channels
             self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
             self.simulation_controller_data.handle_log_event();
+
             match self.simulation_controller_data.handle_client_event(){
                 None => {}
                 Some(str) => {

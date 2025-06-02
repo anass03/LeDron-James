@@ -6,7 +6,7 @@ use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
-use wg_2024::network::NodeId;
+use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet};
 use host::{HostEvent, NetCommand};
 #[derive(Clone)]
@@ -17,6 +17,12 @@ pub enum LogType{
 pub struct Logs{
     pub logs_memory: Vec<(LogType,String)>,
     pub log_scroll_offset: usize,
+}
+
+pub struct Statistics{
+    pub total_packet_exchanged: usize,
+    pub total_active_connections: usize,
+    pub network_reliability: u8,
 }
 
 /// Simulation Controller struct contains:
@@ -38,6 +44,7 @@ pub struct SimulationControllerData {
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
     pub log_receiver: Receiver<String>,
     pub logs: Logs,
+    pub stats: Statistics,
 }
 
 impl SimulationControllerData {
@@ -49,7 +56,7 @@ impl SimulationControllerData {
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
-        log_receiver: Receiver<String>
+        log_receiver: Receiver<String>,
     ) -> Self {
         let mut drones = vec![];
         for drone in config.drone {
@@ -75,6 +82,7 @@ impl SimulationControllerData {
             packet_sender,
             log_receiver,
             logs: Logs::default(),
+            stats: Statistics::default(),
         }
     }
 }
@@ -109,6 +117,18 @@ impl Logs{
             self.logs_memory.push((type_of_log, text.to_string()));
             self.log_scroll_offset += 1;
         }
+    }
+}
+impl Statistics{
+    pub fn default()->Self{
+        Self{
+            total_packet_exchanged: 0,
+            total_active_connections: 0,
+            network_reliability: 0,
+        }
+    }
+    pub fn received_packet(&mut self){
+        self.total_packet_exchanged += 1;
     }
 }
 pub fn log(txt: &str) {

@@ -227,7 +227,7 @@ impl App<'_> {
                         match drone_fn{
                             3 => {
                                 match self.simulation_controller_data.crash(id_origin){
-                                    Ok(_) => (),
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("[SC] Sent Crash command to {:?}", id_origin).as_str()),
                                     Err(err) => {
                                         self.simulation_controller_data.logs.push_log(LogType::ERROR, err.as_str())
                                     }
