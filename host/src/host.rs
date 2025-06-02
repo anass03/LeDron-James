@@ -90,7 +90,7 @@ pub struct Network {
     /// Mappa nodo → (tipo, lista archi)
     pub nodes: HashMap<NodeId, (NodeType, Vec<Edge>)>,
 
-    /// Per ogni drone: (pacchetti inviati, pacchetti persi)
+    /// Per ogni drone media mobile esponenziale: EWMA
     pub drone_pdr: HashMap<NodeId, f64>,
 }
 impl Network {
@@ -126,7 +126,7 @@ impl Network {
     pub fn pdr_helper(&mut self, hops: &[NodeId]) {
         for &drone_id in hops {
             // Se non esiste ancora, lo inizializziamo a 1.0 (fiducia totale)
-            let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
+            let old = self.drone_pdr.entry(drone_id).or_insert(1.0);
             // EWMA verso 0.0 (abbassiamo la PDR perché ha trasmesso)
             let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
             *old = new_pdr;
@@ -135,7 +135,7 @@ impl Network {
     /// Ogni volta che un drone invia un NACK “Dropped”, abbassiamo ulteriormente la PDR:
     /// new_pdr = α * 0.0 + (1 − α) * old_pdr
     pub fn pdr_from_nack(&mut self, node_id: NodeId) {
-        let old = self.drone_pdr.entry(node_id).or_insert(0.0);
+        let old = self.drone_pdr.entry(node_id).or_insert(1.0);
         // EWMA verso 0.0 (penalizziamo il link quando effettivamente drop)
         let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
         *old = new_pdr;
@@ -524,7 +524,7 @@ impl Functionality for Host {
                 self.network
                     .drone_pdr
                     .entry(node_id)
-                    .or_insert(0.0);
+                    .or_insert(1.0);
             }
             // per i server, inserisci nell’HashSet dei server
             if node_type == NodeType::Server {
