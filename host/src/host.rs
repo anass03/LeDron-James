@@ -15,7 +15,7 @@ pub type FileId = usize;
 pub type MediaId = usize;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
-
+const ALPHA: f64 = 0.1; // fattore di smussamento (regolabile)
 
 #[derive(Clone)]
 pub struct Host{
@@ -91,7 +91,7 @@ pub struct Network {
     pub nodes: HashMap<NodeId, (NodeType, Vec<Edge>)>,
 
     /// Per ogni drone: (pacchetti inviati, pacchetti persi)
-    pub drones_packet_stats: HashMap<NodeId, (u32, u32)>,
+    pub drone_pdr: HashMap<NodeId, f64>,
 }
 impl Network {
     pub fn new() -> Self {
@@ -101,60 +101,45 @@ impl Network {
             servers: HashSet::new(),
             // drones_packet_sent: HashMap::new()
             nodes: HashMap::new(),
-            drones_packet_stats: HashMap::new(),
+            drone_pdr: HashMap::new(),
         }
     }
-    /// Chiama questa funzione **dopo** aver inserito/aggiornato
-    /// i contatori in `drones_packet_stats` per ricalcolare tutti
-    /// i PDR sugli archi uscenti da ciascun drone.
+    /// Aggiorna edge.weight = 1.0 - drone_pdr[drone_id] per ogni arco uscente da `drone_id`.
+    /// In questo modo, in `find_best_route` un arco avrà affidabilità = drone_pdr[&drone_id].
     pub fn recalc_pdr(&mut self) {
-        for (&drone_id, &(sent, lost)) in &self.drones_packet_stats {
-            // Evitiamo divisioni per zero
-            let pdr = if sent == 0 {
-                0.0
-            } else {
-                // PDR = lost / sent
-                (lost as f64) / (sent as f64)
-            };
+        for (&drone_id, &reliability) in &self.drone_pdr {
+            // Se per qualche motivo reliability > 1.0 o < 0.0, lo rimettiamo in [0,1]
+            let r = reliability.clamp(0.0, 1.0);
+            let drop_rate = 1.0 - r;
 
-            // Aggiorna ogni arco uscente dal drone
             if let Some((node_type, edges)) = self.nodes.get_mut(&drone_id) {
-                // Solo se è effettivamente un drone
                 if *node_type == NodeType::Drone {
                     for edge in edges.iter_mut() {
-                        edge.weight = pdr;
+                        edge.weight = drop_rate;
                     }
                 }
-            } else {
-                //Host::send_logging(format!("Drone node {} non trovato in `nodes`!", drone_id));
             }
         }
     }
-
-    /// Registra un tentativo di forwarding su ciascun hop
-    /// (ad esempio quando mandi un pacchetto a percorso sorgente).
+    /// Ogni volta che un drone “ha trasmesso” (forward), abbassiamo la sua stima di PDR:
+    /// new_pdr = α * 0.0 + (1 − α) * old_pdr
     pub fn pdr_helper(&mut self, hops: &[NodeId]) {
-        // Ogni volta che "provi" a inoltrare via hop, incrementa sent
-        for &node in hops {
-            self.drones_packet_stats
-                .entry(node)
-                .and_modify(|stats| stats.0 += 1)
-                .or_insert((1, 0));
+        for &drone_id in hops {
+            // Se non esiste ancora, lo inizializziamo a 1.0 (fiducia totale)
+            let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
+            // EWMA verso 0.0 (abbassiamo la PDR perché ha trasmesso)
+            let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
+            *old = new_pdr;
         }
-        self.recalc_pdr();
     }
-
-    /// Registra un NACK (drop) ricevuto dal drone `node_id`
+    /// Ogni volta che un drone invia un NACK “Dropped”, abbassiamo ulteriormente la PDR:
+    /// new_pdr = α * 0.0 + (1 − α) * old_pdr
     pub fn pdr_from_nack(&mut self, node_id: NodeId) {
-        self.drones_packet_stats
-            .entry(node_id)
-            .and_modify(|stats| stats.1 += 1)
-            .or_insert((0, 1));
-        self.recalc_pdr();
+        let old = self.drone_pdr.entry(node_id).or_insert(0.0);
+        // EWMA verso 0.0 (penalizziamo il link quando effettivamente drop)
+        let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
+        *old = new_pdr;
     }
-
-
-
 
     /// Restituisce Some(path) che massimizza la probabilità di successo (PDR),
     /// ovvero minimizza la somma dei costi c = -ln(pdr) lungo gli archi.
@@ -181,14 +166,16 @@ impl Network {
             if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    let reliability = 1.0 - edge.weight;
-                    // se affidabilità nulla, ignoro l'arco
+                    // Qui estraggo direttamente la stima EWMA di PDR per il drone `u`
+                    let reliability = *self.drone_pdr.get(&u).unwrap_or(&1.0);
+                    // Se la stima è zero o negativa, salto subito l'arco
                     if reliability <= 0.0 {
                         continue;
                     }
                     // costo additivo
                     let c = -reliability.ln();
                     let next_cost = cost_u + c;
+
                     if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
@@ -251,12 +238,16 @@ impl Network {
             if let Some((_, edges)) = temp.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    let reliability = 1.0 - edge.weight;
+
+                    // idem: leggo la stima EWMA per `u`
+                    let reliability = *self.drone_pdr.get(&u).unwrap_or(&1.0);
                     if reliability <= 0.0 {
                         continue;
                     }
+
                     let c = -reliability.ln();
                     let next_cost = cost_u + c;
+
                     if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
@@ -528,12 +519,12 @@ impl Functionality for Host {
                 .entry(node_id)
                 .or_insert_with(|| (node_type, Vec::new()));
 
-            // per i droni, inizializza subito i contatori (0 inviati, 0 persi)
+            // per i droni, inizializza subito pdr
             if node_type == NodeType::Drone {
                 self.network
-                    .drones_packet_stats
+                    .drone_pdr
                     .entry(node_id)
-                    .or_insert((0, 0));
+                    .or_insert(0.0);
             }
             // per i server, inserisci nell’HashSet dei server
             if node_type == NodeType::Server {
@@ -582,7 +573,7 @@ impl Functionality for Host {
         }
 
         // (Opzionale) se vuoi ricalcolare subito i PDR:
-        // self.network.recalc_pdr();
+        self.network.recalc_pdr();
     }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         self.send_logging(format!("Sending packet... host={}", self.id));
@@ -637,18 +628,16 @@ impl Functionality for Host {
     fn handle_ack(&self, ack: Ack, session_id: u64) {
 
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
-        for (&drone_id, &(sent, lost)) in &self.network.drones_packet_stats {
-            let drop_rate = if sent == 0 {
-                0.0
-            } else {
-                (lost as f64) / (sent as f64)
-            };
+        for (&drone_id, &pdr) in &self.network.drone_pdr {
+            // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
+            let drop_rate = 1.0 - pdr.clamp(0.0, 1.0);
             self.send_logging(format!(
-                "Drone {}: sent = {}, lost = {}, drop_rate = {:.3}",
-                drone_id, sent, lost, drop_rate
+                "Drone {}: pdr = {:.3}, drop_rate = {:.3}",
+                drone_id, pdr, drop_rate
             ));
         }
         self.send_logging("--------------------------".to_string());
+
         let idx = ack.fragment_index as usize;
         self.send_logging(format!(
             "Received ACK host={} session={} fragment={}",
