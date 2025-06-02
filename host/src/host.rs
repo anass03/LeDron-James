@@ -327,6 +327,9 @@ impl Functionality for Host {
         self.send_logging("Flood scheduled (debounced)".to_string());
     }
     fn initiate_flood(&mut self) {
+        if !self.network.nodes.is_empty() {
+            self.network.nodes.clear();
+        }
         if self.packet_send.is_empty() {
             self.send_logging(format!("No neighbors to flood to host={}",  self.id));
             // Siamo in errore di rete: MA siccome non ho inviato alcun FloodRequest,
