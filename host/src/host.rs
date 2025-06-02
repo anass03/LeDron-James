@@ -110,12 +110,12 @@ impl Network {
         for (&drone_id, &reliability) in &self.drone_pdr {
             // Se per qualche motivo reliability > 1.0 o < 0.0, lo rimettiamo in [0,1]
             let r = reliability.clamp(0.0, 1.0);
-            let drop_rate = 1.0 - r;
+            //let drop_rate = 1.0 - r;
 
             if let Some((node_type, edges)) = self.nodes.get_mut(&drone_id) {
                 if *node_type == NodeType::Drone {
                     for edge in edges.iter_mut() {
-                        edge.weight = drop_rate;
+                        edge.weight = r;
                     }
                 }
             }
