@@ -35,7 +35,7 @@ impl Client {
         let (_never_tx, never_timer): (Sender<Instant>, Receiver<Instant>) = unbounded();
 
         self.host.initiate_flood();
-
+        let mut counter =30;
         loop {
             select_biased!{
                 // 1) comandi dal controller
@@ -52,8 +52,11 @@ impl Client {
                             self.host.send_logging(format!("Error processing packet: {}", e));
                         }
                     }
+                    if counter==0 {
+                        self.host.send_logging(format!("✅❌✅❌✅ PDR DISCOVERY: {:?}", self.host.network.drones_packet_stats));
+                        counter = 30;
+                    }else{ counter-=1; }
                 },
-
                 // 3) debounce‐timer (fire solo se flood_scheduled è true)
                 // recv(self
                 // .host
