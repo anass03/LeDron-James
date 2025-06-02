@@ -35,7 +35,6 @@ impl Client {
         let (_never_tx, never_timer): (Sender<Instant>, Receiver<Instant>) = unbounded();
 
         self.host.initiate_flood();
-        let mut counter =10;
         loop {
             select_biased!{
                 // 1) comandi dal controller
@@ -47,10 +46,6 @@ impl Client {
 
                 // 2) pacchetti in arrivo
                 recv(self.host.packet_recv) -> pkt => {
-                    if counter==0 {
-                        self.host.send_logging(format!("✅❌✅❌✅ PDR DISCOVERY: {:?}", self.host.network.drones_packet_stats));
-                        counter = 10;
-                    }else{ counter-=1; }
                     if let Ok(packet) = pkt {
                         if let Err(e) = self.handle_packet(packet) {
                             self.host.send_logging(format!("Error processing packet: {}", e));

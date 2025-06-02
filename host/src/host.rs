@@ -1,5 +1,5 @@
 use std::cmp::Reverse;
-use crossbeam_channel::{after, Receiver, Sender};
+use crossbeam_channel::{after, select, Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
 use std::collections::{BinaryHeap, HashMap, HashSet};
@@ -15,6 +15,7 @@ pub type FileId = usize;
 pub type MediaId = usize;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
+
 
 #[derive(Clone)]
 pub struct Host{
@@ -44,7 +45,6 @@ impl Host{
                packet_recv:Receiver<Packet>,
                packet_send:HashMap<NodeId, Sender<Packet>>,
                log_sender: Sender<String>) -> Host {
-
         let host = Self {
             id,
             type_host,
@@ -635,6 +635,20 @@ impl Functionality for Host {
         }
     }
     fn handle_ack(&self, ack: Ack, session_id: u64) {
+
+        self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
+        for (&drone_id, &(sent, lost)) in &self.network.drones_packet_stats {
+            let drop_rate = if sent == 0 {
+                0.0
+            } else {
+                (lost as f64) / (sent as f64)
+            };
+            self.send_logging(format!(
+                "Drone {}: sent = {}, lost = {}, drop_rate = {:.3}",
+                drone_id, sent, lost, drop_rate
+            ));
+        }
+        self.send_logging("--------------------------".to_string());
         let idx = ack.fragment_index as usize;
         self.send_logging(format!(
             "Received ACK host={} session={} fragment={}",
