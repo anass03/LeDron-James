@@ -330,13 +330,19 @@ impl SimulationControllerData {
     pub fn handle_channels(&mut self) {
 
         while let Ok(event) = self.host_event_receiver.try_recv() {
-            let _ = self.handle_host_event(event);
+            match self.handle_host_event(event) {
+                Ok(()) => {},
+                Err(e) => {self.logs.push_log(e.0, e.1.as_str());},
+            }
         }
         while let Ok(log) = self.log_receiver.try_recv() {
             self.handle_log_event(log);
         }
         while let Ok(event) = self.drone_event_receiver.try_recv() {
-            let _ = self.handle_drone_event(event);
+            match self.handle_drone_event(event) {
+                Ok(()) => {},
+                Err(e) => {self.logs.push_log(e.0, e.1.as_str())}
+            }
         }
         /*crossbeam_channel::select! { // Prioritizing Controller messages using select_biased! macro
             recv(self.host_event_receiver) -> event => {
