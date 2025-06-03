@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
@@ -238,35 +238,31 @@ impl SimulationControllerData {
 
     /// - Drone Events
 
-    pub fn handle_drone_event(&mut self) -> Result<(), String> {
-        for receiver in self.drone_event_receiver.try_iter() {
-            match receiver {
-                DroneEvent::PacketSent(packet) => {
-                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                    //handle_packet(&packet);
-                    let session_id = packet.session_id;
-                    self.stats.received_packet();
-                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-                },
-                DroneEvent::PacketDropped(packet) => {
-                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                    //handle_packet(&packet);
-                    let session_id = packet.session_id;
-                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-                },
-                DroneEvent::ControllerShortcut(packet) => {
-                    let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                    //handle_packet(&packet);
-                    let session_id = packet.session_id;
-                    //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-                },
-            }
+    pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
+        match event {
+            DroneEvent::PacketSent(packet) => {
+                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let session_id = packet.session_id;
+                self.stats.received_packet();
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::PacketDropped(packet) => {
+                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let session_id = packet.session_id;
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::ControllerShortcut(packet) => {
+                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let session_id = packet.session_id;
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
         }
-
-        /*for drone in self.drones.iter() {
-            self.logs.push_log(LogType::INFO, format!("[Simulation Controller] - Drone {} neighbors: {:?}",drone.id, drone.connected_node_ids).as_str())
-        }*/
-        Ok(())
     }
 
     /// - Client Commands
@@ -330,82 +326,100 @@ impl SimulationControllerData {
 
     // /// - Client Events
 
-    pub fn handle_client_event(&mut self) -> Option<String> {
-        for received in self.host_event_receiver.try_iter() {
-            return match received {
-                HostEvent::PacketReconstructed(server_to_client) => {
-                    Some(match server_to_client {
-                        ServerToClient::ServerType(server_type) => format!("Server type: {:?}", server_type),
-                        ServerToClient::FilesList(file_list) => format!("Files list received: {:?}", file_list),
-                        ServerToClient::File(file_id, file) => {
-                            // Infer file type
-                            let kind = infer::get(&file);
-                            let extension = kind
-                                .map(|k| k.extension())
-                                .unwrap_or("txt"); // default to .bin if unknown
-
-                            // Construct filename based on file ID and inferred extension
-                            let filename = format!("file_{}.{}", file_id, extension);
-                            let path = PathBuf::from("assets").join(&filename);
-
-                            // Write file
-                            fs::write(&path, &file).expect("file not downloaded");
-
-                            // Open with system default application
-                            #[cfg(target_os = "windows")]
-                            {
-                                let path_str = path.to_str().unwrap();
-                                let quoted_path = format!("\"{}\"", path_str);
-                                Command::new("cmd")
-                                    .args(&["/C", "start", "\"\"", &quoted_path])
-                                    .spawn()
-                                    .expect("Unable to open file on Windows");
-                            }
-
-                            #[cfg(target_os = "macos")]
-                            {
-                                Command::new("open")
-                                    .arg(&path)
-                                    .spawn()
-                                    .expect("Unable to open file on macOS");
-                            }
-
-                            #[cfg(target_os = "linux")]
-                            {
-                                Command::new("xdg-open")
-                                    .arg(&path)
-                                    .spawn()
-                                    .expect("Unable to open file on Linux");
-                            }
-
-                            format!("File {} received, saved as {} and opened", file_id, filename)
-                        },
-                        ServerToClient::MediaList(media_list) => format!("Media list received: {:?}", media_list),
-                        ServerToClient::Media(media_id, image) => {
-                            let path = format!("assets/image_{}.jpg", media_id);
-                            std::fs::write(&path, &image.data).expect("Errore nel salvataggio immagine");
-                            format!("Immagine {} salvata come {}", media_id, path)
-                        },
-                        ServerToClient::ClientList(client_list) => format!("Client list received: {:?}", client_list),
-                        ServerToClient::MessageFrom(client_id, message) => format!("Message from Client {} received: {:?}", client_id, message),
-                        ServerToClient::ErrNotFound => "Err Not Found".to_owned(),
-                        ServerToClient::ErrClientId => "Err Client Id Not Found".to_owned(),
-                    })
-                },
-                HostEvent::PacketSent(_packet) => {
-                    self.stats.received_packet();
-                    //Some(format!("💥Packet Sent: {:?}", packet))
-                    None
-                },
+    pub fn handle_channels(&mut self) {
+        crossbeam_channel::select_biased! { // Prioritizing Controller messages using select_biased! macro
+            recv(self.host_event_receiver) -> event => {
+                if let Ok(event) = event {
+                    match self.handle_host_event(event) {
+                        Ok(()) => {},
+                        Err(e) => {self.logs.push_log(e.0, e.1.as_str());},
+                    }
+                }
+            }
+            recv(self.log_receiver) -> log => {
+                if let Ok(log) = log {
+                    self.handle_log_event(log)
+                }
+            }
+            recv(self.drone_event_receiver) -> event => {
+                if let Ok(event) = event {
+                    match self.handle_drone_event(event) {
+                        Ok(()) => {},
+                        Err(e) => {self.logs.push_log(e.0, e.1.as_str())}
+                    }
+                }
             }
         }
-        None
+
     }
 
-    pub fn handle_log_event(&mut self){
-        for logs in self.log_receiver.try_iter(){
-            self.logs.push_log(LogType::INFO, logs.as_str());
+    pub fn handle_host_event(&mut self, event: HostEvent) -> Result<(), (LogType, String)> {
+        match event {
+            HostEvent::PacketReconstructed(server_to_client) => {
+                match server_to_client {
+                    ServerToClient::ServerType(server_type) => self.logs.push_log(LogType::INFO, format!("Server type: {:?}", server_type).as_str()),
+                    ServerToClient::FilesList(file_list) => self.logs.push_log(LogType::INFO, format!("Files list received: {:?}", file_list).as_str()),
+                    ServerToClient::File(file_id, extension, file) => {
+                        // Construct filename based on file ID and inferred extension
+                        let filename = format!("file_{}.{}", file_id, extension);
+                        let path = PathBuf::from("assets").join(&filename);
+
+                        // Write file
+                        fs::write(&path, &file).expect("file not downloaded");
+
+                        // Open with system default application
+                        #[cfg(target_os = "windows")]
+                        {
+                            let path_str = path.to_str().unwrap();
+                            let quoted_path = format!("\"{}\"", path_str);
+                            Command::new("cmd")
+                                .args(&["/C", "start", "\"\"", &quoted_path])
+                                .spawn()
+                                .expect("Unable to open file on Windows");
+                        }
+
+                        #[cfg(target_os = "macos")]
+                        {
+                            Command::new("open")
+                                .arg(&path)
+                                .spawn()
+                                .expect("Unable to open file on macOS");
+                        }
+
+                        #[cfg(target_os = "linux")]
+                        {
+                            Command::new("xdg-open")
+                                .arg(&path)
+                                .spawn()
+                                .expect("Unable to open file on Linux");
+                        }
+
+                        self.logs.push_log(LogType::INFO, format!("File {} received, saved", file_id, /*filename*/).as_str());
+
+                    },
+                    ServerToClient::MediaList(media_list) => self.logs.push_log(LogType::INFO, format!("Media list received: {:?}", media_list).as_str()),
+                    ServerToClient::Media(media_id, extension, image) => {
+                        let path = format!("assets/image_{}.{extension}", media_id);
+                        fs::write(&path, &image.data).expect("Errore nel salvataggio immagine");
+
+                        self.logs.push_log(LogType::INFO, format!("Immagine {} salvata come {}", media_id, path).as_str())
+                    },
+                    ServerToClient::ClientList(client_list) => self.logs.push_log(LogType::INFO, format!("Client list received: {:?}", client_list).as_str()),
+                    ServerToClient::MessageFrom(client_id, message) => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
+                    ServerToClient::ErrNotFound => return Err((LogType::ERROR, "Err Not Found".to_string())),
+                    ServerToClient::ErrClientId => return Err((LogType::ERROR, "Err Client Id Not Found".to_string())),
+                }
+            },
+            HostEvent::PacketSent(_packet) => {
+                self.stats.received_packet();
+                //Some(format!("💥Packet Sent: {:?}", packet))
+            },
         }
+        Ok(())
+    }
+
+    pub fn handle_log_event(&mut self, log: String) {
+        self.logs.push_log(LogType::INFO, log.as_str())
     }
 }
 
