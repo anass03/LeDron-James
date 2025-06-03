@@ -249,7 +249,7 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
                     }
                 }
                 Node::Server(_) => {
-                    let block_image = Block::default()
+               /*     let block_image = Block::default()
                         .title(" PAT PAT PAT ")
                         .title_alignment(Alignment::Center)
                         .borders(Borders::ALL);
@@ -258,9 +258,9 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
                     let dyn_img = image::ImageReader::open("./assets/IMG_0400.jpg")
                         .unwrap()
                         .decode()
-                        .unwrap();
-                    /*
-                    // Initialize a Picker for Crossterm graphics
+                        .unwrap();*/
+                    /*a
+                    // dInitialize a Picker for Crossterm graphics
                     let font_size = (8, 16); // adjust based on your terminal cell size if needed
                     let mut picker = Picker::new(font_size, BackendType::Crossterm, None).unwrap();
 
@@ -371,7 +371,7 @@ fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     // I'll render 2 TUI_TEXT_AREA on the two areas, with all the 2 different buffers
     // 1 - Add 2 buffers on tab1_data
     // 2 - Add a fn to flush each data each tab change,
-//      that parse each buffer!
+    // that parse each buffer!
 
     let mut first_block = Block::new()
         .title(Span::from(" insert the ID ( u8 ) "))
