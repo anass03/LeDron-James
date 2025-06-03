@@ -535,8 +535,10 @@ impl Client {
             )
             .copied()
             .collect();
-
+        self.host.send_logging(format!("✅✅ dorne pdr= {:?}", drone_hops));
         self.host.network.pdr_helper(&drone_hops);
+        self.host.send_logging(format!("✅✅ AFTER PDR_HELPER, dorne pdr= {:?}", self.host.network.drone_pdr));
+
         self.host.send_logging(format!(
             "PDR updated host={} header hops={:?}",
             self.host.id,
