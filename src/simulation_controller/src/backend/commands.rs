@@ -51,9 +51,16 @@ impl NodeType {
 }
 
 impl SimulationControllerData {
+    //returns true if node is critical
+    fn check_critical(&mut self, drone_id: NodeId) -> bool{
+        false
+    }
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
+        if self.check_critical(drone_id) {
+            return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
+        }
         self.logs.push_log(LogType::DEBUG, format!("Sending drone crash to drone: {drone_id}").as_str());
         let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
@@ -383,7 +390,7 @@ impl SimulationControllerData {
                     ServerToClient::ServerType(server_type) 
                     => self.logs.push_log(LogType::INFO, format!("Server type: {:?}", server_type).as_str()),
                     ServerToClient::FilesList(server_id, file_list) 
-                    => self.logs.push_log(LogType::INFO, format!("Files list from server {server_id} received: {file_list:?}").as_str()),
+                    => self.logs.push_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}").as_str()),
                     ServerToClient::File(server_id, file_id, extension, file) 
                     => {
                         // Construct filename based on file ID and inferred extension
@@ -423,7 +430,7 @@ impl SimulationControllerData {
 
                     },
                     ServerToClient::MediaList(server_id, media_list) 
-                    => self.logs.push_log(LogType::INFO, format!("Media list received: {:?}", media_list).as_str()),
+                    => self.logs.push_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list).as_str()),
                     ServerToClient::Media(server_id, media_id, extension, image) 
                     => {
                         let path = format!("assets/image_{}.{extension}", media_id);
@@ -444,7 +451,7 @@ impl SimulationControllerData {
 
                             match save_result {
                                 Ok(_) => {
-                                    self.logs.push_log(LogType::INFO, format!("Media {} saved as {}", media_id, path).as_str());
+                                    self.logs.push_log(LogType::INFO, format!("Media {} from Server {server_id} saved as {}", media_id, path).as_str());
                                     open_image(&path)
                                 },
                                 Err(e) => self.logs.push_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e).as_str()),
@@ -454,7 +461,7 @@ impl SimulationControllerData {
                         }
                     },
                     ServerToClient::ClientList(server_id, client_list) 
-                    => self.logs.push_log(LogType::INFO, format!("Client list received: {:?}", client_list).as_str()),
+                    => self.logs.push_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list).as_str()),
                     ServerToClient::MessageFrom(server_id, client_id, message) 
                     => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
                     ServerToClient::FileFrom(server_id, client_id, file_id, extension, file) 
@@ -463,7 +470,7 @@ impl SimulationControllerData {
                     }
                     ServerToClient::MediaFrom(server_id, client_id, media_id, extension, image) 
                     => {
-                        
+                        self.logs.push_log(LogType::INFO, format!("Media from Client {client_id} received:").as_str());
                     }
                     ServerToClient::ErrNotFound(server_id) 
                     => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
