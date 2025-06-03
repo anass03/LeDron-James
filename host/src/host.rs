@@ -1021,18 +1021,18 @@ pub enum ClientNetCommand {
     //client command
     ServerType,
     //content-server
-    FilesList,
-    File(FileId),
+    FilesList(ServerId),
+    File(ServerId, FileId),
 
-    MediaList,
-    Media(MediaId),
+    MediaList(ServerId),
+    Media(ServerId,MediaId),
 
     //chat-server
-    RegistrationToChat,
-    ClientList,
-    MessageFor(ClientId, String),
-    FileFor(ClientId, FileId, Extension, Vec<u8>),
-    MediaFor(ClientId,MediaId, Extension, Image),
+    RegistrationToChat(ServerId),
+    ClientList(ServerId),
+    MessageFor(ClientId,ServerId, String),
+    FileFor(ClientId,ServerId, FileId, Extension, Vec<u8>),
+    MediaFor(ClientId,ServerId, MediaId, Extension, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
@@ -1043,20 +1043,20 @@ pub enum ServerToClient{
     ServerType(ServerTypes),
 
     //content server
-    FilesList(Vec<FileId>),
-    File(FileId, Extension, Vec<u8>),
+    FilesList(ServerId, Vec<FileId>),
+    File(ServerId, FileId, Extension, Vec<u8>),
 
-    MediaList(Vec<MediaId>),
-    Media(MediaId, Extension, Image),
+    MediaList(ServerId, Vec<MediaId>),
+    Media(ServerId, MediaId, Extension, Image),
 
     //chat server
-    ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, String),
-    FileFrom(ClientId, FileId, Extension, Vec<u8>),
-    MediaFrom(ClientId, MediaId, Extension, Image),
+    ClientList(ServerId, Vec<ClientId>),
+    MessageFrom(ServerId, ClientId, String),
+    FileFrom(ServerId, ClientId, FileId, Extension, Vec<u8>),
+    MediaFrom(ServerId, ClientId, MediaId, Extension, Image),
 
-    ErrNotFound,
-    ErrClientId
+    ErrNotFound(ServerId),
+    ErrClientId(ServerId),
 }
 /// Application events that comes to the SimulationController
 pub enum HostEvent {
@@ -1064,12 +1064,11 @@ pub enum HostEvent {
     PacketReconstructed(ServerToClient),
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
-    // Timeout(session_id),
-    // ClientDisconnected(client_id),
-    // ecc.
+    ///Servers discovered, response at ServerType
+    ServersDiscovered(HashMap<ServerTypes,Vec<ServerId>>)
 }
 
-#[derive(Hash, Eq, PartialEq, Debug,Deserialize, Serialize)]
+#[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
 pub enum ServerTypes{
     Chat,
     Content
