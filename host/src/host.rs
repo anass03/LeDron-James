@@ -280,7 +280,7 @@ pub trait Functionality{
     fn process_flood_response(&mut self, response: FloodResponse);
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes;
     fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
-    fn handle_ack(&self, ack: Ack, session_id: u64);
+    fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
     fn handle_nack(&mut self, nack: Nack,nack_generator: NodeId, session_id: u64);
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
     fn cleanup_expired_sessions(&self, timeout: Duration);
@@ -626,8 +626,22 @@ impl Functionality for Host {
             }
         }
     }
-    fn handle_ack(&self, ack: Ack, session_id: u64) {
+    fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64) {
+        let drone_hops: Vec<NodeId> = hops.iter()
+            .filter(|&&nid| {
+                matches!(
+                        self.network.nodes.get(&nid).map(|(ty, _)| ty),
+                        Some(NodeType::Drone))}
+            )
+            .copied()
+            .collect();
+        self.network.pdr_helper(&drone_hops);
 
+        self.send_logging(format!(
+            "PDR updated host={} header hops={:?}",
+            self.id,
+            hops,
+        ));
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
         for (&drone_id, &pdr) in &self.network.drone_pdr {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.

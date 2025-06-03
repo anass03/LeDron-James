@@ -437,7 +437,7 @@ impl Client {
             }
 
             PacketType::Ack(ack) => {
-                self.host.handle_ack(ack, packet.session_id);
+                self.host.handle_ack(ack,packet.routing_header.hops.as_slice(), packet.session_id);
                 Ok(())
             }
 
