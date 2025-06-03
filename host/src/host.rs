@@ -1031,6 +1031,8 @@ pub enum ClientNetCommand {
     RegistrationToChat,
     ClientList,
     MessageFor(ClientId, String),
+    FileFor(ClientId, FileId, Extension, Vec<u8>),
+    MediaFor(ClientId,MediaId, Extension, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
@@ -1040,14 +1042,18 @@ pub enum HostCommand {
 pub enum ServerToClient{
     ServerType(ServerTypes),
 
+    //content server
     FilesList(Vec<FileId>),
     File(FileId, Extension, Vec<u8>),
 
     MediaList(Vec<MediaId>),
     Media(MediaId, Extension, Image),
 
+    //chat server
     ClientList(Vec<ClientId>),
     MessageFrom(ClientId, String),
+    FileFrom(ClientId, FileId, Extension, Vec<u8>),
+    MediaFrom(ClientId, MediaId, Extension, Image),
 
     ErrNotFound,
     ErrClientId

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
 use host::ServerTypes::{Content,Chat};
-use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media,MediaList, MessageFrom, ErrNotFound, ErrClientId};
+use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom};
 
 pub struct Client {
     host: Host,
@@ -299,6 +299,52 @@ impl Client {
                             self.host.send_logging(format!("No chat server available for MessageFor({})", client_id));
                         }
                     }
+                    ClientNetCommand::FileFor(client_id, file_id,ext, file) => {
+                        self.host.send_logging(format!("Preparing FileFor({}, …) request", client_id));
+                        if let Some(&server_id) = self.servers.get(&Chat) {
+                            match serde_json::to_vec(&ClientNetCommand::FileFor(client_id,file_id, ext, file)) {
+                                Ok(content) => {
+                                    let message = Message {
+                                        session_id: generate_unique_session_id(),
+                                        content,
+                                    };
+                                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                                        self.host.send_logging(format!("Failed to send FileFor({}, …) to server {}: {}", client_id, server_id, err));
+                                    } else {
+                                        self.host.send_logging(format!("FileFor({}, …) sent to server {}", client_id, server_id));
+                                    }
+                                }
+                                Err(e) => {
+                                    self.host.send_logging(format!("Serialization of FileFor failed: {}", e));
+                                }
+                            }
+                        } else {
+                            self.host.send_logging(format!("No chat server available for FileFor({})", client_id));
+                        }
+                    }
+                    ClientNetCommand::MediaFor(client_id,media_id, ext, image) => {
+                        self.host.send_logging(format!("Preparing FileFor({}, …) request", client_id));
+                        if let Some(&server_id) = self.servers.get(&Chat) {
+                            match serde_json::to_vec(&ClientNetCommand::MediaFor(client_id, media_id, ext, image)) {
+                                Ok(content) => {
+                                    let message = Message {
+                                        session_id: generate_unique_session_id(),
+                                        content,
+                                    };
+                                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                                        self.host.send_logging(format!("Failed to send MediaFor({}, …) to server {}: {}", client_id, server_id, err));
+                                    } else {
+                                        self.host.send_logging(format!("MediaFor({}, …) sent to server {}", client_id, server_id));
+                                    }
+                                }
+                                Err(e) => {
+                                    self.host.send_logging(format!("Serialization of MediaFor failed: {}", e));
+                                }
+                            }
+                        } else {
+                            self.host.send_logging(format!("No chat server available for MediaFor({})", client_id));
+                        }
+                    }
                     _ => {
                         self.host.send_logging(format!("Received NetCommand variant with no action: {:?}", net_command));
                     }
@@ -388,12 +434,20 @@ impl Client {
                                     self.host.send_logging(format!("Message from {}: {:?}", from, msg.clone()));
                                     send_reconstructed(MessageFrom(from, msg))?;
                                 }
+                                FileFrom(from,file_id, ext, data) => {
+                                    self.host.send_logging(format!("Received {}.{} from client {}", file_id, ext,from));
+                                    send_reconstructed(FileFrom(from,file_id, ext, data))?;
+                                }
+                                MediaFrom(from, media_id, ext, data) => {
+                                    self.host.send_logging(format!("Received {}.{} from client {}", media_id, ext,from));
+                                    send_reconstructed(MediaFrom(from, media_id, ext, data))?;
+                                }
                                 FilesList(files) => {
                                     self.host.send_logging(format!("Files available: {:?}", files));
                                     send_reconstructed(FilesList(files))?;
                                 }
                                 File(file_id,ext, data) => {
-                                    self.host.send_logging(format!("Received file {}, with extension {} of {} bytes",file_id,ext, data.len()));
+                                    self.host.send_logging(format!("Received {}.{} of {} bytes",file_id,ext, data.len()));
                                     send_reconstructed(File(file_id,ext, data))?;
                                 }
                                 MediaList(media_list) => {
@@ -401,7 +455,7 @@ impl Client {
                                     send_reconstructed(MediaList(media_list))?;
                                 }
                                 Media(media_id,ext, media) => {
-                                    self.host.send_logging(format!("Received media {}, with extension {} of {} bytes",media_id,ext, media.data.len()));
+                                    self.host.send_logging(format!("Received {}.{} of {} bytes",media_id,ext, media.data.len()));
                                     send_reconstructed(Media(media_id,ext, media))?;
                                 }
                                 ErrClientId => {
