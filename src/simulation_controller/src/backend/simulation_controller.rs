@@ -1,14 +1,15 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
+use client::{Client, ClientCommand};
 use colored::Colorize;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
-use wg_2024::network::{NodeId, SourceRoutingHeader};
+use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
-use host::{HostEvent, NetCommand};
+use host::{HostCommand, HostEvent};
 #[derive(Clone)]
 pub enum LogType{
     WARN, ERROR, INFO, DEBUG, FATAL
@@ -37,8 +38,8 @@ pub struct SimulationControllerData {
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
-    pub client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-    pub server_command_sender: HashMap<NodeId, Sender<NetCommand>>,
+    pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+    pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
@@ -51,8 +52,8 @@ impl SimulationControllerData {
     pub fn new(
         config: Config,
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
-        client_command_sender: HashMap<NodeId, Sender<NetCommand>>,
-        server_command_sender: HashMap<NodeId, Sender<NetCommand>>,
+        client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
+        server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,

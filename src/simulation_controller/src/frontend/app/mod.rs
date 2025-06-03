@@ -55,7 +55,7 @@ impl App<'_>{
             simulation_controller_data,
             stay:true,
             app_mode:AppMode::Normal,
-            tick_rate:Duration::from_millis(250),
+            tick_rate:Duration::from_millis(200),
 
             settings: Settings::load(),
             selected_tab: SelectedTab::default(),
@@ -73,7 +73,7 @@ impl App<'_>{
             match self.simulation_controller_data.handle_client_event(){
                 None => {}
                 Some(str) => {
-                    self.simulation_controller_data.log(LogType::INFO, str);
+                    self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str());
                 }
             }
 

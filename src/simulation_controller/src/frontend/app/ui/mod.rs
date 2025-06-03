@@ -1,8 +1,9 @@
 pub mod layout;
-pub mod topology;
+
 pub mod logs;
 pub mod tabs;
 mod utils;
+mod topology_algorithm;
 
 use super::super::app::App;
 
