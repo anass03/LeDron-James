@@ -16,11 +16,9 @@ pub struct ContentServer {
     media: Vec<usize>,
 }
 
-
 pub trait ContentServerBehavior: MediaServer + TextServer {
     fn handling_packets(&mut self, packet: Packet);
 }
-
 
 impl ContentServer {
     delegate! {
@@ -166,10 +164,14 @@ impl ContentServer {
                 self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
             }
             ClientNetCommand::File(id) => {
-                if let Ok(data) = Self::convert_file(id) {
-                    self.send_response(ServerToClient::File(id, data), destination);
-                } else {
-                    self.send_response(ServerToClient::ErrNotFound, destination);
+                match Self::convert_file(id) {
+                    Ok((data, ext)) => {
+                        // invio (id, estensione, contenuto)
+                        self.send_response(ServerToClient::File(id, ext.clone(), data), destination);
+                    }
+                    Err(_) => {
+                        self.send_response(ServerToClient::ErrNotFound, destination);
+                    }
                 }
             }
             ClientNetCommand::MediaList => {
@@ -177,10 +179,13 @@ impl ContentServer {
                 self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
             }
             ClientNetCommand::Media(id) => {
-                if let Ok(image) = Self::process_image(id) {
-                    self.send_response(ServerToClient::Media(id, image), destination);
-                } else {
-                    self.send_response(ServerToClient::ErrNotFound, destination);
+                match Self::process_image(id) {
+                    Ok((image, ext)) => {
+                        self.send_response(ServerToClient::Media(id, ext.clone(), image), destination);
+                    }
+                    Err(_) => {
+                        self.send_response(ServerToClient::ErrNotFound, destination);
+                    }
                 }
             }
             _ => {
@@ -188,8 +193,6 @@ impl ContentServer {
             }
         }
     }
-    
-    
     fn handling_packets(&mut self, packet: Packet) {
         match packet.clone().pack_type {
             PacketType::Nack(nack) => {
@@ -212,10 +215,8 @@ impl ContentServer {
     }
 }
 
-
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
-
 
 
 #[test]

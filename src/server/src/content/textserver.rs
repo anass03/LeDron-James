@@ -5,12 +5,15 @@ use std::path::{Path, PathBuf};
 use host::FileId;
 
 pub trait TextServer {
-    fn read_file_any<P: AsRef<Path>>(folder: P, id: usize, exts: &[&str]) -> io::Result<Vec<u8>> {
+    /// Legge "i{id}.{ext}" per ognuna delle exts e restituisce (byte, ext) se trovato.
+    fn read_file_any_with_ext<P: AsRef<Path>>(folder: P, id: usize, exts: &[&str])
+        -> io::Result<(Vec<u8>, String)> {
         let base: &Path = folder.as_ref();
         for ext in exts {
             let candidate = base.join(format!("i{}.{}", id, ext));
             if candidate.exists() {
-                return fs::read(candidate);
+                let data = fs::read(&candidate)?;
+                return Ok((data, ext.to_string()));
             }
         }
         Err(io::Error::new(
@@ -18,13 +21,13 @@ pub trait TextServer {
             format!("Nessun file {} con estensioni {:?} in {:?}", id, exts, base),
         ))
     }
-    fn convert_file(id:FileId) -> Result<Vec<u8>, Box<dyn Error>> {
 
+    /// Restituisce (contenuto, estensione) del file richiesto come Text.
+    fn convert_file(id: FileId) -> Result<(Vec<u8>, String), Box<dyn Error>> {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-
         let files_dir  = manifest_dir.join("src/content/files");
         let id_num = id;
-        let bytes = Self::read_file_any(files_dir, id_num, &["txt", "pdf"])?;
-        Ok(bytes)
+        let (bytes, ext) = Self::read_file_any_with_ext(files_dir, id_num, &["txt", "pdf"])?;
+        Ok((bytes, ext))
     }
 }

@@ -6,7 +6,6 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet};
 use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand, FileId, MediaId, ClientId};
 use host::ServerTypes;
-use serde::{Deserialize, Serialize};
 
 pub struct GenServer {
     pub host: Host,
@@ -128,6 +127,22 @@ impl GenServerBehavior for GenServer {
         ack.routing_header.hop_index += 1;
         let _ = self.host.send_packet(ack, None);
 
+        let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
+            .filter(|&&nid| {
+                matches!(
+                        self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
+                        Some(NodeType::Drone))}
+            )
+            .copied()
+            .collect();
+        self.host.network.pdr_helper(&drone_hops);
+
+        self.host.send_logging(format!(
+            "PDR updated host={} header hops={:?}",
+            self.host.id,
+            packet.routing_header.hops,
+        ));
+        
         // se finito, reassembly e rimozione
         if session.pending == 0 {
             self.host.send_logging( format!(
@@ -149,21 +164,6 @@ impl GenServerBehavior for GenServer {
             received.remove(&session_id);
             return Some(data);
         }
-        let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
-            .filter(|&&nid| {
-                matches!(
-                        self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
-                        Some(NodeType::Drone))}
-            )
-            .copied()
-            .collect();
-        self.host.network.pdr_helper(&drone_hops);
-
-        self.host.send_logging(format!(
-            "PDR updated host={} header hops={:?}",
-            self.host.id,
-            packet.routing_header.hops,
-        ));
         None
     }
 }
