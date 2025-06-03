@@ -110,9 +110,9 @@ impl Network {
         for (&drone_id, &pdr) in &self.drone_pdr {
             if let Some((node_type, edges)) = self.nodes.get_mut(&drone_id) {
                 if *node_type == NodeType::Drone {
-                    let drop_rate = (1.0 - pdr).clamp(0.0, 1.0);
+                    let clamped = pdr.clamp(0.0, 1.0);
                     for edge in edges.iter_mut() {
-                        edge.weight = drop_rate;
+                        edge.weight = clamped;
                     }
                 }
             }
@@ -123,7 +123,7 @@ impl Network {
     pub fn pdr_helper(&mut self, hops: &[NodeId]) {
         for &drone_id in hops {
             // Se non esiste ancora, lo inizializziamo a 1.0 (fiducia totale)
-            let old = self.drone_pdr.entry(drone_id).or_insert(1.0);
+            let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
             // EWMA verso 0.0 (abbassiamo la PDR perché ha trasmesso)
             let new_pdr = (1.0 - ALPHA) * *old;
             *old = new_pdr.clamp(0.0, 1.0);
@@ -133,7 +133,7 @@ impl Network {
     /// Ogni volta che un drone invia un NACK “Dropped”, abbassiamo ulteriormente la PDR:
     /// new_pdr = α * 0.0 + (1 − α) * old_pdr
     pub fn pdr_from_nack(&mut self, node_id: NodeId) {
-        let old = self.drone_pdr.entry(node_id).or_insert(1.0);
+        let old = self.drone_pdr.entry(node_id).or_insert(0.0);
         // EWMA verso 0.0 (penalizziamo il link quando effettivamente drop)
         let new_pdr = ALPHA * 1.0 + (1.0 - ALPHA) * *old;
         *old = new_pdr.clamp(0.0, 1.0);
@@ -523,7 +523,7 @@ impl Functionality for Host {
                 self.network
                     .drone_pdr
                     .entry(node_id)
-                    .or_insert(1.0);
+                    .or_insert(0.0);
             }
             // per i server, inserisci nell’HashSet dei server
             if node_type == NodeType::Server {
@@ -629,10 +629,10 @@ impl Functionality for Host {
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
         for (&drone_id, &pdr) in &self.network.drone_pdr {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
-            let drop_rate = 1.0 - pdr.clamp(0.0, 1.0);
+            let reliability = 1.0 - pdr.clamp(0.0, 1.0);
             self.send_logging(format!(
                 "Drone {}: pdr = {:.3}, reliability = {:.3}",
-                drone_id, pdr, drop_rate
+                drone_id, pdr, reliability
             ));
         }
         self.send_logging("--------------------------".to_string());
@@ -907,15 +907,12 @@ impl Functionality for Host {
                 self.id, message.session_id, i, result
             ));
             if let SendingCodes::SuccessfullySent(_) = result {
-                let drone_hops: Vec<NodeId> = header
-                    .hops
-                    .iter()
+                let drone_hops: Vec<NodeId> = header.hops.iter()
                     .filter(|&&nid| {
                         matches!(
-                self.network.nodes.get(&nid).map(|(ty, _)| ty),
-                Some(NodeType::Drone)
-            )
-                    })
+                        self.network.nodes.get(&nid).map(|(ty, _)| ty),
+                        Some(NodeType::Drone))}
+                    )
                     .copied()
                     .collect();
 
