@@ -20,7 +20,7 @@ impl ChatServer {
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, response: FloodResponse);
-            fn handle_ack(&self, ack: Ack, session_id: u64);
+            fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
             fn send_logging(&self, message: String);
         }
@@ -144,7 +144,7 @@ impl ChatServer {
     fn handling_packets(&mut self, packet:Packet) {
         match packet.clone().pack_type {
             PacketType::Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            PacketType::Ack(ack) => self.handle_ack(ack, packet.session_id),
+            PacketType::Ack(ack) => self.handle_ack(ack, &*packet.routing_header.hops, packet.session_id),
             PacketType::FloodResponse(r) => self.process_flood_response(r),
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
