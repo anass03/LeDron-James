@@ -335,7 +335,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#d262e066e6469cc728f6126129e116dab1cb122f"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#35ff265db8228749160c214ccec60281fee9212c"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -1023,7 +1023,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#d262e066e6469cc728f6126129e116dab1cb122f"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#35ff265db8228749160c214ccec60281fee9212c"
 dependencies = [
  "crossbeam-channel",
  "image 0.25.6",
@@ -2725,7 +2725,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#9269054ed9d33bcf0a0c8beb81575a2e6bc1e21d"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#0a9c30491f19da06d7336e695bf05d1c65676feb"
 dependencies = [
  "crossbeam-channel",
  "delegate",
@@ -4135,9 +4135,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99a5bab8d7dedf81405c4bb1f2b83ea057643d9cb28778cea9eecddeedd2e028"
+checksum = "b63fd466826ec8fe25e1fc010c169213fec4e135ac39caccdba830eaa3895923"
 dependencies = [
  "zune-core",
 ]

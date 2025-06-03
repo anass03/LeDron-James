@@ -2,13 +2,11 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::Duration;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, ServerToClient};
+use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
-use host::ClientNetCommand::{FilesList, ServerType};
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{LogType, SimulationControllerData};
 
@@ -243,24 +241,24 @@ impl SimulationControllerData {
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
             DroneEvent::PacketSent(packet) => {
-                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 //handle_packet(&packet);
-                let session_id = packet.session_id;
+                let _session_id = packet.session_id;
                 self.stats.received_packet();
                 Ok(())
                 //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::PacketDropped(packet) => {
-                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 //handle_packet(&packet);
-                let session_id = packet.session_id;
+                let _session_id = packet.session_id;
                 Ok(())
                 //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::ControllerShortcut(packet) => {
-                let sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 //handle_packet(&packet);
-                let session_id = packet.session_id;
+                let _session_id = packet.session_id;
                 Ok(())
                 //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
@@ -280,44 +278,48 @@ impl SimulationControllerData {
             None => Err(format!("Client {client_id} command sender not found")),
         }
     }
+    
+    pub fn file_for() {
+        
+    }
 
     pub fn request_server_type(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(ServerType);
+        let command = ClientCommand::Net(ClientNetCommand::ServerType);
+        self.send_client_command(client_id, command)
+    }
+ 
+    pub fn request_files_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::FilesList(server_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_files_list(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(FilesList);
+    pub fn request_file(&self, client_id: ClientId, server_id: ServerId, file_id: FileId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::File(server_id, file_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_file(&self, client_id: ClientId, file_id: FileId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::File(file_id));
+    pub fn request_media_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::MediaList(server_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_media_list(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::MediaList);
+    pub fn request_media(&self, client_id: ClientId, server_id: ServerId, media_id: MediaId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::Media(server_id, media_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_media(&self, client_id: ClientId, media_id: MediaId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::Media(media_id));
+    pub fn request_registration_to_chat(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::RegistrationToChat(server_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_registration_to_chat(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::RegistrationToChat);
+    pub fn request_client_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::ClientList(server_id));
         self.send_client_command(client_id, command)
     }
 
-    pub fn request_client_list(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::ClientList);
-        self.send_client_command(client_id, command)
-    }
-
-    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, message: String) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::MessageFor(receiver_client_id, message));
+    pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, message: String) -> Result<(), String> {
+        let command = ClientCommand::Net(ClientNetCommand::MessageFor(receiver_client_id, server_id, message));
         self.send_client_command(sender_client_id, command)
     }
 
@@ -378,23 +380,25 @@ impl SimulationControllerData {
         match event {
             HostEvent::PacketReconstructed(server_to_client) => {
                 match server_to_client {
-                    ServerToClient::ServerType(server_type) => self.logs.push_log(LogType::INFO, format!("Server type: {:?}", server_type).as_str()),
-                    ServerToClient::FilesList(file_list) => self.logs.push_log(LogType::INFO, format!("Files list received: {:?}", file_list).as_str()),
-                    ServerToClient::File(file_id, extension, file) => {
+                    ServerToClient::ServerType(server_type) 
+                    => self.logs.push_log(LogType::INFO, format!("Server type: {:?}", server_type).as_str()),
+                    ServerToClient::FilesList(server_id, file_list) 
+                    => self.logs.push_log(LogType::INFO, format!("Files list from server {server_id} received: {file_list:?}").as_str()),
+                    ServerToClient::File(server_id, file_id, extension, file) 
+                    => {
                         // Construct filename based on file ID and inferred extension
                         let filename = format!("file_{}.{}", file_id, extension);
                         let path = PathBuf::from("assets").join(&filename);
 
-                        // Write file
                         fs::write(&path, &file).expect("file not downloaded");
 
                         // Open with system default application
                         #[cfg(target_os = "windows")]
                         {
                             let path_str = path.to_str().unwrap();
-                            let quoted_path = format!("\"{}\"", path_str);
+                            //let quoted_path = format!("\"{}\"", path_str);
                             Command::new("cmd")
-                                .args(&["/C", "start", "\"\"", &quoted_path])
+                                .args(&["/C", "start", "", &path_str])
                                 .spawn()
                                 .expect("Unable to open file on Windows");
                         }
@@ -415,11 +419,13 @@ impl SimulationControllerData {
                                 .expect("Unable to open file on Linux");
                         }
 
-                        self.logs.push_log(LogType::INFO, format!("File {} received, saved", file_id, /*filename*/).as_str());
+                        self.logs.push_log(LogType::INFO, format!("File {file_id} received from Server {server_id}").as_str());
 
                     },
-                    ServerToClient::MediaList(media_list) => self.logs.push_log(LogType::INFO, format!("Media list received: {:?}", media_list).as_str()),
-                    ServerToClient::Media(media_id, extension, image) => {
+                    ServerToClient::MediaList(server_id, media_list) 
+                    => self.logs.push_log(LogType::INFO, format!("Media list received: {:?}", media_list).as_str()),
+                    ServerToClient::Media(server_id, media_id, extension, image) 
+                    => {
                         let path = format!("assets/image_{}.{extension}", media_id);
                         let path_ref = Path::new(&path);
 
@@ -438,25 +444,38 @@ impl SimulationControllerData {
 
                             match save_result {
                                 Ok(_) => {
-                                    self.logs.push_log(LogType::INFO, format!("Immagine {} salvata come {}", media_id, path).as_str());
+                                    self.logs.push_log(LogType::INFO, format!("Media {} saved as {}", media_id, path).as_str());
                                     open_image(&path)
                                 },
-                                Err(e) => self.logs.push_log(LogType::ERROR, format!("Errore nel salvataggio immagine {}: {}", media_id, e).as_str()),
+                                Err(e) => self.logs.push_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e).as_str()),
                             }
                         } else {
-                            self.logs.push_log(LogType::ERROR, format!("Impossibile creare immagine valida per {}", media_id).as_str());
+                            self.logs.push_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id).as_str());
                         }
                     },
-                    ServerToClient::ClientList(client_list) => self.logs.push_log(LogType::INFO, format!("Client list received: {:?}", client_list).as_str()),
-                    ServerToClient::MessageFrom(client_id, message) => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
-                    ServerToClient::ErrNotFound => return Err((LogType::ERROR, "Err Not Found".to_string())),
-                    ServerToClient::ErrClientId => return Err((LogType::ERROR, "Err Client Id Not Found".to_string())),
+                    ServerToClient::ClientList(server_id, client_list) 
+                    => self.logs.push_log(LogType::INFO, format!("Client list received: {:?}", client_list).as_str()),
+                    ServerToClient::MessageFrom(server_id, client_id, message) 
+                    => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
+                    ServerToClient::FileFrom(server_id, client_id, file_id, extension, file) 
+                    => {
+                        self.logs.push_log(LogType::INFO, format!("File from Client {client_id} received:").as_str());
+                    }
+                    ServerToClient::MediaFrom(server_id, client_id, media_id, extension, image) 
+                    => {
+                        
+                    }
+                    ServerToClient::ErrNotFound(server_id) 
+                    => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
+                    ServerToClient::ErrClientId(server_id) 
+                    => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
                 }
             },
             HostEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
                 //Some(format!("💥Packet Sent: {:?}", packet))
             },
+            _ => {}
         }
         Ok(())
     }

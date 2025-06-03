@@ -1,6 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
-use client::{Client, ClientCommand};
+use client::ClientCommand;
 use colored::Colorize;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
