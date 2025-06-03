@@ -67,7 +67,10 @@ impl App<'_>{
 
         while self.stay {
             // Listening to channels
-            self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
+
+            self.simulation_controller_data.handle_channels();
+
+            /*self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
             self.simulation_controller_data.handle_log_event();
 
             match self.simulation_controller_data.handle_host_event(){
@@ -75,7 +78,7 @@ impl App<'_>{
                 Some(str) => {
                     self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str());
                 }
-            }
+            }*/
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();

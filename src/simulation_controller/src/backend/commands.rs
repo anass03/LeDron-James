@@ -2,6 +2,7 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
+use std::time::Duration;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -327,7 +328,17 @@ impl SimulationControllerData {
     // /// - Client Events
 
     pub fn handle_channels(&mut self) {
-        crossbeam_channel::select_biased! { // Prioritizing Controller messages using select_biased! macro
+
+        while let Ok(event) = self.host_event_receiver.try_recv() {
+            let _ = self.handle_host_event(event);
+        }
+        while let Ok(log) = self.log_receiver.try_recv() {
+            self.handle_log_event(log);
+        }
+        while let Ok(event) = self.drone_event_receiver.try_recv() {
+            let _ = self.handle_drone_event(event);
+        }
+        /*crossbeam_channel::select! { // Prioritizing Controller messages using select_biased! macro
             recv(self.host_event_receiver) -> event => {
                 if let Ok(event) = event {
                     match self.handle_host_event(event) {
@@ -349,7 +360,10 @@ impl SimulationControllerData {
                     }
                 }
             }
-        }
+            default(Duration::from_millis(1)) => {
+                // Idle or periodic maintenance
+            }
+        }*/
 
     }
 
