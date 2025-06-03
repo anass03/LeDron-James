@@ -906,23 +906,7 @@ impl Functionality for Host {
                 "Send result host={} session={} fragment={} result={}",
                 self.id, message.session_id, i, result
             ));
-            if let SendingCodes::SuccessfullySent(_) = result {
-                let drone_hops: Vec<NodeId> = header.hops.iter()
-                    .filter(|&&nid| {
-                        matches!(
-                        self.network.nodes.get(&nid).map(|(ty, _)| ty),
-                        Some(NodeType::Drone))}
-                    )
-                    .copied()
-                    .collect();
 
-                self.network.pdr_helper(&drone_hops);
-                self.send_logging(format!(
-                    "PDR updated host={} header hops={:?} fragment={}",
-                    self.id,
-                    header.hops,
-                    i,
-                ));}
         }
 
         self.send_logging(format!(
