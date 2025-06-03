@@ -1,12 +1,15 @@
+use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
-use std::fs;
+use std::{fs, io};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, ServerId, ServerToClient};
+use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
+use client::ClientCommand::*;
+use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{LogType, SimulationControllerData};
 
@@ -50,16 +53,106 @@ impl NodeType {
     }
 }
 
+fn dfs(
+    current: NodeId,
+    net_map: &HashMap<NodeId, Vec<NodeId>>,
+    exclude: Option<NodeId>,
+    visited: &mut HashSet<NodeId>
+) {
+    match exclude {
+        Some(exclude) => {
+            if current == exclude {
+                return
+            }
+            visited.insert(current);
+            for &neighbor in &net_map[&current] {
+                if !visited.contains(&neighbor)  && neighbor != exclude {
+                    dfs(neighbor, net_map, Some(exclude), visited);
+                }
+            }
+        }
+        None => {
+            visited.insert(current);
+            for &neighbor in &net_map[&current] {
+                if !visited.contains(&neighbor) {
+                    dfs(neighbor, net_map, None, visited);
+                }
+            }
+        }
+    }
+}
+
 impl SimulationControllerData {
+
+    //builds connections map
+    fn build_network_map(&self) -> HashMap<NodeId, Vec<NodeId>> {
+        let mut network_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        for client in self.clients.iter() {
+            network_map.insert(client.id, client.connected_drone_ids.clone());
+        }
+        for server in self.servers.iter() {
+            network_map.insert(server.id, server.connected_drone_ids.clone());
+        }
+        for drone in self.drones.iter() {
+            network_map.insert(drone.id, drone.connected_node_ids.clone());
+        }
+
+        network_map
+    }
     //returns true if node is critical
-    fn check_critical(&mut self, drone_id: NodeId) -> bool{
-        false
+    fn check_critical_node(&self, drone_id: NodeId) -> Result<bool, String>{
+        let net_map = self.build_network_map();
+        if net_map.len() <= 1 {
+            return Ok(false);
+        }
+
+        let mut visited = HashSet::new();
+
+        let &start = match net_map.keys().find(|&&id| id != drone_id) {
+            Some(&id) => &id,
+            None => return Err(format!("Drone {drone_id} is not connected in the network"))
+        };
+
+        //applying dfs without target node to check if the network would still be connected
+        dfs(start, &net_map, Some(drone_id), &mut visited);
+        //If not all node could be found => target node is critical
+        Ok(visited.len() + 1 != net_map.len())
+    }
+
+    fn check_critical_connection(&self, first_node: NodeId, second_node: NodeId) -> Result<bool, String>{
+        let net_map = self.build_network_map();
+        let mut modified_net_map = net_map.clone();
+        //simulate removing connection
+        match modified_net_map.get(&first_node) {
+            Some(mut first_node_neighbors) => {
+                first_node_neighbors.retain(|&id| id != second_node);
+            },
+            None => return Err(format!("connection between {first_node} and {second_node} !does not exist"))
+        }
+        match modified_net_map.get(&second_node) {
+            Some(mut second_node_neighbors) => {
+                second_node_neighbors.retain(|&id| id != first_node);
+            },
+            None => return Err(format!("connection between {first_node} and {second_node} !does not exist"))
+        }
+
+        let mut visited = HashSet::new();
+        //applying dfs without connection
+        dfs(first_node, &modified_net_map, None , &mut visited);
+
+        Ok(!visited.contains(&second_node))
     }
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
-        if self.check_critical(drone_id) {
-            return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
+        match self.check_critical_node(drone_id) {
+            Ok(critical) => {
+                if critical {
+                    return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
+
+                }
+            },
+            Err(e) => return Err(e)
         }
         self.logs.push_log(LogType::DEBUG, format!("Sending drone crash to drone: {drone_id}").as_str());
         let command = DroneCommand::Crash;
@@ -89,6 +182,57 @@ impl SimulationControllerData {
         }
     }
 
+    pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) -> Result<(), String> {
+        let valid_pdr;
+        if new_pdr >= 0.0 && new_pdr <= 1.0 {
+            valid_pdr = new_pdr;
+        } else {
+            return Err(format!("Invalid PDR value: {} | 0.0 < PDR < 1.0", new_pdr));
+        }
+        let command = DroneCommand::SetPacketDropRate(valid_pdr);
+        match self.drone_command_sender.get(&drone_id) {
+            Some(drone_command_sender) => {
+                match drone_command_sender.send(command) {
+                    Ok(()) => {
+                        self.logs.push_log(LogType::INFO, format!("Changing Drone {drone_id} PDR to: {valid_pdr}").as_str());
+                        Ok(()) },
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            None => Err(format!("Drone {drone_id} command sender not found")),
+        }
+    }
+
+    /// - Drone Events
+
+    pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
+        match event {
+            DroneEvent::PacketSent(packet) => {
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
+                self.stats.received_packet();
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::PacketDropped(packet) => {
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::ControllerShortcut(packet) => {
+                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
+                Ok(())
+                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+        }
+    }
+
+    /// - Nodes Commands
     fn mono_add_sender(&mut self, first_type: NodeType, first_id: NodeId, second_type: NodeType, second_id: NodeId) -> Result<(), String> {
         self.logs.push_log(LogType::DEBUG, format!("{first_type} + {second_type}").as_str());
         //checking if packet sender for forward node exists
@@ -114,7 +258,7 @@ impl SimulationControllerData {
                     NodeType::Client => {
                         match self.client_command_sender.get(&first_id) {
                             Some(forward_client_command_sender) => {
-                                let forward_command = ClientCommand::Internal(HostCommand::AddSender(second_id, forward_packet_sender.clone()));
+                                let forward_command = Internal(HostCommand::AddSender(second_id, forward_packet_sender.clone()));
                                 //trying to send command forward
                                 match forward_client_command_sender.send(forward_command) {
                                     Ok(()) => {
@@ -183,7 +327,7 @@ impl SimulationControllerData {
             NodeType::Client => {
                 match self.client_command_sender.get(&first_id) {
                     Some(forward_client_command_sender) => {
-                        let forward_command = ClientCommand::Internal(HostCommand::RemoveSender(second_id));
+                        let forward_command = Internal(HostCommand::RemoveSender(second_id));
                         //trying to send command forward
                         match forward_client_command_sender.send(forward_command) {
                             Ok(()) => {
@@ -218,58 +362,18 @@ impl SimulationControllerData {
         let forward_node_type = NodeType::from(&self, node_id);
         let backwards_node_type = NodeType::from(&self, sender_id);
 
+        match self.check_critical_connection(node_id, sender_id) {
+            Ok(critical) => {
+                if critical {
+                    return Err(format!("Connection between {forward_node_type} {node_id} and {backwards_node_type} {sender_id} is critical and cannot be removed!"))
+                }
+            }
+            Err(e) => return Err(e),
+        }
+
+
         self.mono_remove_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
         self.mono_remove_sender(backwards_node_type, sender_id, forward_node_type, node_id)
-    }
-
-    pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) -> Result<(), String> {
-        let valid_pdr;
-        if new_pdr >= 0.0 && new_pdr <= 1.0 {
-            valid_pdr = new_pdr;
-        } else {
-            return Err(format!("Invalid PDR value: {} | 0.0 < PDR < 1.0", new_pdr));
-        }
-        let command = DroneCommand::SetPacketDropRate(valid_pdr);
-        match self.drone_command_sender.get(&drone_id) {
-            Some(drone_command_sender) => {
-                match drone_command_sender.send(command) {
-                    Ok(()) => {
-                        self.logs.push_log(LogType::INFO, format!("Changing Drone {drone_id} PDR to: {valid_pdr}").as_str());
-                        Ok(()) },
-                    Err(e) => Err(e.to_string()),
-                }
-            },
-            None => Err(format!("Drone {drone_id} command sender not found")),
-        }
-    }
-
-    /// - Drone Events
-
-    pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
-        match event {
-            DroneEvent::PacketSent(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
-                self.stats.received_packet();
-                Ok(())
-                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-            },
-            DroneEvent::PacketDropped(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
-                Ok(())
-                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-            },
-            DroneEvent::ControllerShortcut(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
-                Ok(())
-                //self.logs.push_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
-            },
-        }
     }
 
     /// - Client Commands
@@ -285,53 +389,93 @@ impl SimulationControllerData {
             None => Err(format!("Client {client_id} command sender not found")),
         }
     }
-    
-    pub fn file_for() {
-        
-    }
 
     pub fn request_server_type(&self, client_id: ClientId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::ServerType);
+        let command = Net(ServerType);
         self.send_client_command(client_id, command)
     }
  
     pub fn request_files_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::FilesList(server_id));
+        let command = Net(FilesList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_file(&self, client_id: ClientId, server_id: ServerId, file_id: FileId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::File(server_id, file_id));
+        let command = Net(File(server_id, file_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_media_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::MediaList(server_id));
+        let command = Net(MediaList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_media(&self, client_id: ClientId, server_id: ServerId, media_id: MediaId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::Media(server_id, media_id));
+        let command = Net(Media(server_id, media_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_registration_to_chat(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::RegistrationToChat(server_id));
+        let command = Net(RegistrationToChat(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_client_list(&self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::ClientList(server_id));
+        let command = Net(ClientList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn message_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, message: String) -> Result<(), String> {
-        let command = ClientCommand::Net(ClientNetCommand::MessageFor(receiver_client_id, server_id, message));
+        let command = Net(MessageFor(receiver_client_id, server_id, message));
         self.send_client_command(sender_client_id, command)
     }
 
+    /*pub fn file_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, file_id: FileId, extension: Extension, file: Vec<u8>) -> Result<(), String> {
+        let command = ClientCommand::Net(FileFor(receiver_client_id, server_id, file_id, extension, file));
+        self.send_client_command(sender_client_id, command)
+
+    }*/
+
+    /*fn process_image(id: MediaId) -> Result<(Image, String), Box<dyn Error>> {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let images_dir = manifest_dir.join("src/content/images");
+        let id_num = id;
+        let (data_bytes, ext) = Self::read_file_any_with_ext(images_dir, id_num, &["png", "jpeg", "jpg"])?;
+        let img = ImageReader::new(Cursor::new(data_bytes)).with_guessed_format()?.decode()?;
+        let width = img.width();
+        let height = img.height();
+        let rgba = img.to_rgba8();
+        Ok((Image {
+            width,
+            height,
+            data: rgba.to_vec(),
+        }, ext))
+    }
+
+    fn read_file_any_with_ext<P: AsRef<Path>>(folder: P, id: usize, ext: &[&str])
+                                              -> io::Result<(Vec<u8>, String)> {
+        let base: &Path = folder.as_ref();
+        for ext in ext {
+            let candidate = base.join(format!("i{}.{}", id, ext));
+            if candidate.exists() {
+                let data = fs::read(&candidate)?;
+                return Ok((data, ext.to_string()));
+            }
+        }
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("No File {} with extension {:?} in {:?}", id, ext, base),
+        ))
+    }*/
+
+    pub fn media_for(&self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, media_id: MediaId, extension: Extension, image: Image) -> Result<(), String> {
+        let command = Net(MediaFor(receiver_client_id, server_id, media_id, extension, image));
+        self.send_client_command(sender_client_id, command)
+
+    }
+
     pub fn controller_shortcut(&self, client_id: ClientId, packet: Packet) -> Result<(), String> {
-        let command = ClientCommand::ControllerShortcut(packet);
+        let command = ControllerShortcut(packet);
         self.send_client_command(client_id, command)
     }
 
@@ -463,14 +607,14 @@ impl SimulationControllerData {
                     ServerToClient::ClientList(server_id, client_list) 
                     => self.logs.push_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list).as_str()),
                     ServerToClient::MessageFrom(server_id, client_id, message) 
-                    => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
-                    ServerToClient::FileFrom(server_id, client_id, file_id, extension, file) 
+                    => self.logs.push_log(LogType::INFO, format!("Message from Client {} received through Server {server_id}: {:?}", client_id, message).as_str()),
+                    ServerToClient::FileFrom(server_id, client_id,..)
                     => {
-                        self.logs.push_log(LogType::INFO, format!("File from Client {client_id} received:").as_str());
+                        self.logs.push_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}").as_str());
                     }
-                    ServerToClient::MediaFrom(server_id, client_id, media_id, extension, image) 
+                    ServerToClient::MediaFrom(server_id, client_id, ..)
                     => {
-                        self.logs.push_log(LogType::INFO, format!("Media from Client {client_id} received:").as_str());
+                        self.logs.push_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}").as_str());
                     }
                     ServerToClient::ErrNotFound(server_id) 
                     => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
