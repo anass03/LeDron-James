@@ -1,6 +1,6 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 use wg_2024::controller::{DroneCommand, DroneEvent};
@@ -9,6 +9,7 @@ use wg_2024::packet::Packet;
 use host::{ClientId, ClientNetCommand, FileId, HostCommand, HostEvent, MediaId, ServerToClient};
 use client::ClientCommand;
 use host::ClientNetCommand::{FilesList, ServerType};
+use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{LogType, SimulationControllerData};
 
 
@@ -420,9 +421,31 @@ impl SimulationControllerData {
                     ServerToClient::MediaList(media_list) => self.logs.push_log(LogType::INFO, format!("Media list received: {:?}", media_list).as_str()),
                     ServerToClient::Media(media_id, extension, image) => {
                         let path = format!("assets/image_{}.{extension}", media_id);
-                        fs::write(&path, &image.data).expect("Errore nel salvataggio immagine");
+                        let path_ref = Path::new(&path);
 
-                        self.logs.push_log(LogType::INFO, format!("Immagine {} salvata come {}", media_id, path).as_str())
+                        if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
+                            // Convert to DynamicImage
+                            let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+
+                            // If extension is jpg/jpeg, convert to RGB to drop alpha
+                            let save_result = match extension.to_lowercase().as_str() {
+                                "jpg" | "jpeg" => {
+                                    let rgb_image: RgbImage = dynamic_image.to_rgb8();
+                                    rgb_image.save(path_ref)
+                                },
+                                _ => dynamic_image.save(path_ref), // png, etc.
+                            };
+
+                            match save_result {
+                                Ok(_) => {
+                                    self.logs.push_log(LogType::INFO, format!("Immagine {} salvata come {}", media_id, path).as_str());
+                                    open_image(&path)
+                                },
+                                Err(e) => self.logs.push_log(LogType::ERROR, format!("Errore nel salvataggio immagine {}: {}", media_id, e).as_str()),
+                            }
+                        } else {
+                            self.logs.push_log(LogType::ERROR, format!("Impossibile creare immagine valida per {}", media_id).as_str());
+                        }
                     },
                     ServerToClient::ClientList(client_list) => self.logs.push_log(LogType::INFO, format!("Client list received: {:?}", client_list).as_str()),
                     ServerToClient::MessageFrom(client_id, message) => self.logs.push_log(LogType::INFO, format!("Message from Client {} received: {:?}", client_id, message).as_str()),
@@ -440,6 +463,21 @@ impl SimulationControllerData {
 
     pub fn handle_log_event(&mut self, log: String) {
         self.logs.push_log(LogType::INFO, log.as_str())
+    }
+}
+
+fn open_image(path: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn().ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd").args(["/C", "start", path]).spawn().ok();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(path).spawn().ok();
     }
 }
 
