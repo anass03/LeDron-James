@@ -123,7 +123,7 @@ impl Network {
     pub fn pdr_helper(&mut self, hops: &[NodeId]) {
         for &drone_id in hops {
             // Se non esiste ancora, lo inizializziamo a 1.0 (fiducia totale)
-            let old = self.drone_pdr.entry(drone_id).or_insert(0.1);
+            let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
             // EWMA verso 0.0 (abbassiamo la PDR perché ha trasmesso)
             let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
             *old = new_pdr.clamp(0.0, 1.0);
@@ -133,7 +133,7 @@ impl Network {
     /// Ogni volta che un drone invia un NACK “Dropped”, abbassiamo ulteriormente la PDR:
     /// new_pdr = α * 0.0 + (1 − α) * old_pdr
     pub fn pdr_from_nack(&mut self, node_id: NodeId) {
-        let old = self.drone_pdr.entry(node_id).or_insert(0.1);
+        let old = self.drone_pdr.entry(node_id).or_insert(0.0);
         // EWMA verso 0.0 (penalizziamo il link quando effettivamente drop)
         let new_pdr = ALPHA * 1.0 + (1.0 - ALPHA) * *old;
         *old = new_pdr.clamp(0.0, 1.0);
