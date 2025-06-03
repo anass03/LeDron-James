@@ -525,7 +525,7 @@ impl Functionality for Host {
                 self.network
                     .drone_pdr
                     .entry(node_id)
-                    .or_insert(0.1);
+                    .or_insert(0.0);
             }
             // per i server, inserisci nell’HashSet dei server
             if node_type == NodeType::Server {
