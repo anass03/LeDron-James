@@ -15,7 +15,9 @@ pub type FileId = usize;
 pub type MediaId = usize;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
+pub type Extension = String;
 const ALPHA: f64 = 0.1; // fattore di smussamento (regolabile)
+
 
 #[derive(Clone)]
 pub struct Host{
@@ -1025,10 +1027,10 @@ pub enum ServerToClient{
     ServerType(ServerTypes),
 
     FilesList(Vec<FileId>),
-    File(FileId, Vec<u8>),
+    File(FileId, Extension, Vec<u8>),
 
     MediaList(Vec<MediaId>),
-    Media(MediaId, Image),
+    Media(MediaId, Extension, Image),
 
     ClientList(Vec<ClientId>),
     MessageFrom(ClientId, String),

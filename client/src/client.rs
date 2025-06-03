@@ -392,17 +392,17 @@ impl Client {
                                     self.host.send_logging(format!("Files available: {:?}", files));
                                     send_reconstructed(FilesList(files))?;
                                 }
-                                File(file_id, data) => {
-                                    self.host.send_logging(format!("Received file {} of {} bytes",file_id,data.len()));
-                                    send_reconstructed(File(file_id, data))?;
+                                File(file_id,ext, data) => {
+                                    self.host.send_logging(format!("Received file {}, with extension {} of {} bytes",file_id,ext, data.len()));
+                                    send_reconstructed(File(file_id,ext, data))?;
                                 }
                                 MediaList(media_list) => {
                                     self.host.send_logging(format!("Media available: {:?}", media_list));
                                     send_reconstructed(MediaList(media_list))?;
                                 }
-                                Media(media_id, media) => {
-                                    self.host.send_logging(format!("Received media {} of {} bytes",media_id, media.data.len()));
-                                    send_reconstructed(Media(media_id, media))?;
+                                Media(media_id,ext, media) => {
+                                    self.host.send_logging(format!("Received media {}, with extension {} of {} bytes",media_id,ext, media.data.len()));
+                                    send_reconstructed(Media(media_id,ext, media))?;
                                 }
                                 ErrClientId => {
                                     self.host.send_logging("Server responded: ErrClientId".to_string());
@@ -506,6 +506,21 @@ impl Client {
         ack.routing_header.hop_index += 1;
         let _ = self.host.send_packet(ack, None);
 
+        let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
+            .filter(|&&nid| {
+                matches!(
+                        self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
+                        Some(NodeType::Drone))}
+            )
+            .copied()
+            .collect();
+        self.host.network.pdr_helper(&drone_hops);
+
+        self.host.send_logging(format!(
+            "PDR updated host={} header hops={:?}",
+            self.host.id,
+            packet.routing_header.hops,
+        ));
         // se finito, reassembly e rimozione
         if session.pending == 0 {
             self.host.send_logging( format!(
@@ -527,21 +542,6 @@ impl Client {
             received.remove(&session_id);
             return Some(data);
         }
-        let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
-            .filter(|&&nid| {
-                matches!(
-                        self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
-                        Some(NodeType::Drone))}
-            )
-            .copied()
-            .collect();
-        self.host.network.pdr_helper(&drone_hops);
-
-        self.host.send_logging(format!(
-            "PDR updated host={} header hops={:?}",
-            self.host.id,
-            packet.routing_header.hops,
-        ));
         None
     }
 
