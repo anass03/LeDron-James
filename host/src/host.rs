@@ -1057,6 +1057,7 @@ pub enum ServerToClient{
 
     ErrNotFound(ServerId),
     ErrClientId(ServerId),
+    WrongServer(ServerId)
 }
 /// Application events that comes to the SimulationController
 pub enum HostEvent {

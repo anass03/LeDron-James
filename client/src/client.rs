@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use serde::{Deserialize, Serialize};
 use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
 use host::ServerTypes::{Content,Chat};
-use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom};
+use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
 
 pub struct Client {
     host: Host,
@@ -535,6 +535,10 @@ impl Client {
                                 ErrNotFound(server_id) => {
                                     self.host.send_logging("Server responded: ErrNotFound".to_string());
                                     send_reconstructed(ErrNotFound(server_id))?;
+                                }
+                                WrongServer(server_id) => {
+                                    self.host.send_logging("Server responded: WrongServer".to_string());
+                                    send_reconstructed(WrongServer(server_id))?;
                                 }
                             }
                             Ok(())
