@@ -672,7 +672,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James?branch=client#aac7fc930fe344123072c82dec22ad07379ef705"
+source = "git+https://github.com/anass03/LeDron-James?branch=client#3d489a1209002060237f7f230909ae9c831f9ec9"
 dependencies = [
  "crossbeam-channel",
  "image",
@@ -3066,9 +3066,9 @@ dependencies = [
 
 [[package]]
 name = "zune-jpeg"
-version = "0.4.14"
+version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "99a5bab8d7dedf81405c4bb1f2b83ea057643d9cb28778cea9eecddeedd2e028"
+checksum = "b63fd466826ec8fe25e1fc010c169213fec4e135ac39caccdba830eaa3895923"
 dependencies = [
  "zune-core",
 ]

@@ -150,46 +150,69 @@ impl ContentServer {
     }
     
     
-    fn handle_command(&mut self, cmd: ClientNetCommand, destination: NodeId) {
+    fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
                 if let Ok(server_type)=self.servertype(){
-                    self.send_response(ServerToClient::ServerType(server_type),destination);
+                    self.send_response(ServerToClient::ServerType(server_type),source);
                 }else{
-                    self.send_logging(format!("[Server] ID {} - Failed to send ServerToClient::ServerType",self.info.host.id));
+                    self.send_logging("Failed to send ServerToClient::ServerType".to_string());
                 }
             }
-            ClientNetCommand::FilesList => {
-                 self.count_files();
-                self.send_response(ServerToClient::FilesList(self.files.clone()), destination);
-            }
-            ClientNetCommand::File(id) => {
-                match Self::convert_file(id) {
-                    Ok((data, ext)) => {
-                        // invio (id, estensione, contenuto)
-                        self.send_response(ServerToClient::File(id, ext.clone(), data), destination);
+            ClientNetCommand::FilesList(receiver_id) => { 
+                match receiver_id==self.info.host.id{
+                    true => {                 
+                        self.count_files();
+                        self.send_response(ServerToClient::FilesList(self.info.host.id,self.files.clone()), source);
                     }
-                    Err(_) => {
-                        self.send_response(ServerToClient::ErrNotFound, destination);
+                    false => {
+                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                    } 
+                }
+            }
+            ClientNetCommand::File(receiver_id,file_id) => {
+                match receiver_id==self.info.host.id {
+                    true => {                
+                        match Self::convert_file(file_id) {
+                        Ok((data, ext)) => {
+                            self.send_response(ServerToClient::File(self.info.host.id,file_id, ext.clone(), data), source);
+                        }
+                        Err(_) => {
+                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                        }
+                    }}
+                    false => {
+                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                     }
                 }
             }
-            ClientNetCommand::MediaList => {
-                 self.count_files();
-                self.send_response(ServerToClient::MediaList(self.media.clone()), destination);
+            ClientNetCommand::MediaList(receiver_id) => {
+                match receiver_id==self.info.host.id{
+                    true => {
+                        self.count_files();
+                        self.send_response(ServerToClient::MediaList(self.info.host.id,self.media.clone()), source);}
+                    false => {
+                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                    }
+                }
             }
-            ClientNetCommand::Media(id) => {
-                match Self::process_image(id) {
-                    Ok((image, ext)) => {
-                        self.send_response(ServerToClient::Media(id, ext.clone(), image), destination);
-                    }
-                    Err(_) => {
-                        self.send_response(ServerToClient::ErrNotFound, destination);
-                    }
+            ClientNetCommand::Media(receiver_id,file_id) => {
+                match receiver_id==self.info.host.id{
+                    true => {match Self::process_image(file_id) {
+                        Ok((image, ext)) => {
+                            self.send_response(ServerToClient::Media(self.info.host.id,file_id, ext.clone(), image), source);
+                        }
+                        Err(_) => {
+                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                        }
+                    }}
+                    false => {
+                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                    } 
                 }
             }
             _ => {
-                self.send_response(ServerToClient::ErrNotFound, destination);
+                self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
             }
         }
     }
@@ -205,7 +228,7 @@ impl ContentServer {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
                         Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                        Err(_) => self.send_response(ServerToClient::ErrNotFound, packet.routing_header.hops[0]),
+                        Err(_) => self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0]),
                     }
                 }else {
                     self.send_logging("The packet is not complete and server is waiting".to_string());

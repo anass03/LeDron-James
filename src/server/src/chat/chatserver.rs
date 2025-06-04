@@ -82,15 +82,15 @@ impl ChatServer {
     }
     
     
-    fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
+    fn send_response(&mut self, response: ServerToClient, source: NodeId) {
         match serde_json::to_vec(&response) {
             Ok(data) => {
                 let msg = Message {
                     session_id: generate_unique_session_id(),
                     content: data,
                 };
-                if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!(" Failed to send response to {}: {}", destination, e));
+                if let Err(e) = self.info.build_msg_fragment(source, msg) {
+                    self.send_logging(format!(" Failed to send response to {}: {}", source, e));
                 }
             }
             Err(e) => {
@@ -100,37 +100,82 @@ impl ChatServer {
     }
     
     
-    fn handle_command(&mut self, cmd: ClientNetCommand, destination: NodeId) {
+    fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
                 if let Ok(server_type) = self.servertype() {
-                    self.send_response(ServerToClient::ServerType(server_type), destination);
+                    self.send_response(ServerToClient::ServerType(server_type), source);
                 } else {
                     self.send_logging(" Failed to send ServerToClient::ServerType".to_string());
                 }
             }
-            ClientNetCommand::RegistrationToChat => {
-                if !self.client_list.contains(&destination) {
-                    self.client_list.push(destination);
-                    self.send_logging(format!(" Registered new client to chat: {}", destination));
-                }else{
-                    self.send_logging(format!(" Registration from {} already exists!", destination));
-                }
-            }
-            ClientNetCommand::ClientList => {
-                self.send_response(ServerToClient::ClientList(self.client_list.clone()), destination);
-            }
-            ClientNetCommand::MessageFor(dest, msg) => {
-                match self.check_if_in_client_list(destination) {
-                    true => {match self.check_if_in_client_list(dest) {
-                        true => {self.send_response(ServerToClient::MessageFrom(destination, msg), dest)}
-                        false => {self.send_logging(" The destination is not registered to client chat".to_string());}
+            ClientNetCommand::RegistrationToChat(receiver_id) => {
+                match receiver_id==self.info.host.id {
+                    true => {
+                        if !self.client_list.contains(&source) {
+                        self.client_list.push(source);
+                        self.send_logging(format!(" Registered new client to chat: {}", source));
+                    }else{
+                        self.send_logging(format!(" Registration from {} already exists!", source));
                     }}
-                    false => {self.send_logging(" You're not registered to client chat".to_string())}
+                    false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
                 }
+            }
+            ClientNetCommand::ClientList(receiver_id) => {
+                match receiver_id==self.info.host.id {
+                    true => {self.send_response(ServerToClient::ClientList(self.info.host.id,self.client_list.clone()), source);}
+                    false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
+                }
+            }
+            ClientNetCommand::MessageFor(destination, receiver_id,msg ) => {
+                match receiver_id ==self.info.host.id {
+                    true => {
+                        match self.check_if_in_client_list(source) {
+                            true => {match self.check_if_in_client_list(destination) {
+                                true => {self.send_response(ServerToClient::MessageFrom(self.info.host.id,source, msg), destination);},
+                                false => {self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);}
+                            }}
+                            false => {self.send_logging(" You're not registered to client chat".to_string())}
+                        }
+                    }
+                    false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
+                }
+                
+            }
+            ClientNetCommand::FileFor(destination, receiver_id, file_id, extension, message) => {
+                match receiver_id ==self.info.host.id {
+                    true => {
+                        match self.check_if_in_client_list(source) {
+                            true => {
+                                match self.check_if_in_client_list(destination) {
+                                    true => {self.send_response(ServerToClient::FileFrom(self.info.host.id,source,file_id,extension,message), destination);}
+                                    false => {self.send_logging(" The destination is not registered to client chat".to_string());}
+                                }
+                            }
+                            false => {self.send_logging(" You're not registered to client chat".to_string())} 
+                            }
+                        }
+                    false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
+                }
+            }
+            ClientNetCommand::MediaFor(destination, receiver_id, media_id, extension, message) => {
+                match receiver_id ==self.info.host.id {
+                    true => {
+                        match self.check_if_in_client_list(source) {
+                            true => {
+                                match self.check_if_in_client_list(destination) {
+                                    true => {self.send_response(ServerToClient::MediaFrom(self.info.host.id,source,media_id,extension,message), destination);}
+                                    false => {self.send_logging(" The destination is not registered to client chat".to_string());}
+                                }
+                            }
+                            false => {self.send_logging(" You're not registered to client chat".to_string())}
+                        }
+                    }
+                    false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
+                }                
             }
             _ => {
-                self.send_response(ServerToClient::ErrNotFound, destination);
+                self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
             }
         }
     }
