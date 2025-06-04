@@ -10,7 +10,7 @@ use ratatui::text::Text;
 use rodio::{Decoder, OutputStream, Sink};
 use tui_textarea::TextArea;
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::simulation_controller::LogType;
+use crate::backend::sc_models::LogType;
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 

@@ -21,7 +21,8 @@ use host::HostEvent;
 use rand::Rng;
 use wg_2024::packet::PacketType;
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::simulation_controller::{LogType, SimulationControllerData};
+use crate::backend::simulation_controller::SimulationControllerData;
+use crate::backend::sc_models::LogType;
 use crate::frontend::app::model::{AppMode, Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*

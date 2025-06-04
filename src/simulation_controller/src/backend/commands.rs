@@ -11,7 +11,8 @@ use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
-use crate::backend::simulation_controller::{LogType, SimulationControllerData};
+use crate::backend::simulation_controller::SimulationControllerData;
+use crate::backend::sc_models::LogType;
 
 
 #[derive(Default, Clone, Copy)]

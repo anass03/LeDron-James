@@ -4,7 +4,7 @@ use std::num::ParseIntError;
 use std::str::FromStr;
 use host::MediaId;
 use wg_2024::network::NodeId;
-use crate::backend::simulation_controller::LogType;
+use crate::backend::sc_models::LogType;
 use crate::frontend::app::App;
 
 /*
@@ -13,7 +13,7 @@ if any error happens while sending commands,
 it'll just print it on logs.
  */
 impl App<'_>{
-    // Each method here is is
+    // Each method here is
     pub(super) fn parse_and_send_message(&mut self, id:NodeId){
         match self.parse_2input(){
             Ok((n,str)) => {

@@ -1,7 +1,3 @@
-use std::collections::HashMap;
-use wg_2024::network::NodeId;
-use wg_2024::packet::NodeType;
-
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
 pub enum LogType{

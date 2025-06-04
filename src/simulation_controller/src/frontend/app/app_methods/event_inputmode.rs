@@ -4,7 +4,7 @@ Each input-mode related method is found here
 use ratatui::crossterm::event::{KeyEvent, KeyEventKind, KeyCode, Event, KeyModifiers};
 use tui_textarea::{Input, TextArea};
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::simulation_controller::LogType;
+use crate::backend::sc_models::LogType;
 use crate::frontend::app::model::{AppMode, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;

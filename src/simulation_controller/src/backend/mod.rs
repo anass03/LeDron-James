@@ -1,3 +1,3 @@
 mod commands;
 pub mod simulation_controller;
-mod sc_models;
+pub (crate) mod sc_models;
