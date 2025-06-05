@@ -84,31 +84,57 @@ impl Client {
     fn ensure_all_servers_discovered(&mut self) -> Result<(), String> {
         let expected = self.host.network.servers.len();
         let mut servers_discovered = 0;
+
         if servers_discovered != expected {
             self.host.send_logging(format!(
                 "Discovering server types from {} nodes, host={}",
                 expected, self.host.id
             ));
-            // invio subito la prima ondata di request
             self.request_server_type();
 
-            // resto in discovery finché non ho tutte le risposte
-            while servers_discovered != expected {
+            while servers_discovered < expected {
                 crossbeam_channel::select! {
-
                 recv(self.host.packet_recv) -> pkt => {
                     let packet = pkt.map_err(|e| e.to_string())?;
-                    // la chiamata interna aggiornerà `self.servers` quando riceve un ServerType
-                    servers_discovered += 1;
-                    self.handle_packet(packet)?;
-                }
+                    // Processing del packet: estraggo il payload, ricompongo il messaggio e provo a
+                    // interpretarlo come ServerToClient.
+                    if let PacketType::MsgFragment(fragment) = packet.pack_type.clone() {
+                        if let Some(raw_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
+                            // qui provo a parsare esattamente un JSON ServerToClient
+                            if let Ok(cmd) = serde_json::from_slice::<ServerToClient>(&raw_bytes) {
+                                match cmd {
+                                    ServerType(st) => {
+                                        // Se è un ServerType valido, registro l’ID del sender
+                                        if let Some(src) = packet.routing_header.source() {
+                                            let entry =
+                                                self.servers.entry(st.clone()).or_insert_with(Vec::new);
+                                            if !entry.contains(&src) {
+                                                entry.push(src);
+                                                self.host.send_logging(format!(
+                                                    "Registered {:?} server: {:?}",
+                                                    st, src
+                                                ));
+                                            }
+                                            // Incremento solo qui: ho effettivamente ricevuto un ServerType
+                                            servers_discovered += 1;
+                                        }
+                                    }
+                                    _ => {
+                                        // È una qualche altra risposta (File, Media, ecc.) che
+                                        // non ci interessa per il conteggio dei server.
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
 
                 recv(self.controller_recv) -> _cmd => {
-                    // ad esempio: loggo e poi continuo a scoprire
                     self.host.send_logging("Got a command while discovering".to_string());
-                }
+                },
 
                 default(Duration::from_millis(200)) => {
+                    // Se non arriva nulla per 200 ms, rilancio una nuova ondata di ServerType
                     self.request_server_type();
                 }
             }
@@ -121,6 +147,7 @@ impl Client {
         }
         Ok(())
     }
+
 
 
 
