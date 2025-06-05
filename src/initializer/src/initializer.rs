@@ -152,13 +152,10 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - Initializing the servers
     for (i, server) in config.server.iter().enumerate() {
-        let server_type = match i {
+        let server_type = match i % 2 {
             0 => ServerType::Chat,
             1 => ServerType::Content,
-            _ => {
-                println!("Too many servers ({}). Ignoring extra server with id {}", i, server.id);
-                continue;
-            }
+            _ => { continue }
         };
 
         let server_id = server.id;

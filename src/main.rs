@@ -3,6 +3,7 @@ use crossbeam_channel::unbounded;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
 use simulation_controller::backend::sc_models::{Logs, Statistics};
 use initializer::initializer::initialize;
+use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 fn main() -> std::io::Result<()> {
     let mut thread_handles = HashMap::new();
@@ -10,6 +11,7 @@ fn main() -> std::io::Result<()> {
         drones: vec![],
         clients: vec![],
         servers: vec![],
+        running_network: HashMap::new(),
         drone_command_sender: Default::default(),
         client_command_sender: Default::default(),
         server_command_sender: Default::default(),
@@ -19,6 +21,7 @@ fn main() -> std::io::Result<()> {
         log_receiver: unbounded().1,
         logs: Logs::default(),
         stats: Statistics::default(),
+        topology_algorithm_data: TopologyAlgorithm::default(),
     };
     match initialize("init_file.toml") {
         Ok((simulation_controller, handles)) => {

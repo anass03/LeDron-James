@@ -19,7 +19,7 @@ use crate::backend::sc_models::{LogType, Logs, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone)]
-enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
+pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -36,9 +36,7 @@ pub struct SimulationControllerData {
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
-
     pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has!
-
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,

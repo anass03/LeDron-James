@@ -39,7 +39,7 @@ impl TopologyAlgorithm{
         }
     }
     pub fn initialize(&mut self){
-        self = &mut Self::default();
+        *self = Self::default();
     }
     /// Function called when finally the algorithms converges, so when the avg positioning score
     pub fn computed(&mut self){

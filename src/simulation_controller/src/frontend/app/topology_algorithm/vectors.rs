@@ -4,14 +4,15 @@ pub(in crate::frontend::app) struct Vector{
     y: f32,
 }
 impl Vector{
-    pub(in crate::frontend::app) async fn new(x: f32, y: f32) -> Vector {
+    pub(in crate::frontend::app) fn new(x: f32, y: f32) -> Vector {
         Vector{x, y}
     }
     /// 'dimx' is the max x value, 'dimy' is the max y value of the area
     pub fn random(dimx:u16, dimy:u16) -> Vector {
         Vector::new(
             rand::random_range(0f32..dimx as f32),
-            rand::random_range(0f32..dimy as f32))
+            rand::random_range(0f32..dimy as f32)
+        )
     }
     pub(in crate::frontend::app) fn check_if_equal(vec1:&Vector, vec2:&Vector) -> bool {
         if vec1.x == vec2.x && vec1.y == vec2.y {
