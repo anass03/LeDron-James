@@ -251,7 +251,7 @@ impl App<'_> {
                                 // Server Type
                                 // Can't find command in the backend
                                 // match self.simulation_controller_data.
-                                match self.simulation_controller_data.request_server_type(client_fn){
+                                match self.simulation_controller_data.request_server_type(id_origin){
                                     Ok(_) => self.simulation_controller_data.logs.push_log(
                                         LogType::DEBUG,
                                         "Simulation Controller Sent Request Server Type",

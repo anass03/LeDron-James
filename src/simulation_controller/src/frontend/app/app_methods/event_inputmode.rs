@@ -89,6 +89,7 @@ impl App<'_>{
                                     match self.cache.tab1_data.selected_button{
                                         1 => self.cache.text_buffer.inputfirst_text_area.insert_char(c),
                                         2 => self.cache.text_buffer.inputsecond_text_area.insert_char(c),
+                                        3 => self.cache.text_buffer.inputthird_text_area.insert_char(c),
                                         _ => ()
                                     }
                                     self.cache.text_buffer.toml_text_area.insert_char(c);
@@ -100,6 +101,7 @@ impl App<'_>{
                                     match self.cache.tab1_data.selected_button{
                                         1 => {self.cache.text_buffer.inputfirst_text_area.input(input);},
                                         2 => {self.cache.text_buffer.inputsecond_text_area.input(input);},
+                                        3 => {self.cache.text_buffer.inputthird_text_area.input(input);},
                                         _ => ()
                                     }
                                 }
