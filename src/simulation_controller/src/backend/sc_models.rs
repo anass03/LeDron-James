@@ -26,12 +26,16 @@ impl Logs{
             log_scroll_offset: 0,
         }
     }
-    pub/*(crate)*/ fn push_log(&mut self, type_of_log: LogType, text: &str){
+
+    pub (crate) fn push_sc_log(&mut self, log_type: LogType, text: String) {
+        self.logs_memory.push((log_type, format!("[Simulation Controller] - {text}")));
+    }
+    pub fn push_log(&mut self, log_type: LogType, text: &str){
         if self.logs_memory.len()>=1000{
             self.logs_memory.remove(0);
-            self.logs_memory.push((type_of_log, text.to_string()));
+            self.logs_memory.push((log_type, text.to_string()));
         }else{
-            self.logs_memory.push((type_of_log, text.to_string()));
+            self.logs_memory.push((log_type, text.to_string()));
             self.log_scroll_offset += 1;
         }
     }

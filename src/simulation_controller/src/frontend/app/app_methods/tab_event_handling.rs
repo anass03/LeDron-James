@@ -236,7 +236,7 @@ impl App<'_> {
                         match drone_fn{
                             3 => {
                                 match self.simulation_controller_data.crash(id_origin){
-                                    Ok(_) => self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("[SC] Sent Crash command to {:?}", id_origin).as_str()),
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("[Simulation Controller] - Sent Crash command to {:?}", id_origin).as_str()),
                                     Err(err) => {
                                         self.simulation_controller_data.logs.push_log(LogType::ERROR, err.as_str())
                                     }
@@ -254,7 +254,7 @@ impl App<'_> {
                                 match self.simulation_controller_data.request_server_type(id_origin){
                                     Ok(_) => self.simulation_controller_data.logs.push_log(
                                         LogType::DEBUG,
-                                        "Simulation Controller Sent Request Server Type",
+                                        "[Simulation Controller] - Sent Request Server Type",
                                     ),
                                     Err(str) => self
                                         .simulation_controller_data

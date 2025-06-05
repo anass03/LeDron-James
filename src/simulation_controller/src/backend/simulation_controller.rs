@@ -9,13 +9,8 @@ use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
-use host::{HostCommand, HostEvent, Network};
-
-use petgraph::Graph;
-use petgraph::graph::Node;
-use wg_internal::packet::NodeType;
-use crate::frontend::app::topology_algorithm::alg_models;
-use crate::backend::sc_models::{LogType, Logs, Statistics};
+use host::{HostCommand, HostEvent};
+use crate::backend::sc_models::{Logs, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone)]
@@ -31,7 +26,7 @@ pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
 pub struct SimulationControllerData {
     pub logs: Logs,
 
-    // Each of the next data is gonna get re-initialized each time the simulation stops!
+    // Each of the next data is going to get re-initialized each time the simulation stops!
 
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
@@ -96,8 +91,4 @@ impl SimulationControllerData {
             topology_algorithm_data: TopologyAlgorithm::default(),
         }
     }
-}
-
-pub fn log(txt: &str) {
-    println!("{} - {}",Colorize::on_green("SimulationController"), Colorize::on_green(txt))
 }

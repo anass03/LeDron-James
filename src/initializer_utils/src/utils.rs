@@ -153,6 +153,7 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     if errors.is_empty() {
         Ok(config)
     } else {
+        //panic!("{}", errors.join("\n"));
         Err(errors.join("\n"))
     }
 }

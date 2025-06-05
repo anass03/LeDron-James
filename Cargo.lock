@@ -219,9 +219,9 @@ checksum = "56ed6191a7e78c36abdb16ab65341eefd73d64d303fffccdbb00d51e4205967b"
 
 [[package]]
 name = "bumpalo"
-version = "3.17.0"
+version = "3.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1628fb46dfa0b37568d12e5edd512553eccf6a22a78e8bde00bb4aed84d5bdbf"
+checksum = "c1b094a32014c3d1f3944e4808e0e7c70e97dae0660886a8eb6dbc52d745badc"
 
 [[package]]
 name = "bytemuck"
@@ -335,7 +335,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#3d489a1209002060237f7f230909ae9c831f9ec9"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#cb85c65308b61a99e29dbc07974d7dc3614f5819"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -1023,7 +1023,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#3d489a1209002060237f7f230909ae9c831f9ec9"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#cb85c65308b61a99e29dbc07974d7dc3614f5819"
 dependencies = [
  "crossbeam-channel",
  "image 0.25.6",
