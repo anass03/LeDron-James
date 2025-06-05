@@ -164,6 +164,10 @@ impl Client {
                         self.host.send_logging("ServerType request received".to_string());
 
                         let servers_snapshot = self.servers.clone();
+                        self.host.send_logging(format!(
+                            "Servers discovered: {:?}",
+                            servers_snapshot.clone()
+                        ));
                         if let Err(err) = self.host.controller_send.send(HostEvent::ServersDiscovered(servers_snapshot)) {
                             self.host.send_logging(format!(
                                 "Error sending ServersDiscovered to controller: {}",
