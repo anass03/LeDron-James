@@ -464,7 +464,7 @@ fn render_three_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     if app.cache.tab1_data.selected_button == 3 {
         third_block = third_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
     }
-    let inner_third_block = third_block.inner(second_input_area);
+    let inner_third_block = third_block.inner(third_input_area);
     third_block.render(third_input_area, buf);
     app.cache.text_buffer.inputthird_text_area.render(inner_third_block, buf);
 

@@ -91,8 +91,7 @@ impl App<'_>{
                                         2 => self.cache.text_buffer.inputsecond_text_area.insert_char(c),
                                         3 => self.cache.text_buffer.inputthird_text_area.insert_char(c),
                                         _ => ()
-                                    }
-                                    self.cache.text_buffer.toml_text_area.insert_char(c);
+                                    };
                                 },
                                 None => {
                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
