@@ -1,28 +1,26 @@
 mod app_methods;
 mod ui;
 mod model;
+pub mod topology_algorithm;
 
 use ui::tabs::{render_footer, render_inner, render_top};
 use model::Cache;
 
 use ratatui::{
     buffer::Buffer,
-    DefaultTerminal,
     layout::{
-        Rect,Layout
+        Layout, Rect
     },
-    widgets::Widget
+    widgets::Widget,
+    DefaultTerminal
 };
 
 use std::{io, time};
 use std::time::Duration;
 use time::Instant;
-use host::HostEvent;
 use rand::Rng;
-use wg_2024::packet::PacketType;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
-use crate::backend::sc_models::LogType;
 use crate::frontend::app::model::{AppMode, Settings, TOMLmessages};
 use crate::frontend::app::ui::tabs::SelectedTab;
 /*
