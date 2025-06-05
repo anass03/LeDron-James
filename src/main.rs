@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
-use simulation_controller::backend::simulation_controller::{Logs, SimulationControllerData, Statistics};
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
+use simulation_controller::backend::sc_models::{Logs, Statistics};
 use initializer::initializer::initialize;
 
 fn main() -> std::io::Result<()> {
@@ -16,7 +17,7 @@ fn main() -> std::io::Result<()> {
         host_event_receiver: unbounded().1,
         packet_sender: Default::default(),
         log_receiver: unbounded().1,
-        logs: Logs { logs_memory: vec![], log_scroll_offset: 0 },
+        logs: Logs::default(),
         stats: Statistics::default(),
     };
     match initialize("init_file.toml") {

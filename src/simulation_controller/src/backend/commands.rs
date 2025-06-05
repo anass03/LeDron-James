@@ -124,13 +124,13 @@ impl SimulationControllerData {
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate removing connection
-        match modified_net_map.get(&first_node) {
+        match modified_net_map.get_mut(&first_node) {
             Some(mut first_node_neighbors) => {
                 first_node_neighbors.retain(|&id| id != second_node);
             },
             None => return Err(format!("connection between {first_node} and {second_node} !does not exist"))
         }
-        match modified_net_map.get(&second_node) {
+        match modified_net_map.get_mut(&second_node) {
             Some(mut second_node_neighbors) => {
                 second_node_neighbors.retain(|&id| id != first_node);
             },
@@ -616,6 +616,10 @@ impl SimulationControllerData {
                     ServerToClient::MediaFrom(server_id, client_id, ..)
                     => {
                         self.logs.push_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}").as_str());
+                    }
+                    ServerToClient::WrongServer(server_id)
+                    => {
+                        self.logs.push_log(LogType::INFO, format!("Wrong Server ID: {server_id}").as_str());
                     }
                     ServerToClient::ErrNotFound(server_id) 
                     => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),

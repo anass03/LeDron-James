@@ -11,7 +11,7 @@ pub struct Logs{
     pub log_scroll_offset: usize,
 }
 
-pub (crate) struct Statistics{
+pub struct Statistics{
     pub total_packet_exchanged: usize,
     pub total_active_connections: usize,
     pub network_reliability: u8,
@@ -20,7 +20,7 @@ pub (crate) struct Statistics{
 // Implementations
 
 impl Logs{
-    pub(super) fn default()->Self{
+    pub fn default() ->Self{
         Self{
             logs_memory: vec![],
             log_scroll_offset: 0,
