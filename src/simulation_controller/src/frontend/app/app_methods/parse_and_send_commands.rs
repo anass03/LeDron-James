@@ -92,7 +92,7 @@ impl App<'_>{
     pub(super) fn request_file(&mut self, id: NodeId){
         match self.parse_2input(true){
             Ok(n) => {
-                match self.simulation_controller_data.request_file(id, n.0 as ServerId, n.1 as FileId){
+                match self.simulation_controller_data.request_file(id, n.1 as ServerId, n.0 as FileId){
                     Ok(_) => {self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Simulation Controller Sent Request File ID {:?} to Server ID {:?}", n.0,n.1).as_str())},
                     Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
                 }
