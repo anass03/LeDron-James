@@ -191,8 +191,16 @@ pub(super) struct ChartsData{ // Each CONST sec data, NOT TOTAL
 }
 impl Settings{
     pub(super) fn load()->Self{
+        use std::path::Path;
+
+        let sub_crate_dir = env!("CARGO_MANIFEST_DIR");
+        let workspace_root = Path::new(sub_crate_dir)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
         Self{
-            toml_path:"./init_file".to_string(),
+            toml_path: format!("{}/init_file.toml", workspace_root.display())
         }
     }
 }
