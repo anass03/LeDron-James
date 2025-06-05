@@ -163,30 +163,39 @@ impl App<'_> {
                             Node::Client(c) => {
                                 let id = c.id;
                                 /*
-                                "[1] Server Type",
-                                "[2] FilesList",
-                                "[3] File [ 1 input ]",
-                                "[4] MediaList",
-                                "[5] Media [ 1 input ]",
-                                "[6] Registration to chat",
-                                "[7] ClientList",
-                                "[8] Message For [ 2 input ]",
+                                                        0 => {
+                            render_no_input_fn(app, area, buf);
+                        }
+                        1 | 3 | 5 | 6 => {
+                            render_one_input_fn(app, area, buf);
+                        }
+                        2 | 4 => {
+                            render_two_input_fn(app, area, buf);
+                        }
+                        7 => {
+                            render_three_input_fn(app, area, buf);
+                        }
                                      */
                                 match self.cache.tab1_data.selected_fn.selected {
-                                    0 | 1 | 3 | 5 | 6 => self.tab1_0input_handle(
+                                    0 => self.tab1_0input_handle(
                                         key,
                                         id,
                                         SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
                                     ),
-                                    2 | 4 => self.tab1_1input_handle(
+                                    1 | 3 | 5 | 6 => self.tab1_1input_handle(
                                         key,
                                         id,
                                         SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
                                     ),
-                                    7 => self.tab1_2input_handle(
+                                    2 | 4 => self.tab1_2input_handle(
                                         key,
                                         id,
                                         SelectedNode::Client(self.cache.tab1_data.selected_fn.selected),
+                                    ),
+                                    7 => self.tab1_3input_handle(
+                                        key,
+                                        id,
+                                        SelectedNode::Client(self.cache.tab1_data.selected_fn.selected)
                                     ),
                                     _ => self.handle_unknown(key),
                                 }
@@ -242,11 +251,31 @@ impl App<'_> {
                                 // Server Type
                                 // Can't find command in the backend
                                 // match self.simulation_controller_data.
-                                self.simulation_controller_data
-                                    .logs
-                                    .push_log(LogType::ERROR, "Function does NOT exist")
+                                match self.simulation_controller_data.request_server_type(client_fn){
+                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                        LogType::DEBUG,
+                                        "Simulation Controller Sent Request Server Type",
+                                    ),
+                                    Err(str) => self
+                                        .simulation_controller_data
+                                        .logs
+                                        .push_log(LogType::ERROR, str.as_str()),
+                                }
                             }
-                            1 => {
+                            /*0 => {
+                            render_no_input_fn(app, area, buf);
+                        }
+                        1 | 3 | 5 | 6 => {
+                            render_one_input_fn(app, area, buf);
+                        }
+                        2 | 4 => {
+                            render_two_input_fn(app, area, buf);
+                        }
+                        7 => {
+                            render_three_input_fn(app, area, buf);
+                        }
+                                     */
+                        /*    1 => {
                                 // Files List
                                 match self
                                     .simulation_controller_data
@@ -309,7 +338,7 @@ impl App<'_> {
                                         .logs
                                         .push_log(LogType::ERROR, str.as_str()),
                                 }
-                            }
+                            }*/
                             _ => (),
                         }
                     }
@@ -360,13 +389,18 @@ impl App<'_> {
                             }
                             SelectedNode::Client(client_fn) => {
                                 match client_fn {
-                                    2 => {
-                                        // File ID requested
-                                        self.request_file(id_origin);
+                                    1 =>{
+                                        self.request_filelist(id_origin)
                                     }
-                                    4 => {
+                                    3 => {
+                                        self.request_medialist(id_origin)
+                                    }
+                                    5 => {
                                         // Media ID requested
-                                        self.request_media(id_origin);
+                                        self.request_regtochat(id_origin);
+                                    }
+                                    6 => {
+                                        self.request_clientlist(id_origin);
                                     }
                                     _ => (),
                                 }
@@ -410,6 +444,58 @@ impl App<'_> {
                             SelectedNode::Drone(drone_fn) => {}
                             SelectedNode::Client(client_fn) => {
                                 match client_fn {
+                                    2=> {
+                                        self.request_file(id_origin);
+                                    }
+                                    4 => {
+                                        // Media ID requested
+                                        self.request_media(id_origin);
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            SelectedNode::Server(server_fn) => {}
+                        }
+                    }
+                    1 => {
+                        self.app_mode = AppMode::Input;
+                    }
+                    2 => {
+                        self.app_mode = AppMode::Input;
+                    }
+                    _ => (),
+                }
+            }
+            _ => (),
+        }
+    }
+    fn tab1_3input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn: SelectedNode) {
+        match key {
+            KeyCode::Left => {
+                self.cache.cursor -= 1;
+            }
+            KeyCode::Up => {
+                if self.cache.tab1_data.selected_button > 0 {
+                    self.cache.tab1_data.selected_button -= 1;
+                }
+            }
+            KeyCode::Down => {
+                if self.cache.tab1_data.selected_button < 3 {
+                    self.cache.tab1_data.selected_button += 1;
+                }
+            }
+            KeyCode::Enter => {
+                // Se 1 -> INPUT MODE e inseriamo nel first buffer
+                // Se 2 -> INPUT MODE e inseriamo nel second buffer
+                // Se 3 -> INPUT MODE e inseriamo nel terzo buffer
+                // Se 0 -> parse dei dati e a seconda della fn selezionata inviamo
+                match self.cache.tab1_data.selected_button {
+                    // ENTER
+                    0 => {
+                        match node_fn {
+                            SelectedNode::Drone(drone_fn) => {}
+                            SelectedNode::Client(client_fn) => {
+                                match client_fn {
                                     7 => {
                                         self.parse_and_send_message(id_origin)
                                     }
@@ -423,6 +509,9 @@ impl App<'_> {
                         self.app_mode = AppMode::Input;
                     }
                     2 => {
+                        self.app_mode = AppMode::Input;
+                    }
+                    3 => {
                         self.app_mode = AppMode::Input;
                     }
                     _ => (),

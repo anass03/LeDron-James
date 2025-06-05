@@ -109,8 +109,8 @@ impl SimulationControllerData {
 
         let mut visited = HashSet::new();
 
-        let &start = match net_map.keys().find(|&&id| id != drone_id) {
-            Some(&id) => &id,
+        let start = match net_map.keys().find(|&&id| id != drone_id) {
+            Some(&id) => id,
             None => return Err(format!("Drone {drone_id} is not connected in the network"))
         };
 

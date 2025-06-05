@@ -168,13 +168,13 @@ fn render_client_opt<'a>(bl: &bool) -> (Vec<Line<'a>>, Block<'a>) {
         block_list = block_list.title(Span::from("Choose your Client option"));
         list_items = vec![
             "[1] Server Type",
-            "[2] FilesList",
-            "[3] File",
-            "[4] MediaList",
-            "[5] Media",
-            "[6] Registration to chat",
-            "[7] ClientList",
-            "[8] Message For",
+            "[2] FilesList 1 input",
+            "[3] File 2 input",
+            "[4] MediaList 1 input",
+            "[5] Media 2 input",
+            "[6] Registration to chat 1 input",
+            "[7] ClientList 1 input",
+            "[8] Message For 3 input",
         ];
     } else {
         block_list = block_list.title(Span::from("Client deactivated"));
@@ -236,14 +236,25 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
             match n {
                 Node::Client(_) => {
                     match app.cache.tab1_data.selected_fn.selected {
-                        0 | 1 | 3 | 5 | 6 => {
+           /*             "[1] Server Type",
+                        "[2] FilesList 1 input",
+                        "[3] File 2 input",
+                        "[4] MediaList 1 input",
+                        "[5] Media 2 input",
+                        "[6] Registration to chat 1 input",
+                        "[7] ClientList 1 input",
+                        "[8] Message For 3 input",*/
+                        0 => {
                             render_no_input_fn(app, area, buf);
                         }
-                        2 | 4 => {
+                        1 | 3 | 5 | 6 => {
                             render_one_input_fn(app, area, buf);
                         }
-                        7 => {
+                        2 | 4 => {
                             render_two_input_fn(app, area, buf);
+                        }
+                        7 => {
+                            render_three_input_fn(app, area, buf);
                         }
                         _ => (),
                     }
@@ -385,7 +396,7 @@ fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     app.cache.text_buffer.inputfirst_text_area.render(inner_first_block, buf);
 
     let mut second_block = Block::new()
-        .title(Span::from(" insert the message ( no newline ) "))
+        .title(Span::from(" insert the server ID ( u8 ) "))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL);
     if app.cache.tab1_data.selected_button == 2 {
@@ -394,5 +405,67 @@ fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     let inner_second_block = second_block.inner(second_input_area);
     second_block.render(second_input_area, buf);
     app.cache.text_buffer.inputsecond_text_area.render(inner_second_block, buf);
+
+}
+
+fn render_three_input_fn(app:&App, area:Rect, buf:&mut Buffer){
+    let [top_area, input_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
+        .areas(area);
+
+    let [first_input_area, second_input_area,third_input_area] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .areas(input_area);
+
+    let [button_area, _] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(25), Constraint::Percentage(75)])
+        .areas(top_area);
+
+    let mut enter_block = Block::new()
+        .title(Span::from(" PRESS ENTER TO CONFIRM "))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    if app.cache.tab1_data.selected_button == 0 && app.cache.cursor == 2 {
+        enter_block = enter_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+    enter_block.render(button_area, buf);
+
+    let mut first_block = Block::new()
+        .title(Span::from(" insert the ID ( u8 ) "))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    if app.cache.tab1_data.selected_button == 1 {
+        first_block = first_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+    let inner_first_block = first_block.inner(first_input_area);
+    first_block.render(first_input_area, buf);
+    app.cache.text_buffer.inputfirst_text_area.render(inner_first_block, buf);
+
+
+    let mut second_block = Block::new()
+        .title(Span::from(" insert the server ID ( u8 ) "))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    if app.cache.tab1_data.selected_button == 2 {
+        second_block = second_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+    let inner_second_block = second_block.inner(second_input_area);
+    second_block.render(second_input_area, buf);
+    app.cache.text_buffer.inputsecond_text_area.render(inner_second_block, buf);
+
+
+    let mut third_block = Block::new()
+        .title(Span::from(" insert the message "))
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL);
+    if app.cache.tab1_data.selected_button == 3 {
+        third_block = third_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+    let inner_third_block = third_block.inner(second_input_area);
+    third_block.render(third_input_area, buf);
+    app.cache.text_buffer.inputthird_text_area.render(inner_third_block, buf);
 
 }

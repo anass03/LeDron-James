@@ -31,7 +31,8 @@ pub(super) struct TextBuffer<'a>{
     pub text_buffer: Vec<String>,
     pub toml_text_area: TextArea<'a>,
     pub inputfirst_text_area: TextArea<'a>,
-    pub inputsecond_text_area: TextArea<'a>
+    pub inputsecond_text_area: TextArea<'a>,
+    pub inputthird_text_area: TextArea<'a>
 }
 
 // Tab structs needed to encapsulate their information and data
@@ -202,6 +203,7 @@ impl<'a> TextBuffer<'_>{
             toml_text_area: Default::default(),
             inputfirst_text_area: Default::default(),
             inputsecond_text_area: Default::default(),
+            inputthird_text_area: Default::default()
         }
     }
     /// 1 - Get ID ( u8 ) on the first buffer
