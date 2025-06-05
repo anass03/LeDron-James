@@ -487,7 +487,32 @@ impl Functionality for Host {
 
     fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
+        let flood_id    = response.flood_id;
+        // (A) Verifico che path_trace non sia vuoto
+        if response.path_trace.is_empty() {
+            self.send_logging(format!(
+                "FloodResponse senza path_trace – host={}",
+                host_id
+            ));
+            return;
+        }
 
+        // (B) Estrae il primo elemento di path_trace: è l’initiator
+        let (initiator, _) = response.path_trace.last().unwrap();
+
+        // (C) Se l’initiator non sono io, o il flood_id non è nella mia entry della cache, ignoro
+        if *initiator != host_id
+            || !self
+            .flood_cache
+            .get(&host_id)
+            .map_or(false, |ids| ids.contains(&flood_id))
+        {
+            self.send_logging(format!(
+                "Ignoro FloodResponse non mio: host={} initiator={} flood_id={}",
+                host_id, initiator, flood_id
+            ));
+            return;
+        }
         // 🔍 LOG: path completo in arrivo
         let path_str = response
             .path_trace
