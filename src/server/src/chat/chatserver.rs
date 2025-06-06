@@ -19,7 +19,7 @@ impl ChatServer {
         to self.info.host {
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
-            fn process_flood_response(&mut self, response: FloodResponse);
+            fn process_flood_response(&mut self, packet: Packet);
             fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
             fn send_logging(&self, message: String);
@@ -104,6 +104,7 @@ impl ChatServer {
         match cmd {
             ClientNetCommand::ServerType => {
                 if let Ok(server_type) = self.servertype() {
+                    self.send_logging("Sending server type".to_string());
                     self.send_response(ServerToClient::ServerType(server_type), source);
                 } else {
                     self.send_logging(" Failed to send ServerToClient::ServerType".to_string());
@@ -113,8 +114,8 @@ impl ChatServer {
                 match receiver_id==self.info.host.id {
                     true => {
                         if !self.client_list.contains(&source) {
-                        self.client_list.push(source);
-                        self.send_logging(format!(" Registered new client to chat: {}", source));
+                            self.client_list.push(source);
+                            self.send_logging(format!(" Registered new client to chat: {}", source));
                     }else{
                         self.send_logging(format!(" Registration from {} already exists!", source));
                     }}
@@ -123,7 +124,10 @@ impl ChatServer {
             }
             ClientNetCommand::ClientList(receiver_id) => {
                 match receiver_id==self.info.host.id {
-                    true => {self.send_response(ServerToClient::ClientList(self.info.host.id,self.client_list.clone()), source);}
+                    true => {
+                        self.send_response(ServerToClient::ClientList(self.info.host.id,self.client_list.clone()), source);
+                        self.send_logging("Sending client list".to_string());
+                    }
                     false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
                 }
             }
@@ -131,9 +135,14 @@ impl ChatServer {
                 match receiver_id ==self.info.host.id {
                     true => {
                         match self.check_if_in_client_list(source) {
-                            true => {match self.check_if_in_client_list(destination) {
-                                true => {self.send_response(ServerToClient::MessageFrom(self.info.host.id,source, msg), destination);},
-                                false => {self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);}
+                            true => {
+                                match self.check_if_in_client_list(destination) {
+                                    true => {
+                                        self.send_logging(format!("Sending message to {}", destination));
+                                        self.send_response(ServerToClient::MessageFrom(self.info.host.id,source, msg), destination);},
+                                    false => {
+                                        self.send_logging(format!("{} is not registered to client chat", destination));
+                                        self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);}
                             }}
                             false => {self.send_logging(" You're not registered to client chat".to_string())}
                         }
@@ -148,8 +157,14 @@ impl ChatServer {
                         match self.check_if_in_client_list(source) {
                             true => {
                                 match self.check_if_in_client_list(destination) {
-                                    true => {self.send_response(ServerToClient::FileFrom(self.info.host.id,source,file_id,extension,message), destination);}
-                                    false => {self.send_logging(" The destination is not registered to client chat".to_string());}
+                                    true => {
+                                        self.send_logging(format!("Sending file to {}", destination));
+                                        self.send_response(ServerToClient::FileFrom(self.info.host.id,source,file_id,extension,message), destination);
+                                    }
+                                    false => {                                        
+                                        self.send_logging(format!("{} is not registered to client chat", destination));
+                                        self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
+                                    }
                                 }
                             }
                             false => {self.send_logging(" You're not registered to client chat".to_string())} 
@@ -164,11 +179,19 @@ impl ChatServer {
                         match self.check_if_in_client_list(source) {
                             true => {
                                 match self.check_if_in_client_list(destination) {
-                                    true => {self.send_response(ServerToClient::MediaFrom(self.info.host.id,source,media_id,extension,message), destination);}
-                                    false => {self.send_logging(" The destination is not registered to client chat".to_string());}
+                                    true => {
+                                        self.send_logging(format!("Sending media to {}", destination));
+                                        self.send_response(ServerToClient::MediaFrom(self.info.host.id,source,media_id,extension,message), destination);
+                                    }
+                                    false => {
+                                        self.send_logging(" The destination is not registered to client chat".to_string());
+                                    }
                                 }
                             }
-                            false => {self.send_logging(" You're not registered to client chat".to_string())}
+                            false => {
+                                self.send_logging(" You're not registered to client chat".to_string());
+                                self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
+                            }
                         }
                     }
                     false => {self.send_response(ServerToClient::WrongServer(self.info.host.id), source);}
@@ -190,7 +213,7 @@ impl ChatServer {
         match packet.clone().pack_type {
             PacketType::Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
             PacketType::Ack(ack) => self.handle_ack(ack, &*packet.routing_header.hops, packet.session_id),
-            PacketType::FloodResponse(r) => self.process_flood_response(r),
+            PacketType::FloodResponse(_) => self.process_flood_response(packet),
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {

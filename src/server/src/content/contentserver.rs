@@ -25,7 +25,7 @@ impl ContentServer {
         to self.info.host {
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
-            fn process_flood_response(&mut self, response: FloodResponse);
+            fn process_flood_response(&mut self, packet: Packet);
             fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
             fn send_logging(&self, message: String);
@@ -154,6 +154,7 @@ impl ContentServer {
         match cmd {
             ClientNetCommand::ServerType => {
                 if let Ok(server_type)=self.servertype(){
+                    self.send_logging("Sending server type".to_string());
                     self.send_response(ServerToClient::ServerType(server_type),source);
                 }else{
                     self.send_logging("Failed to send ServerToClient::ServerType".to_string());
@@ -163,6 +164,7 @@ impl ContentServer {
                 match receiver_id==self.info.host.id{
                     true => {                 
                         self.count_files();
+                        self.send_logging("Checking files ids".to_string());
                         self.send_response(ServerToClient::FilesList(self.info.host.id,self.files.clone()), source);
                     }
                     false => {
@@ -175,6 +177,7 @@ impl ContentServer {
                     true => {                
                         match Self::convert_file(file_id) {
                         Ok((data, ext)) => {
+                            self.send_logging("Sending file".to_string());
                             self.send_response(ServerToClient::File(self.info.host.id,file_id, ext.clone(), data), source);
                         }
                         Err(_) => {
@@ -190,6 +193,7 @@ impl ContentServer {
                 match receiver_id==self.info.host.id{
                     true => {
                         self.count_files();
+                        self.send_logging("Checking Medias ids".to_string());
                         self.send_response(ServerToClient::MediaList(self.info.host.id,self.media.clone()), source);}
                     false => {
                         self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
@@ -200,6 +204,7 @@ impl ContentServer {
                 match receiver_id==self.info.host.id{
                     true => {match Self::process_image(file_id) {
                         Ok((image, ext)) => {
+                            self.send_logging("Sending image".to_string());
                             self.send_response(ServerToClient::Media(self.info.host.id,file_id, ext.clone(), image), source);
                         }
                         Err(_) => {
@@ -222,7 +227,7 @@ impl ContentServer {
                 self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id)
             }
             PacketType::Ack(ack) => self.handle_ack(ack, &*packet.routing_header.hops, packet.session_id),
-            PacketType::FloodResponse(r) => self.process_flood_response(r),
+            PacketType::FloodResponse(_) => self.process_flood_response(packet),
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {

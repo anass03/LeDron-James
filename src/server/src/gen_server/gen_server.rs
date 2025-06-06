@@ -58,23 +58,23 @@ impl GenServerBehavior for GenServer {
             HostCommand::AddSender(id, sender) => {
                 let current = self.host.packet_send.len();
                 if self.host.packet_send.contains_key(&id) {
-                    self.host.send_logging("Channel already present!".to_string());
+                    self.send_logging("Channel already present!".to_string());
                 } else if current >= 2 {
-                    self.host.send_logging("Cannot add more than 2 channels: limit reached".to_string());
+                    self.send_logging("Cannot add more than 2 channels: limit reached".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
-                    self.host.send_logging("Successfully added sender!".to_string());
+                    self.send_logging("Successfully added sender!".to_string());
                 }
             }
             HostCommand::RemoveSender(id) => {
                 let current = self.host.packet_send.len();
                 if !self.host.packet_send.contains_key(&id) {
-                    self.host.send_logging("Channel not found!".to_string());
+                    self.send_logging("Channel not found!".to_string());
                 } else if current <= 1 {
-                    self.host.send_logging("Cannot remove last channel: at least one connection required".to_string());
+                    self.send_logging("Cannot remove last channel: at least one connection required".to_string());
                 } else {
                     self.host.packet_send.remove(&id);
-                    self.host.send_logging("Successfully removed sender!".to_string());
+                    self.send_logging("Successfully removed sender!".to_string());
                 }
             }
         }
