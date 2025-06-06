@@ -498,7 +498,7 @@ impl Client {
     fn handle_packet(&mut self, packet: Packet) -> Result<(), String> {
         match packet.pack_type.clone() {
             PacketType::FloodResponse(response) => {
-                self.host.process_flood_response(response.clone());
+                self.host.process_flood_response(packet);
                 Ok(())
             }
             PacketType::MsgFragment(fragment) => {
