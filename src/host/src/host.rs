@@ -15,7 +15,9 @@ pub type FileId = usize;
 pub type MediaId = usize;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
+pub type Extension = String;
 const ALPHA: f64 = 0.1; // fattore di smussamento (regolabile)
+
 
 #[derive(Clone)]
 pub struct Host{
@@ -275,10 +277,10 @@ pub trait Functionality{
     fn schedule_flood(&mut self);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
-    fn process_flood_response(&mut self, response: FloodResponse);
+    fn process_flood_response(&mut self, packet: Packet);
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes;
     fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
-    fn handle_ack(&self, ack: Ack, session_id: u64);
+    fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
     fn handle_nack(&mut self, nack: Nack,nack_generator: NodeId, session_id: u64);
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
     fn cleanup_expired_sessions(&self, timeout: Duration);
@@ -297,7 +299,7 @@ pub fn generate_unique_session_id() -> u64 {
 impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
-        let role = if self.network.servers.contains(&self.id) { "Server" } else { "Client" };
+        let role = self.type_host;
         let log_msg = format!("[{}] ID {} - {}", role, self.id, message);
 
         if let Err(err) = self.log_sender.send(log_msg) {
@@ -482,98 +484,248 @@ impl Functionality for Host {
             }
         }
     }
+    fn process_flood_response(&mut self, mut pkt: Packet) {
+        // 1) Estraggo il FloodResponse e l’header di routing
+        let (response, routing_header) = match &mut pkt.pack_type {
+            PacketType::FloodResponse(resp) => (resp, &mut pkt.routing_header),
+            _ => {
+                // Non dovrebbe succedere: sto chiamando questa funzione
+                // solo per FloodResponse. Se capita, esco subito.
+                return;
+            }
+        };
 
-    fn process_flood_response(&mut self, response: FloodResponse) {
         let host_id = self.id;
+        let flood_id = response.flood_id;
 
-        // 🔍 LOG: path completo in arrivo
-        let path_str = response
-            .path_trace
-            .iter()
-            .map(|(id, ty)| format!("{:?}({})", ty, id))
-            .collect::<Vec<_>>()
-            .join(" -> ");
+        // 2) Controllo che path_trace non sia vuoto
+        if response.path_trace.is_empty() {
+            self.send_logging(format!("FloodResponse senza path_trace – host={}", host_id));
+            return;
+        }
 
+        // 3) Estraggo l’iniziatore dall’ultimo elemento di path_trace
+        let (initiator, _) = response.path_trace.last().unwrap();
+
+        // 4) Controllo se è una flood-response per me
+        if *initiator != host_id
+            || !self
+            .flood_cache
+            .get(&host_id)
+            .map_or(false, |ids| ids.contains(&flood_id))
+        {
+            //  “Non è una risposta per me”: devo forwardare verso l’iniziatore
+            //    routing_header.hop_index punta ora all’indice del nodo corrente.
+            //    Per rimbalzare, incrementiamo hop_index e inviamo al prossimo hop.
+            routing_header.hop_index += 1;
+            // ATTENZIONE: verifichiamo che non sfori
+            if routing_header.hop_index <= routing_header.hops.len() {
+                let next_hop = routing_header.hops[routing_header.hop_index];
+                self.send_logging(format!(
+                    "Forwarding FloodResponse host={} flood_id={} verso next_hop={}",
+                    host_id, flood_id, next_hop
+                ));
+                // Chiamo send_packet con None perché voglio che lui guardi routing_header per
+                // decidere il canale corretto
+                let _ = self.send_packet(pkt.clone(), None);
+            } else {
+                // (teoricamente non dovrebbe mai succedere, perché hop_index == len-1
+                // implica che il pacchetto era già al suo destino, ma per sicurezza lo logghiamo)
+                self.send_logging(format!(
+                    "Hop_index oltre la lunghezza di hops: host={} hop_index={} len={}",
+                    host_id,
+                    routing_header.hop_index,
+                    routing_header.hops.len()
+                ));
+            }
+            return;
+        }
+        // ◁ Se arrivo qui, “sono” l’iniziatore (e flood_id ∈ flood_cache[self.id]):
+        //    posso far partire la logica che registra i nodi e gli archi
         self.send_logging(format!(
-            "Handling FloodResponse with path host={} flood_id={}, path_str={}",
+            "Handling FloodResponse per me host={} flood_id={} path={:?}",
             host_id,
-            response.flood_id,
-            path_str,
+            flood_id,
+            response
+                .path_trace
+                .iter()
+                .map(|(nid, ty)| format!("{:?}({})", ty, nid))
+                .collect::<Vec<_>>()
+                .join(" -> ")
         ));
+
         let path = &response.path_trace;
         if path.len() < 2 {
             self.send_logging(format!(
-                "FloodResponse path too short, skipping host={} len={}",
+                "FloodResponse path troppo corto, host={} len={}",
                 host_id,
-                path.len(),
+                path.len()
             ));
             return;
         }
 
-        // 1) Assicura che tutti i nodi nel percorso siano nella adjacency-list
+        // 5) Registro tutti i nodi nella mia adjacency-list
         for &(node_id, node_type) in path {
-            // entry nuovo nodo, se non esiste
-            self.network
+            let entry = self
+                .network
                 .nodes
                 .entry(node_id)
                 .or_insert_with(|| (node_type, Vec::new()));
-
-            // per i droni, inizializza subito pdr
-            if node_type == NodeType::Drone {
-                self.network
-                    .drone_pdr
-                    .entry(node_id)
-                    .or_insert(0.1);
+            // inizializzo pdr se è drone
+            if entry.0 == NodeType::Drone {
+                self.network.drone_pdr.entry(node_id).or_insert(0.0);
             }
-            // per i server, inserisci nell’HashSet dei server
-            if node_type == NodeType::Server {
-                self.network
-                    .servers
-                    .insert(node_id);
+            // se è server, lo aggiungo all’insieme
+            if entry.0 == NodeType::Server {
+                self.network.servers.insert(node_id);
             }
         }
 
-        // 2) Registra connessioni tra nodi adiacenti
+        // 6) Registro gli archi tra nodi consecutivi
         for window in path.windows(2) {
             let (curr_id, _) = window[0];
             let (next_id, _) = window[1];
-
+            // aggiungo arco curr_id → next_id
             if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
-                // evita doppioni
                 if !edges.iter().any(|e| e.to == next_id) {
                     edges.push(Edge { to: next_id, weight: 0.0 });
                     self.send_logging(format!(
-                        "Recorded adjacency edge host={} from={} to={}",
-                        host_id,
-                        curr_id,
-                        next_id,
+                        "Recorded adjacency edge host={} da {} a {}",
+                        host_id, curr_id, next_id
                     ));
                 }
-                // ——— Aggiungi anche l'arco inverso ———
-                if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
-                    // evita doppioni
-                    if !inv_edges.iter().any(|e| e.to == curr_id) {
-                        inv_edges.push(Edge { to: curr_id, weight: 0.0 });
-                        self.send_logging(format!(
-                            "Recorded adjacency edge host={} from={} to={}",
-                            host_id,
-                            next_id,
-                            curr_id,
-                        ));
-                    }
+            }
+            // aggiungo anche l’arco inverso next_id → curr_id
+            if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
+                if !inv_edges.iter().any(|e| e.to == curr_id) {
+                    inv_edges.push(Edge { to: curr_id, weight: 0.0 });
+                    self.send_logging(format!(
+                        "Recorded adjacency edge host={} da {} a {}",
+                        host_id, next_id, curr_id
+                    ));
                 }
-
-            } else {
-                self.send_logging(format!(
-                    "Current node missing from network.nodes host={} node={}",
-                    host_id, curr_id,
-                ));
             }
         }
 
-        // (Opzionale) se vuoi ricalcolare subito i PDR:
+        // 7) (Opzionale) Ricalcolo subito i PDR
         self.network.recalc_pdr();
     }
+    // fn process_flood_response(&mut self, response: FloodResponse) {
+    //     let host_id = self.id;
+    //     let flood_id    = response.flood_id;
+    //     // (A) Verifico che path_trace non sia vuoto
+    //     if response.path_trace.is_empty() {
+    //         self.send_logging(format!(
+    //             "FloodResponse senza path_trace – host={}",
+    //             host_id
+    //         ));
+    //         return;
+    //     }
+    //
+    //     // (B) Estrae il primo elemento di path_trace: è l’initiator
+    //     let (initiator, _) = response.path_trace.last().unwrap();
+    //
+    //     // (C) Se l’initiator non sono io, o il flood_id non è nella mia entry della cache, ignoro
+    //     if *initiator != host_id
+    //         || !self
+    //         .flood_cache
+    //         .get(&host_id)
+    //         .map_or(false, |ids| ids.contains(&flood_id))
+    //     {
+    //         self.send_logging(format!(
+    //             "Ignoro FloodResponse non mio: host={} initiator={} flood_id={}",
+    //             host_id, initiator, flood_id
+    //         ));
+    //         return;
+    //     }
+    //     // 🔍 LOG: path completo in arrivo
+    //     let path_str = response
+    //         .path_trace
+    //         .iter()
+    //         .map(|(id, ty)| format!("{:?}({})", ty, id))
+    //         .collect::<Vec<_>>()
+    //         .join(" -> ");
+    //
+    //     self.send_logging(format!(
+    //         "Handling FloodResponse with path host={} flood_id={}, path_str={}",
+    //         host_id,
+    //         response.flood_id,
+    //         path_str,
+    //     ));
+    //     let path = &response.path_trace;
+    //     if path.len() < 2 {
+    //         self.send_logging(format!(
+    //             "FloodResponse path too short, skipping host={} len={}",
+    //             host_id,
+    //             path.len(),
+    //         ));
+    //         return;
+    //     }
+    //
+    //     // 1) Assicura che tutti i nodi nel percorso siano nella adjacency-list
+    //     for &(node_id, node_type) in path {
+    //         // entry nuovo nodo, se non esiste
+    //         self.network
+    //             .nodes
+    //             .entry(node_id)
+    //             .or_insert_with(|| (node_type, Vec::new()));
+    //
+    //         // per i droni, inizializza subito pdr
+    //         if node_type == NodeType::Drone {
+    //             self.network
+    //                 .drone_pdr
+    //                 .entry(node_id)
+    //                 .or_insert(0.0);
+    //         }
+    //         // per i server, inserisci nell’HashSet dei server
+    //         if node_type == NodeType::Server {
+    //             self.network
+    //                 .servers
+    //                 .insert(node_id);
+    //         }
+    //     }
+    //
+    //     // 2) Registra connessioni tra nodi adiacenti
+    //     for window in path.windows(2) {
+    //         let (curr_id, _) = window[0];
+    //         let (next_id, _) = window[1];
+    //
+    //         if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
+    //             // evita doppioni
+    //             if !edges.iter().any(|e| e.to == next_id) {
+    //                 edges.push(Edge { to: next_id, weight: 0.0 });
+    //                 self.send_logging(format!(
+    //                     "Recorded adjacency edge host={} from={} to={}",
+    //                     host_id,
+    //                     curr_id,
+    //                     next_id,
+    //                 ));
+    //             }
+    //             // ——— Aggiungi anche l'arco inverso ———
+    //             if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
+    //                 // evita doppioni
+    //                 if !inv_edges.iter().any(|e| e.to == curr_id) {
+    //                     inv_edges.push(Edge { to: curr_id, weight: 0.0 });
+    //                     self.send_logging(format!(
+    //                         "Recorded adjacency edge host={} from={} to={}",
+    //                         host_id,
+    //                         next_id,
+    //                         curr_id,
+    //                     ));
+    //                 }
+    //             }
+    //
+    //         } else {
+    //             self.send_logging(format!(
+    //                 "Current node missing from network.nodes host={} node={}",
+    //                 host_id, curr_id,
+    //             ));
+    //         }
+    //     }
+    //
+    //     // (Opzionale) se vuoi ricalcolare subito i PDR:
+    //     self.network.recalc_pdr();
+    // }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         self.send_logging(format!("Sending packet... host={}", self.id));
 
@@ -624,8 +776,22 @@ impl Functionality for Host {
             }
         }
     }
-    fn handle_ack(&self, ack: Ack, session_id: u64) {
+    fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64) {
+        let drone_hops: Vec<NodeId> = hops.iter()
+            .filter(|&&nid| {
+                matches!(
+                        self.network.nodes.get(&nid).map(|(ty, _)| ty),
+                        Some(NodeType::Drone))}
+            )
+            .copied()
+            .collect();
+        self.network.pdr_helper(&drone_hops);
 
+        self.send_logging(format!(
+            "PDR updated host={} header hops={:?}",
+            self.id,
+            hops,
+        ));
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
         for (&drone_id, &pdr) in &self.network.drone_pdr {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
@@ -1005,16 +1171,18 @@ pub enum ClientNetCommand {
     //client command
     ServerType,
     //content-server
-    FilesList,
-    File(FileId),
+    FilesList(ServerId),
+    File(ServerId, FileId),
 
-    MediaList,
-    Media(MediaId),
+    MediaList(ServerId),
+    Media(ServerId,MediaId),
 
     //chat-server
-    RegistrationToChat,
-    ClientList,
-    MessageFor(ClientId, String),
+    RegistrationToChat(ServerId),
+    ClientList(ServerId),
+    MessageFor(ClientId,ServerId, String),
+    FileFor(ClientId,ServerId, FileId, Extension, Vec<u8>),
+    MediaFor(ClientId,ServerId, MediaId, Extension, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
@@ -1024,17 +1192,22 @@ pub enum HostCommand {
 pub enum ServerToClient{
     ServerType(ServerTypes),
 
-    FilesList(Vec<FileId>),
-    File(FileId, Vec<u8>),
+    //content server
+    FilesList(ServerId, Vec<FileId>),
+    File(ServerId, FileId, Extension, Vec<u8>),
 
-    MediaList(Vec<MediaId>),
-    Media(MediaId, Image),
+    MediaList(ServerId, Vec<MediaId>),
+    Media(ServerId, MediaId, Extension, Image),
 
-    ClientList(Vec<ClientId>),
-    MessageFrom(ClientId, String),
+    //chat server
+    ClientList(ServerId, Vec<ClientId>),
+    MessageFrom(ServerId, ClientId, String),
+    FileFrom(ServerId, ClientId, FileId, Extension, Vec<u8>),
+    MediaFrom(ServerId, ClientId, MediaId, Extension, Image),
 
-    ErrNotFound,
-    ErrClientId
+    ErrNotFound(ServerId),
+    ErrClientId(ServerId),
+    WrongServer(ServerId)
 }
 /// Application events that comes to the SimulationController
 pub enum HostEvent {
@@ -1042,12 +1215,11 @@ pub enum HostEvent {
     PacketReconstructed(ServerToClient),
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
-    // Timeout(session_id),
-    // ClientDisconnected(client_id),
-    // ecc.
+    ///Servers discovered, response at ServerType
+    ServersDiscovered(HashMap<ServerTypes,Vec<ServerId>>)
 }
 
-#[derive(Hash, Eq, PartialEq, Debug,Deserialize, Serialize)]
+#[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
 pub enum ServerTypes{
     Chat,
     Content
