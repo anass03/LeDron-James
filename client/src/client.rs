@@ -162,7 +162,8 @@ impl Client {
                 match net_command {
                     ClientNetCommand::ServerType =>{
                         self.host.send_logging("ServerType request received".to_string());
-
+                        self.host.send_logging(format!("SERVERS ID {:?}", self.host.network.servers));
+                        self.host.send_logging(format!("✅ {:?}", self.host.network.nodes));
                         let servers_snapshot = self.servers.clone();
                         self.host.send_logging(format!(
                             "Servers discovered: {:?}",

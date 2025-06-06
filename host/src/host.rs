@@ -79,7 +79,7 @@ pub struct SentSessionData {
     pub route: Vec<NodeId>,        // percorso pre-calcolato
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Edge {
     pub to:     NodeId,
     weight: f64,
