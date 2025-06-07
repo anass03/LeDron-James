@@ -503,9 +503,9 @@ impl Functionality for Host {
             self.send_logging(format!("FloodResponse senza path_trace – host={}", host_id));
             return;
         }
-
+        self.send_logging(format!("👌👌👌 path trace da controllare, {:?}", response.path_trace));
         // 3) The last element in path_trace is the initiator
-        let (initiator, _) = response.path_trace.last().unwrap();
+        let (initiator, _) = response.path_trace.first().unwrap();
 
         // 4) If I'm not the initiator, forward the response back along the path
         if *initiator != host_id {
