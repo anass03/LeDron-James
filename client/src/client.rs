@@ -197,7 +197,7 @@ impl Client {
                                         self.host.send_logging(format!("Serialization of FilesList failed: {}", e));
                                     }
                                 }
-                            }
+                            }else { self.host.send_logging(format!("Err, ServerID: {} , is a chat Server", server_id)); }
                         } else {
                             self.host.send_logging("No content server available for FilesList".to_string());
                         }
