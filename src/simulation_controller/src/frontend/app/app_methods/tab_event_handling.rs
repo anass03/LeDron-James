@@ -236,9 +236,9 @@ impl App<'_> {
                         match drone_fn{
                             3 => {
                                 match self.simulation_controller_data.crash(id_origin){
-                                    Ok(_) => self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("[Simulation Controller] - Sent Crash command to {:?}", id_origin).as_str()),
+                                    Ok(_) => self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG, format!("Sent Crash command to {:?}", id_origin)),
                                     Err(err) => {
-                                        self.simulation_controller_data.logs.push_log(LogType::ERROR, err.as_str())
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err)
                                     }
                                 }
                             },
@@ -252,9 +252,9 @@ impl App<'_> {
                                 // Can't find command in the backend
                                 // match self.simulation_controller_data.
                                 match self.simulation_controller_data.request_server_type(id_origin){
-                                    Ok(_) => self.simulation_controller_data.logs.push_log(
+                                    Ok(_) => self.simulation_controller_data.logs.push_sc_log(
                                         LogType::DEBUG,
-                                        "[Simulation Controller] - Sent Request Server Type",
+                                        "Sent Request Server Type".to_string(),
                                     ),
                                     Err(str) => self
                                         .simulation_controller_data
@@ -390,17 +390,17 @@ impl App<'_> {
                             SelectedNode::Client(client_fn) => {
                                 match client_fn {
                                     1 =>{
-                                        self.request_filelist(id_origin)
+                                        self.request_file_list(id_origin)
                                     }
                                     3 => {
-                                        self.request_medialist(id_origin)
+                                        self.request_media_list(id_origin)
                                     }
                                     5 => {
                                         // Media ID requested
-                                        self.request_regtochat(id_origin);
+                                        self.request_reg_to_chat(id_origin);
                                     }
                                     6 => {
-                                        self.request_clientlist(id_origin);
+                                        self.request_client_list(id_origin);
                                     }
                                     _ => (),
                                 }

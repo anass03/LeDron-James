@@ -225,10 +225,12 @@ impl SimulationControllerData {
             },
             DroneEvent::ControllerShortcut(packet) => {
                 let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
-                Ok(())
-                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet shortcut [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+                let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
+                match self.controller_shortcut(*receiver_id, packet) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err((LogType::ERROR, e)),
+                }
+
             },
         }
     }
