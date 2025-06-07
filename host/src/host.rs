@@ -39,6 +39,7 @@ pub struct Host{
     // *** CONTATORE DI FLOOD PER SESSIONE ***
     max_flood_attempts: u8,
     flood_attempts: HashMap<u64, u8>,  // session_id -> tentativi
+
 }
 impl Host{
     pub fn new(id:NodeId,
@@ -503,36 +504,24 @@ impl Functionality for Host {
             return;
         }
 
-        // 3) Estraggo l’iniziatore dall’ultimo elemento di path_trace
+        // 3) The last element in path_trace is the initiator
         let (initiator, _) = response.path_trace.last().unwrap();
 
-        // 4) Se non sono l’iniziatore o non ho quel flood_id in cache, lo inoltro
-        let is_mio = *initiator == host_id
-            && self
-            .flood_cache
-            .get(&host_id)
-            .map_or(false, |ids| ids.contains(&flood_id));
-
-        if !is_mio {
-            // ◁ “Non è una risposta per me”: devo forwardare verso l’iniziatore
-            //    routing_header.hop_index punta ora all’indice del nodo corrente.
-            //    Per rimbalzare, incrementiamo hop_index e inviamo al prossimo hop.
+        // 4) If I'm not the initiator, forward the response back along the path
+        if *initiator != host_id {
             routing_header.hop_index += 1;
-            // ATTENZIONE: verifichiamo che non sfori
             if routing_header.hop_index < routing_header.hops.len() {
                 let next_hop = routing_header.hops[routing_header.hop_index];
                 self.send_logging(format!(
-                    "Forwarding FloodResponse host={} flood_id={} verso next_hop={}",
-                    host_id, flood_id, next_hop
+                    "Forwarding FloodResponse: host={} flood_id={} -> next_hop={}",
+                    host_id,
+                    response.flood_id,
+                    next_hop
                 ));
-                // Chiamo send_packet con None perché voglio che lui guardi routing_header per
-                // decidere il canale corretto
                 let _ = self.send_packet(pkt.clone(), None);
             } else {
-                // (teoricamente non dovrebbe mai succedere, perché hop_index == len-1
-                // implica che il pacchetto era già al suo destino, ma per sicurezza lo logghiamo)
                 self.send_logging(format!(
-                    "Hop_index oltre la lunghezza di hops: host={} hop_index={} len={}",
+                    "Invalid hop_index in FloodResponse: host={} hop_index={} len={}",
                     host_id,
                     routing_header.hop_index,
                     routing_header.hops.len()
@@ -913,9 +902,7 @@ impl Functionality for Host {
                 ));
 
                 // 3) Provo subito una rotta alternativa sulla route corrente
-                if let Some(new_route) =
-                    self.network.find_alternate_route(host, destination, &current_route)
-                {
+                if let Some(new_route) = self.network.find_alternate_route(host, destination, &current_route) {
                     self.send_logging(format!(
                         "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
                         host, session_id, frag_idx, new_route
@@ -938,8 +925,8 @@ impl Functionality for Host {
                     } // il lock viene droppato qui
 
                     // 3.b) Invio il frammento sulla nuova rotta
-                    current_route = new_route.clone();
-                    let header = SourceRoutingHeader::new(new_route.clone(), 0);
+                    //current_route = new_route.clone();
+                    let header = SourceRoutingHeader::new(new_route, 0);
                     let pkt = Packet::new_fragment(header, session_id, fragment.clone());
                     let res = self.send_packet(pkt, None);
                     self.send_logging(format!(
