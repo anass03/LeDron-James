@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
-use std::{fs, io};
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
@@ -86,7 +86,7 @@ fn dfs(
 impl SimulationControllerData {
 
     //builds connections map
-    fn build_network_map(&self) -> HashMap<NodeId, Vec<NodeId>> {
+    fn build_network_map(&mut self) -> HashMap<NodeId, Vec<NodeId>> {
         let mut network_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         for client in self.clients.iter() {
             network_map.insert(client.id, client.connected_drone_ids.clone());
@@ -97,11 +97,11 @@ impl SimulationControllerData {
         for drone in self.drones.iter() {
             network_map.insert(drone.id, drone.connected_node_ids.clone());
         }
-
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", network_map));
         network_map
     }
     //returns true if node is critical
-    fn check_critical_node(&self, drone_id: NodeId) -> Result<bool, String>{
+    fn check_critical_node(&mut self, drone_id: NodeId) -> Result<bool, String>{
         let net_map = self.build_network_map();
         if net_map.len() <= 1 {
             return Ok(false);
@@ -120,7 +120,7 @@ impl SimulationControllerData {
         Ok(visited.len() + 1 != net_map.len())
     }
 
-    fn check_critical_connection(&self, first_node: NodeId, second_node: NodeId) -> Result<bool, String>{
+    fn check_critical_connection(&mut self, first_node: NodeId, second_node: NodeId) -> Result<bool, String>{
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate removing connection
@@ -172,7 +172,11 @@ impl SimulationControllerData {
                             None => { return Err(format!("Drone {drone_id} does not exist")); }
                         }
                         for neighbor in neighbors.iter() {
-                            self.remove_sender(drone_id, *neighbor)?
+                            let forward_node_type = NodeType::from(&self, drone_id);
+                            let backwards_node_type = NodeType::from(&self, *neighbor);
+
+                            self.mono_remove_sender(forward_node_type, drone_id, backwards_node_type, *neighbor)?;
+                            self.mono_remove_sender(backwards_node_type, *neighbor, forward_node_type, drone_id)?
                         }
                         Ok(())
                     },
@@ -256,6 +260,11 @@ impl SimulationControllerData {
                             },
                             None => return Err(format!("Drone {first_id} command sender not found")),
                         }
+                        for drone in self.drones.iter_mut() {
+                            if drone.id == first_id {
+                                drone.connected_node_ids.push(second_id);
+                            }
+                        }
                     },
                     NodeType::Client => {
                         match self.client_command_sender.get(&first_id) {
@@ -270,6 +279,11 @@ impl SimulationControllerData {
                                 }
                             },
                             None => return Err(format!("Client {first_id} command sender not found")),
+                        }
+                        for client in self.clients.iter_mut() {
+                            if client.id == first_id {
+                                client.connected_drone_ids.push(second_id);
+                            }
                         }
                     },
                     NodeType::Server => {
@@ -286,11 +300,17 @@ impl SimulationControllerData {
                             },
                             None => return Err(format!("Server {first_id} command sender not found")),
                         }
+                        for server in self.servers.iter_mut() {
+                            if server.id == first_id {
+                                server.connected_drone_ids.push(second_id);
+                            }
+                        }
                     }
                 }
             },
             None => return Err(format!("{second_type} {second_id} packet sender not found")),
         }
+
         Ok(())
     }
 
@@ -318,6 +338,11 @@ impl SimulationControllerData {
                     },
                     None => return Err(format!("Drone {first_id} command sender not found")),
                 }
+                for drone in self.drones.iter_mut() {
+                    if drone.id == first_id {
+                        drone.connected_node_ids.retain(|&id| id != second_id);
+                    }
+                }
             },
             NodeType::Client => {
                 match self.client_command_sender.get(&first_id) {
@@ -333,6 +358,11 @@ impl SimulationControllerData {
                     },
                     None => return Err(format!("Client {first_id} command sender not found💥")),
                 }
+                for client in self.clients.iter_mut() {
+                    if client.id == first_id {
+                        client.connected_drone_ids.retain(|&id| id != second_id);
+                    }
+                }
             },
             NodeType::Server => {
                 match self.server_command_sender.get(&first_id) {
@@ -347,6 +377,11 @@ impl SimulationControllerData {
                         }
                     },
                     None => return Err(format!("Server {first_id} command sender not found")),
+                }
+                for server in self.servers.iter_mut() {
+                    if server.id == first_id {
+                        server.connected_drone_ids.retain(|&id| id != second_id);
+                    }
                 }
             }
         }
@@ -445,7 +480,7 @@ impl SimulationControllerData {
         self.send_client_command(client_id, command)
     }
 
-    // /// - Client Events
+    /// - Client Events
 
     pub fn handle_channels(&mut self) {
         while let Ok(event) = self.host_event_receiver.try_recv() {
@@ -470,7 +505,8 @@ impl SimulationControllerData {
             HostEvent::PacketReconstructed(server_to_client) => {
                 match server_to_client {
                     ServerToClient::ServerType(server_type)
-                    => self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)),
+                    => {
+                        self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
                     ServerToClient::FilesList(server_id, file_list) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")),
                     ServerToClient::File(server_id, file_id, extension, file) 
@@ -545,7 +581,7 @@ impl SimulationControllerData {
                     ServerToClient::ClientList(server_id, client_list) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)),
                     ServerToClient::MessageFrom(server_id, client_id, message) 
-                    => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {} received through Server {server_id}: {:?}", client_id, message)),
+                    => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
                     ServerToClient::FileFrom(server_id, client_id,..)
                     => {
                         self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
@@ -567,7 +603,9 @@ impl SimulationControllerData {
             HostEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
             },
-            _ => {}
+            HostEvent::ServersDiscovered(servers) => {
+                self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
+            }
         }
         Ok(())
     }

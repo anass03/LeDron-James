@@ -223,7 +223,7 @@ impl App<'_>{
                 let lines_third = self
                     .cache
                     .text_buffer
-                    .inputsecond_text_area
+                    .inputthird_text_area
                     .clone()
                     .into_lines();
 
