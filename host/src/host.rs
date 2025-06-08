@@ -168,6 +168,13 @@ impl Network {
             if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
+                    // se v NON è né start né destination, allora deve essere un drone
+                    if v != start && v != destination {
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, _)) => { /* ok */ }
+                            _ => continue,  // salta host o altri tipi intermedi
+                        }
+                    }
                     // Qui estraggo direttamente la stima EWMA di PDR per il drone `u`
                     let reliability = 1.0 - edge.weight;
                     // Se la stima è zero o negativa, salto subito l'arco
@@ -240,7 +247,13 @@ impl Network {
             if let Some((_, edges)) = temp.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-
+                    // se v NON è né start né destination, allora deve essere un drone
+                    if v != start && v != destination {
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, _)) => { /* ok */ }
+                            _ => continue,  // salta host o altri tipi intermedi
+                        }
+                    }
                     // idem: leggo la stima EWMA per `u`
                     let reliability = 1.0 - edge.weight;
                     if reliability <= 0.0 {
