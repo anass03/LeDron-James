@@ -138,7 +138,7 @@ impl ChatServer {
                             true => {
                                 match self.check_if_in_client_list(destination) {
                                     true => {
-                                        self.send_logging(format!("Sending message to {}", destination));
+                                        self.send_logging(format!("Sending message to {} , and messaage is : {}", destination, msg));
                                         self.send_response(ServerToClient::MessageFrom(self.info.host.id,source, msg), destination);},
                                     false => {
                                         self.send_logging(format!("{} is not registered to client chat", destination));
