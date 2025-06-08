@@ -10,10 +10,12 @@ use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
 
+
 pub struct Client {
     host: Host,
     controller_recv:Receiver<ClientCommand>,
     servers: HashMap<ServerTypes, Vec<NodeId>>,
+    servers_discovered: usize
 }
 impl Client {
     pub fn new(id:NodeId,
@@ -26,7 +28,7 @@ impl Client {
 
         let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
         Self{
-            host,controller_recv, servers: HashMap::new(),
+            host,controller_recv, servers: HashMap::new(),servers_discovered: 0
         }
     }
 
@@ -83,16 +85,15 @@ impl Client {
     /// tutti gli ID di `self.host.network.servers`.
     fn ensure_all_servers_discovered(&mut self) -> Result<(), String> {
         let expected = self.host.network.servers.len();
-        let mut servers_discovered = 0;
 
-        if servers_discovered != expected {
+        if self.servers_discovered != expected {
             self.host.send_logging(format!(
                 "Discovering server types from {} nodes, host={}",
                 expected, self.host.id
             ));
             self.request_server_type();
 
-            while servers_discovered < expected {
+            while self.servers_discovered < expected {
                 crossbeam_channel::select! {
                 recv(self.host.packet_recv) -> pkt => {
                      if let Ok(packet) = pkt {
@@ -532,6 +533,7 @@ impl Client {
                             match cmd {
                                 ServerType(st) => {
                                     if let Some(src) = packet.routing_header.source() {
+                                        self.servers_discovered += 1;
                                         let entry = self.servers.entry(st.clone()).or_insert_with(Vec::new);
                                         if !entry.contains(&src) {
                                             entry.push(src);
