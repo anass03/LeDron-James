@@ -95,38 +95,46 @@ impl Client {
             while servers_discovered < expected {
                 crossbeam_channel::select! {
                 recv(self.host.packet_recv) -> pkt => {
-                    let packet = pkt.map_err(|e| e.to_string())?;
-                    // Processing del packet: estraggo il payload, ricompongo il messaggio e provo a
-                    // interpretarlo come ServerToClient.
-                    if let PacketType::MsgFragment(fragment) = packet.pack_type.clone() {
-                        if let Some(raw_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
-                            // qui provo a parsare esattamente un JSON ServerToClient
-                            if let Ok(cmd) = serde_json::from_slice::<ServerToClient>(&raw_bytes) {
-                                match cmd {
-                                    ServerType(st) => {
-                                        // Se è un ServerType valido, registro l’ID del sender
-                                        if let Some(src) = packet.routing_header.source() {
-                                            let entry =
-                                                self.servers.entry(st.clone()).or_insert_with(Vec::new);
-                                            if !entry.contains(&src) {
-                                                entry.push(src);
-                                                self.host.send_logging(format!(
-                                                    "Registered {:?} server: {:?}",
-                                                    st, src
-                                                ));
-                                            }
-                                            // Incremento solo qui: ho effettivamente ricevuto un ServerType
-                                            servers_discovered += 1;
-                                        }
-                                    }
-                                    _ => {
-                                        // È una qualche altra risposta (File, Media, ecc.) che
-                                        // non ci interessa per il conteggio dei server.
-                                    }
-                                }
-                            }
+                     if let Ok(packet) = pkt {
+                        if let Err(e) = self.handle_packet(packet) {
+                            self.host.send_logging(format!("Error processing packet: {}", e));
                         }
                     }
+                    // let packet = pkt.map_err(|e| e.to_string())?;
+                    // // Processing del packet: estraggo il payload, ricompongo il messaggio e provo a
+                    // // interpretarlo come ServerToClient.
+                    //
+                    // match packet.pack_type {
+                    //     PacketType::MsgFragment(fragment) => {
+                    //         if let Some(raw_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
+                    //             // qui provo a parsare esattamente un JSON ServerToClient
+                    //             if let Ok(cmd) = serde_json::from_slice::<ServerToClient>(&raw_bytes) {
+                    //                 match cmd {
+                    //                     ServerType(st) => {
+                    //                         // Se è un ServerType valido, registro l’ID del sender
+                    //                         if let Some(src) = packet.routing_header.source() {
+                    //                             let entry =
+                    //                                 self.servers.entry(st.clone()).or_insert_with(Vec::new);
+                    //                             if !entry.contains(&src) {
+                    //                                 entry.push(src);
+                    //                                 self.host.send_logging(format!(
+                    //                                     "Registered {:?} server: {:?}",
+                    //                                     st, src
+                    //                                 ));
+                    //                             }
+                    //                             // Incremento solo qui: ho effettivamente ricevuto un ServerType
+                    //                             servers_discovered += 1;
+                    //                         }
+                    //                     }
+                    //                     _ => {
+                    //                         // È una qualche altra risposta (File, Media, ecc.) che
+                    //                         // non ci interessa per il conteggio dei server.
+                    //                     }
+                    //                 }
+                    //             }
+                    //         }
+                    //     }
+                    // }
                 },
 
                 recv(self.controller_recv) -> _cmd => {
@@ -162,8 +170,8 @@ impl Client {
                 match net_command {
                     ClientNetCommand::ServerType =>{
                         self.host.send_logging("ServerType request received".to_string());
-                        self.host.send_logging(format!("SERVERS ID {:?}", self.host.network.servers));
-                        self.host.send_logging(format!("✅ {:?}", self.host.network.nodes));
+                        // self.host.send_logging(format!("SERVERS ID {:?}", self.host.network.servers));
+                        // self.host.send_logging(format!("✅ {:?}", self.host.network.nodes));
                         let servers_snapshot = self.servers.clone();
                         self.host.send_logging(format!(
                             "Servers discovered: {:?}",
@@ -197,7 +205,13 @@ impl Client {
                                         self.host.send_logging(format!("Serialization of FilesList failed: {}", e));
                                     }
                                 }
-                            }else { self.host.send_logging(format!("Err, ServerID: {} , is a chat Server", server_id)); }
+                            }else {
+                                // target_id non è nella lista dei Content-server
+                                self.host.send_logging(format!(
+                                    "Node {} is NOT a valid CONTENT-SERVER",
+                                    server_id
+                                ));
+                            }
                         } else {
                             self.host.send_logging("No content server available for FilesList".to_string());
                         }
