@@ -56,22 +56,6 @@ impl Client {
                     }
 
                 },
-                // 3) debounce‐timer (fire solo se flood_scheduled è true)
-                // recv(self
-                // .host
-                // .flood_timer
-                // .as_ref()
-                // .cloned()
-                // .unwrap_or_else(|| never_timer.clone())) -> _ => {
-                //     if self.host.flood_scheduled{
-                //          self.host.flood_scheduled = false;
-                //         self.host.flood_timer = None;
-                //         self.host.send_logging("Debounced flood triggered".to_string());
-                //         self.host.initiate_flood();
-                //     }
-                // },
-
-                // 4) cleanup periodico
                 recv(cleanup_tick) -> _ => {
                     let timeout = Duration::from_secs(300);
                     // self.host.cleanup_expired_sessions(timeout);

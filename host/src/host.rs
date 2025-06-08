@@ -32,13 +32,10 @@ pub struct Host{
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
     pub log_sender: Sender<String>,
 
-    // *** CAMPUS PER IL DEBOUNCE ***
-    pub flood_scheduled: bool,
-    pub flood_timer: Option<Receiver<Instant>>,
-
-    // *** CONTATORE DI FLOOD PER SESSIONE ***
-    max_flood_attempts: u8,
-    flood_attempts: HashMap<u64, u8>,  // session_id -> tentativi
+    /// quanto vogliamo aspettare tra un flood e il successivo
+    nack_flood_backoff: Duration,
+    /// timestamp dell’ultimo flood scatenato da un NACK
+    last_nack_flood: Instant,
 
 }
 impl Host{
@@ -59,10 +56,8 @@ impl Host{
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
             log_sender,
-            flood_scheduled: false,
-            flood_timer: None,
-            max_flood_attempts: 5,
-            flood_attempts: HashMap::new(),
+            nack_flood_backoff: Duration::from_secs(5),
+            last_nack_flood: Instant::now() - Duration::from_secs(5),
         };
         host
     }
@@ -288,7 +283,6 @@ impl Network {
 }
 pub trait Functionality{
     fn send_logging(&self, message: String);
-    fn schedule_flood(&mut self);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, packet: Packet);
@@ -321,27 +315,12 @@ impl Functionality for Host {
         }
     }
     /// Al posto di chiamare initiate_flood() direttamente, uso questo
-    fn schedule_flood(&mut self) {
-        // Se ho già schedulato un flood, ignoro
-        if self.flood_scheduled {
-            return;
-        }
-        self.flood_scheduled = true;
-        // Il channel `after` manderà un messaggio dopo 100ms
-        self.flood_timer = Some(after(Duration::from_millis(100)));
-        self.send_logging("Flood scheduled (debounced)".to_string());
-    }
     fn initiate_flood(&mut self) {
         if !self.network.nodes.is_empty() {
             self.network.nodes.clear();
         }
         if self.packet_send.is_empty() {
             self.send_logging(format!("No neighbors to flood to host={}",  self.id));
-            // Siamo in errore di rete: MA siccome non ho inviato alcun FloodRequest,
-            // devo _azzerare_ flood_scheduled e il flood_timer, altrimenti
-            // il select li vede sempre pronti e richiama all’infinito questa funzione.
-            self.flood_scheduled = false;
-            self.flood_timer = None;
             return;
         }
         // Genero subito gli ID, così li posso loggare
@@ -613,122 +592,6 @@ impl Functionality for Host {
         // 7) (Opzionale) Ricalcolo subito i PDR
         self.network.recalc_pdr();
     }
-    // fn process_flood_response(&mut self, response: FloodResponse) {
-    //     let host_id = self.id;
-    //     let flood_id    = response.flood_id;
-    //     // (A) Verifico che path_trace non sia vuoto
-    //     if response.path_trace.is_empty() {
-    //         self.send_logging(format!(
-    //             "FloodResponse senza path_trace – host={}",
-    //             host_id
-    //         ));
-    //         return;
-    //     }
-    //
-    //     // (B) Estrae il primo elemento di path_trace: è l’initiator
-    //     let (initiator, _) = response.path_trace.last().unwrap();
-    //
-    //     // (C) Se l’initiator non sono io, o il flood_id non è nella mia entry della cache, ignoro
-    //     if *initiator != host_id
-    //         || !self
-    //         .flood_cache
-    //         .get(&host_id)
-    //         .map_or(false, |ids| ids.contains(&flood_id))
-    //     {
-    //         self.send_logging(format!(
-    //             "Ignoro FloodResponse non mio: host={} initiator={} flood_id={}",
-    //             host_id, initiator, flood_id
-    //         ));
-    //         return;
-    //     }
-    //     // 🔍 LOG: path completo in arrivo
-    //     let path_str = response
-    //         .path_trace
-    //         .iter()
-    //         .map(|(id, ty)| format!("{:?}({})", ty, id))
-    //         .collect::<Vec<_>>()
-    //         .join(" -> ");
-    //
-    //     self.send_logging(format!(
-    //         "Handling FloodResponse with path host={} flood_id={}, path_str={}",
-    //         host_id,
-    //         response.flood_id,
-    //         path_str,
-    //     ));
-    //     let path = &response.path_trace;
-    //     if path.len() < 2 {
-    //         self.send_logging(format!(
-    //             "FloodResponse path too short, skipping host={} len={}",
-    //             host_id,
-    //             path.len(),
-    //         ));
-    //         return;
-    //     }
-    //
-    //     // 1) Assicura che tutti i nodi nel percorso siano nella adjacency-list
-    //     for &(node_id, node_type) in path {
-    //         // entry nuovo nodo, se non esiste
-    //         self.network
-    //             .nodes
-    //             .entry(node_id)
-    //             .or_insert_with(|| (node_type, Vec::new()));
-    //
-    //         // per i droni, inizializza subito pdr
-    //         if node_type == NodeType::Drone {
-    //             self.network
-    //                 .drone_pdr
-    //                 .entry(node_id)
-    //                 .or_insert(0.0);
-    //         }
-    //         // per i server, inserisci nell’HashSet dei server
-    //         if node_type == NodeType::Server {
-    //             self.network
-    //                 .servers
-    //                 .insert(node_id);
-    //         }
-    //     }
-    //
-    //     // 2) Registra connessioni tra nodi adiacenti
-    //     for window in path.windows(2) {
-    //         let (curr_id, _) = window[0];
-    //         let (next_id, _) = window[1];
-    //
-    //         if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
-    //             // evita doppioni
-    //             if !edges.iter().any(|e| e.to == next_id) {
-    //                 edges.push(Edge { to: next_id, weight: 0.0 });
-    //                 self.send_logging(format!(
-    //                     "Recorded adjacency edge host={} from={} to={}",
-    //                     host_id,
-    //                     curr_id,
-    //                     next_id,
-    //                 ));
-    //             }
-    //             // ——— Aggiungi anche l'arco inverso ———
-    //             if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
-    //                 // evita doppioni
-    //                 if !inv_edges.iter().any(|e| e.to == curr_id) {
-    //                     inv_edges.push(Edge { to: curr_id, weight: 0.0 });
-    //                     self.send_logging(format!(
-    //                         "Recorded adjacency edge host={} from={} to={}",
-    //                         host_id,
-    //                         next_id,
-    //                         curr_id,
-    //                     ));
-    //                 }
-    //             }
-    //
-    //         } else {
-    //             self.send_logging(format!(
-    //                 "Current node missing from network.nodes host={} node={}",
-    //                 host_id, curr_id,
-    //             ));
-    //         }
-    //     }
-    //
-    //     // (Opzionale) se vuoi ricalcolare subito i PDR:
-    //     self.network.recalc_pdr();
-    // }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         self.send_logging(format!("Sending packet... host={}", self.id));
 
@@ -948,28 +811,54 @@ impl Functionality for Host {
                     ));
                 } else {
                     // 3.c) Non c'è rotta alternativa: incremento flood_attempts e valuto se abortire o floodare
-                    let cnt = {
-                        let entry = self.flood_attempts.entry(session_id).or_insert(0);
-                        *entry += 1;
-                        *entry
-                    };
-
-                    if cnt > self.max_flood_attempts {
-                        // 3.d) Superata la soglia: rete scollegata, rimuovo la sessione
-                        self.send_logging(format!(
-                            "❌ NET DISCONNECTED, session {} fallita dopo {} flood → aborting",
-                            session_id,
-                            cnt - 1 // cnt-1 perché cnt è già stato incrementato oltre la soglia
-                        ));
-                        let mut sent = self.sent_fragments.lock().unwrap();
-                        sent.remove(&session_id);
-                    } else {
-                        // 3.e) Pianifico un solo flood, poi esco
-                        self.send_logging(format!(
-                            "No alternate route per session {}, scheduling flood attempt {}/{}",
-                            session_id, cnt, self.max_flood_attempts
-                        ));
+                    let now = Instant::now();
+                    if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
+                        self.send_logging("NACK backoff scaduto: avvio flood".to_string());
                         self.initiate_flood();
+                        if let Some(new_route) = self.network.find_best_route(host, destination) {
+                            self.send_logging(format!(
+                                "route found after flooding, updating and retransmitting host={} session={} fragment={} route={:?}",
+                                host, session_id, frag_idx, new_route
+                            ));
+
+                            // 3.a) Apro il lock solo per aggiornare session.route
+                            {
+                                let mut sent = self.sent_fragments.lock().unwrap();
+                                if let Some(session) = sent.get_mut(&session_id) {
+                                    session.route = new_route.clone();
+                                    session.last_activity = Instant::now();
+                                } else {
+                                    // La sessione è già stata rimossa nel frattempo: esco
+                                    self.send_logging(format!(
+                                        "Session {} già rimossa, non ritrasmetto",
+                                        session_id
+                                    ));
+                                    return;
+                                }
+                            } // il lock viene droppato qui
+
+                            // 3.b) Invio il frammento sulla nuova rotta
+                            //current_route = new_route.clone();
+                            let header = SourceRoutingHeader::new(new_route, 0);
+                            let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+                            let res = self.send_packet(pkt, None);
+                            self.send_logging(format!(
+                                "Retransmission result host={} session={} fragment={} result={:?}",
+                                host, session_id, frag_idx, res
+                            ));
+                        }else {
+                            self.send_logging(format!(
+                                "❌ NET DISCONNECTED, session {} failed --> aborting flood!",
+                                session_id,
+
+                            ));
+                        }
+                        self.last_nack_flood = now;
+                    } else {
+                        self.send_logging(format!(
+                            "NACK ricevuto ma backoff non scaduto ({:.1}s rimanenti)",
+                            (self.nack_flood_backoff - now.duration_since(self.last_nack_flood)).as_secs_f32()
+                        ));
                     }
                 }
             }
