@@ -171,9 +171,9 @@ checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
 
 [[package]]
 name = "bindgen"
-version = "0.70.1"
+version = "0.72.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f49d8fed880d473ea71efb9bf597651e77201bdd4893efe54c9e5d65ae04ce6f"
+checksum = "4f72209734318d0b619a5e0f5129918b848c416e122a3c4ce054e03cb87b726f"
 dependencies = [
  "bitflags 2.9.1",
  "cexpr",
@@ -225,9 +225,9 @@ checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
 
 [[package]]
 name = "bytemuck"
-version = "1.23.0"
+version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9134a6ef01ce4b366b50689c94f82c14bc72bc5d0386829828a2e2752ef7958c"
+checksum = "5c76a5792e44e4abe34d3abf15636779261d45a7450612059293d1d2cfc63422"
 
 [[package]]
 name = "byteorder"
@@ -335,7 +335,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4df930a498ab492ac366fe54e5b79ca71e193391"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#60ce112c2b4f51b1f2ba1c408b0f7451aa55bb83"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -430,9 +430,9 @@ dependencies = [
 
 [[package]]
 name = "coreaudio-sys"
-version = "0.2.16"
+version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ce857aa0b77d77287acc1ac3e37a05a8c95a2af3647d23b15f263bdaeb7562b"
+checksum = "ceec7a6067e62d6f931a2baf6f3a751f4a892595bcec1461a3c94ef9949864b6"
 dependencies = [
  "bindgen",
 ]
@@ -1023,7 +1023,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4df930a498ab492ac366fe54e5b79ca71e193391"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#60ce112c2b4f51b1f2ba1c408b0f7451aa55bb83"
 dependencies = [
  "crossbeam-channel",
  "image 0.25.6",
@@ -2520,9 +2520,9 @@ checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
 
 [[package]]
 name = "rustc-hash"
-version = "1.1.0"
+version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+checksum = "357703d41365b4b27c590e3ed91eabb1b663f07c4c084095e60cbed4362dff0d"
 
 [[package]]
 name = "rustc_version"
@@ -2725,7 +2725,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#47bb763ed7444bfb92095c730e3ddb7d46e41d28"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#7616c30192c31e212dd9893f1c3414df60f35f5c"
 dependencies = [
  "crossbeam-channel",
  "delegate",

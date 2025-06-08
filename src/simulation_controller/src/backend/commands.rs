@@ -11,9 +11,8 @@ use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
-use crate::backend::simulation_controller::SimulationControllerData;
+use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::LogType;
-
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -23,6 +22,7 @@ enum NodeType {
     Server,
 }
 
+type NodeMap = HashMap<NetNode, Vec<NodeId>>;
 impl Display for NodeType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -54,103 +54,230 @@ impl NodeType {
     }
 }
 
+impl NetNode {
+    pub fn id(&self) -> &NodeId {
+        match self {
+            NetNode::Drone(id) => id,
+            NetNode::Client(id) => id,
+            NetNode::Server(id) => id,
+        }
+    }
+}
+
 fn dfs(
     current: NodeId,
-    net_map: &HashMap<NodeId, Vec<NodeId>>,
+    graph: &HashMap<NodeId, Vec<NodeId>>,
     exclude: Option<NodeId>,
-    visited: &mut HashSet<NodeId>
-) {
-    match exclude {
-        Some(exclude) => {
-            if current == exclude {
-                return
-            }
-            visited.insert(current);
-            for &neighbor in &net_map[&current] {
-                if !visited.contains(&neighbor)  && neighbor != exclude {
-                    dfs(neighbor, net_map, Some(exclude), visited);
-                }
-            }
-        }
-        None => {
-            visited.insert(current);
-            for &neighbor in &net_map[&current] {
-                if !visited.contains(&neighbor) {
-                    dfs(neighbor, net_map, None, visited);
-                }
+    visited: &mut HashSet<NodeId>,
+)
+{
+    if Some(current) == exclude {
+        return;
+    }
+    visited.insert(current);
+    if let Some(neighbors) = graph.get(&current) {
+        for &neighbor in neighbors {
+            if !visited.contains(&neighbor) && Some(neighbor) != exclude {
+                dfs(neighbor, graph, exclude, visited);
             }
         }
     }
 }
 
 impl SimulationControllerData {
-
     //builds connections map
-    fn build_network_map(&mut self) -> HashMap<NodeId, Vec<NodeId>> {
-        let mut network_map: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+    fn build_network_map(&mut self) -> NodeMap {
+        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
         for client in self.clients.iter() {
-            network_map.insert(client.id, client.connected_drone_ids.clone());
+            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
         }
         for server in self.servers.iter() {
-            network_map.insert(server.id, server.connected_drone_ids.clone());
+            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
         }
         for drone in self.drones.iter() {
-            network_map.insert(drone.id, drone.connected_node_ids.clone());
+            network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
         }
         self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", network_map));
         network_map
     }
-    //returns true if node is critical
-    fn check_critical_node(&mut self, drone_id: NodeId) -> Result<bool, String>{
+    fn cannot_crash(&mut self, drone_id: NodeId) -> Result<bool, String> {
+        //net cannot be separated
+        //hosts must be at the edges of the net
+        //clients must have 1 or 2 neighbors
+        //servers must have at least 2 neighbors
+
+        //create a NodeMap of my network -> NodeMap: HashMap<NetNode, Vec<NodeId>>
         let net_map = self.build_network_map();
         if net_map.len() <= 1 {
             return Ok(false);
         }
 
+        //Build a net without target drone
+        let mut crashed_net = net_map.clone();
+        match crashed_net.remove(&NetNode::Drone(drone_id)) {
+            Some(_) => (),
+            None => return Err(format!("Drone {drone_id} is not in the net!"))
+        }
+
+        //check hosts constraints
+        for (node, neighbors) in crashed_net.iter() {
+            match node {
+                NetNode::Client(client_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!("Cannot Crash Drone {drone_id} because Client {client_id} would have {adj} Neighbors!"));
+                    }
+                }
+                NetNode::Server(server_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 1 {
+                        return Err(format!("Cannot Crash Drone {drone_id} because Server {server_id} would have only {adj} Neighbors!"));
+                    }
+                }
+                _ => continue
+            }
+        }
+
+        // Build a net without hosts
+        let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        for (drone, neighbors) in &net_map {
+            if let NetNode::Drone(drone_id) = drone {
+                drone_net.insert(*drone_id, neighbors.clone());
+            }
+        }
+
+        // Check if crashing splits the network without considering hosts (they are at the edges)
         let mut visited = HashSet::new();
+        let &start = drone_net.keys().find(|&&id| id != drone_id).ok_or("No other nodes to start DFS")?;
+        dfs(start, &drone_net, Some(drone_id), &mut visited);
+        if visited.len() + 1 != drone_net.len() {
+            return Ok(true);
+        }
 
-        let start = match net_map.keys().find(|&&id| id != drone_id) {
-            Some(&id) => id,
-            None => return Err(format!("Drone {drone_id} is not connected in the network"))
-        };
-
-        //applying dfs without target node to check if the network would still be connected
-        dfs(start, &net_map, Some(drone_id), &mut visited);
-        //If not all node could be found => target node is critical
-        Ok(visited.len() + 1 != net_map.len())
+        Ok(false)
     }
 
-    fn check_critical_connection(&mut self, first_node: NodeId, second_node: NodeId) -> Result<bool, String>{
+    fn cannot_remove(&mut self, first_type: NodeType, first_node: NodeId, second_type: NodeType, second_node: NodeId) -> Result<bool, String> {
+        //net cannot be separated
+        //hosts must be at the edges of the net
+        //clients must have 1 or 2 neighbors
+        //servers must have at least 2 neighbors
+
+        let first = match first_type {
+            NodeType::Drone => {NetNode::Drone(first_node)}
+            NodeType::Client => {NetNode::Client(first_node)}
+            NodeType::Server => {NetNode::Server(first_node)}
+        };
+        let second = match second_type {
+            NodeType::Drone => {NetNode::Drone(second_node)}
+            NodeType::Client => {NetNode::Client(second_node)}
+            NodeType::Server => {NetNode::Server(second_node)}
+        };
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate removing connection
-        match modified_net_map.get_mut(&first_node) {
+        match modified_net_map.get_mut(&first) {
             Some(mut first_node_neighbors) => {
                 first_node_neighbors.retain(|&id| id != second_node);
             },
-            None => return Err(format!("connection between {first_node} and {second_node} !does not exist"))
+            None => return Err(format!("{first_type} {first_node} is not in the map!"))
         }
-        match modified_net_map.get_mut(&second_node) {
+        match modified_net_map.get_mut(&second) {
             Some(mut second_node_neighbors) => {
                 second_node_neighbors.retain(|&id| id != first_node);
             },
-            None => return Err(format!("connection between {first_node} and {second_node} !does not exist"))
+            None => return Err(format!("{second_type} {second_node} is not in the map!"))
         }
 
-        let mut visited = HashSet::new();
-        //applying dfs without connection
-        dfs(first_node, &modified_net_map, None , &mut visited);
+        //check hosts constraints
+        for (node, neighbors) in modified_net_map.iter() {
+            match node {
+                NetNode::Client(client_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!("Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"));
+                    }
+                }
+                NetNode::Server(server_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 1 {
+                        return Err(format!("Connection cannot be removed because Server {server_id} would have only {adj} Neighbors!"));
+                    }
+                }
+                _ => continue
+            }
+        }
 
-        Ok(!visited.contains(&second_node))
+
+        // Build a net without hosts
+        let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        for (drone, neighbors) in &modified_net_map {
+            if let NetNode::Drone(drone_id) = drone {
+                drone_net.insert(*drone_id, neighbors.clone());
+            }
+        }
+
+        // Check if removing connection splits the network without considering hosts (they are at the edges)
+        let mut visited = HashSet::new();
+        dfs(first_node, &drone_net, None, &mut visited);
+        if visited.len() + 1 != drone_net.len() {
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn cannot_add(&mut self, first_type: NodeType, first_node: NodeId, second_type: NodeType, second_node: NodeId) -> Result<bool, String> {
+        //clients must have 1 or 2 neighbors
+        //hosts cannot connect directly with other hosts
+
+        let first = match first_type {
+            NodeType::Drone => {NetNode::Drone(first_node)}
+            NodeType::Client => {NetNode::Client(first_node)}
+            NodeType::Server => {NetNode::Server(first_node)}
+        };
+        let second = match second_type {
+            NodeType::Drone => {NetNode::Drone(second_node)}
+            NodeType::Client => {NetNode::Client(second_node)}
+            NodeType::Server => {NetNode::Server(second_node)}
+        };
+        let net_map = self.build_network_map();
+        let mut modified_net_map = net_map.clone();
+        //simulate adding connection
+        match modified_net_map.get_mut(&first) {
+            Some(mut first_node_neighbors) => {
+                first_node_neighbors.push(second_node);
+            },
+            None => return Err(format!("{first_type} {first_node} is not in the map!"))
+        }
+        match modified_net_map.get_mut(&second) {
+            Some(mut second_node_neighbors) => {
+                second_node_neighbors.push(first_node);
+            },
+            None => return Err(format!("{second_type} {second_node} is not in the map!"))
+        }
+
+        //check hosts constraints
+        for (node, neighbors) in modified_net_map.iter() {
+            match node {
+                NetNode::Client(client_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!("Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"));
+                    }
+                }
+                _ => continue
+            }
+        }
+        Ok(false)
     }
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
-        match self.check_critical_node(drone_id) {
-            Ok(critical) => {
-                if critical {
+        match self.cannot_crash(drone_id) {
+            Ok(not_crashable) => {
+                if not_crashable {
                     return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
-
                 }
             },
             Err(e) => return Err(e)
@@ -318,6 +445,15 @@ impl SimulationControllerData {
         let forward_node_type = NodeType::from(&self, node_id);
         let backwards_node_type = NodeType::from(&self, sender_id);
 
+        match self.cannot_add(forward_node_type, node_id, backwards_node_type, sender_id) {
+            Ok(critical) => {
+                if critical {
+                    return Err(format!("Connection between {forward_node_type} {node_id} and {backwards_node_type} {sender_id} is not possible!"))
+                }
+            }
+            Err(e) => return Err(e),
+        }
+
         self.mono_add_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
         self.mono_add_sender(backwards_node_type, sender_id, forward_node_type, node_id)
     }
@@ -392,7 +528,7 @@ impl SimulationControllerData {
         let forward_node_type = NodeType::from(&self, node_id);
         let backwards_node_type = NodeType::from(&self, sender_id);
 
-        match self.check_critical_connection(node_id, sender_id) {
+        match self.cannot_remove(forward_node_type, node_id, backwards_node_type, sender_id) {
             Ok(critical) => {
                 if critical {
                     return Err(format!("Connection between {forward_node_type} {node_id} and {backwards_node_type} {sender_id} is Critical and cannot be removed!"))
@@ -489,9 +625,9 @@ impl SimulationControllerData {
                 Err(e) => {self.logs.push_sc_log(e.0, e.1);},
             }
         }
-        while let Ok(log) = self.log_receiver.try_recv() {
+        /*while let Ok(log) = self.log_receiver.try_recv() {
             self.handle_log_event(log);
-        }
+        }*/
         while let Ok(event) = self.drone_event_receiver.try_recv() {
             match self.handle_drone_event(event) {
                 Ok(()) => {},

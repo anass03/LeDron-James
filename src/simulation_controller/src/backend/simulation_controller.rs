@@ -1,7 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
 use client::ClientCommand;
-use colored::Colorize;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -13,7 +12,7 @@ use host::{HostCommand, HostEvent};
 use crate::backend::sc_models::{Logs, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
-#[derive(Hash, Eq, PartialEq, Copy, Clone)]
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
 
 /// Simulation Controller struct contains:
