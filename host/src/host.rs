@@ -643,31 +643,31 @@ impl Functionality for Host {
         }
     }
     fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64) {
-        let drone_hops: Vec<NodeId> = hops.iter()
-            .filter(|&&nid| {
-                matches!(
-                        self.network.nodes.get(&nid).map(|(ty, _)| ty),
-                        Some(NodeType::Drone))}
-            )
-            .copied()
-            .collect();
-        self.network.pdr_helper(&drone_hops);
-
-        self.send_logging(format!(
-            "PDR updated host={} header hops={:?}",
-            self.id,
-            hops,
-        ));
-        self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
-        for (&drone_id, &pdr) in &self.network.drone_pdr {
-            // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
-            let reliability = 1.0 - pdr.clamp(0.0, 1.0);
-            self.send_logging(format!(
-                "Drone {}: pdr = {:.3}, reliability = {:.3}",
-                drone_id, pdr, reliability
-            ));
-        }
-        self.send_logging("--------------------------".to_string());
+        // let drone_hops: Vec<NodeId> = hops.iter()
+        //     .filter(|&&nid| {
+        //         matches!(
+        //                 self.network.nodes.get(&nid).map(|(ty, _)| ty),
+        //                 Some(NodeType::Drone))}
+        //     )
+        //     .copied()
+        //     .collect();
+        // self.network.pdr_helper(&drone_hops);
+        //
+        // self.send_logging(format!(
+        //     "PDR updated host={} header hops={:?}",
+        //     self.id,
+        //     hops,
+        // ));
+        // self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
+        // for (&drone_id, &pdr) in &self.network.drone_pdr {
+        //     // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
+        //     let reliability = 1.0 - pdr.clamp(0.0, 1.0);
+        //     self.send_logging(format!(
+        //         "Drone {}: pdr = {:.3}, reliability = {:.3}",
+        //         drone_id, pdr, reliability
+        //     ));
+        // }
+        // self.send_logging("--------------------------".to_string());
 
         let idx = ack.fragment_index as usize;
         self.send_logging(format!(
@@ -1078,7 +1078,7 @@ pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
     RemoveSender(NodeId),
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerToClient{
     ServerType(ServerTypes),
 
@@ -1120,7 +1120,7 @@ pub struct Message {
     pub session_id: u64,
     pub content: Vec<u8>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Image{
     pub width: u32,
     pub height: u32,
