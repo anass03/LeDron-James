@@ -166,12 +166,16 @@ impl Network {
                     // se v NON è né start né destination, allora deve essere un drone
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
-                            Some((NodeType::Drone, _)) => { /* ok */ }
+                            Some((NodeType::Drone, pdr)) => {  }
                             _ => continue,  // salta host o altri tipi intermedi
                         }
                     }
-                    // Qui estraggo direttamente la stima EWMA di PDR per il drone `u`
-                    let reliability = 1.0 - edge.weight;
+                    // Estrai la PDR del drone di ARRIVO (v), non di u
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let reliability = 1.0 - pdr_v;
                     // Se la stima è zero o negativa, salto subito l'arco
                     if reliability <= 0.0 {
                         continue;
