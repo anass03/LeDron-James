@@ -154,16 +154,16 @@ impl Client {
             ClientCommand::Net(net_command) => {
                 match net_command {
                     ClientNetCommand::ServerType =>{
-                        self.host.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
-                        for (&drone_id, &pdr) in &self.host.network.drone_pdr {
-                            // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
-                            let reliability = 1.0 - pdr.clamp(0.0, 1.0);
-                            self.host.send_logging(format!(
-                                "Drone {}: pdr = {:.3}, reliability = {:.3}",
-                                drone_id, pdr, reliability
-                            ));
-                        }
-                        self.host.send_logging("--------------------------".to_string());
+                        // self.host.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
+                        // for (&drone_id, &pdr) in &self.host.network.drone_pdr {
+                        //     // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
+                        //     let reliability = 1.0 - pdr.clamp(0.0, 1.0);
+                        //     self.host.send_logging(format!(
+                        //         "Drone {}: pdr = {:.3}, reliability = {:.3}",
+                        //         drone_id, pdr, reliability
+                        //     ));
+                        // }
+                        // self.host.send_logging("--------------------------".to_string());
                         self.host.send_logging("ServerType request received".to_string());
                         // self.host.send_logging(format!("SERVERS ID {:?}", self.host.network.servers));
                         // self.host.send_logging(format!("✅ {:?}", self.host.network.nodes));

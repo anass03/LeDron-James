@@ -658,16 +658,16 @@ impl Functionality for Host {
             self.id,
             hops,
         ));
-        // self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
-        // for (&drone_id, &pdr) in &self.network.drone_pdr {
-        //     // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
-        //     let reliability = 1.0 - pdr.clamp(0.0, 1.0);
-        //     self.send_logging(format!(
-        //         "Drone {}: pdr = {:.3}, reliability = {:.3}",
-        //         drone_id, pdr, reliability
-        //     ));
-        // }
-        // self.send_logging("--------------------------".to_string());
+        self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
+        for (&drone_id, &pdr) in &self.network.drone_pdr {
+            // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
+            let reliability = 1.0 - pdr.clamp(0.0, 1.0);
+            self.send_logging(format!(
+                "Drone {}: expected pdr = {:.3}, reliability = {:.3}",
+                drone_id, pdr, reliability
+            ));
+        }
+        self.send_logging("--------------------------".to_string());
 
         let idx = ack.fragment_index as usize;
         self.send_logging(format!(
