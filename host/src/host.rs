@@ -16,7 +16,7 @@ pub type MediaId = usize;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
 pub type Extension = String;
-const ALPHA: f64 = 0.1; // fattore di smussamento (regolabile)
+const ALPHA: f64 = 0.01; // fattore di smussamento (regolabile)
 
 
 #[derive(Clone)]
