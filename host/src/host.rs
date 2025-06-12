@@ -662,6 +662,22 @@ impl Functionality for Host {
             self.id,
             hops,
         ));
+
+        // 2) *RICALCOLO* la rotta per la sessione, dato che i PDR sono cambiati
+        {
+            let mut sent = self.sent_fragments.lock().unwrap();
+            if let Some(session) = sent.get_mut(&session_id) {
+                let dest = session.destination;
+                if let Some(new_route) = self.network.find_best_route(self.id, dest) {
+                    session.route = new_route;
+                    session.last_activity = Instant::now();
+                    self.send_logging(format!(
+                        "🔄 Route aggiornata host={} session={} route={:?}",
+                        self.id, session_id, session.route
+                    ));
+                }
+            }
+        }
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
         for (&drone_id, &pdr) in &self.network.drone_pdr {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
