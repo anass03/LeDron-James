@@ -79,7 +79,7 @@ pub struct SentSessionData {
     pub route: Vec<NodeId>,        // percorso pre-calcolato
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Edge {
     pub to:     NodeId,
     weight: f64,
@@ -300,12 +300,11 @@ impl Functionality for Host {
     /// Inoltra una stringa di log al simulation controller.
     fn send_logging(&self, message: String) {
         let role = self.type_host;
-        let log_msg = format!("[{}] ID {} - {}", role, self.id, message);
+        let log_msg = format!("[{:?}] ID {} - {}", role, self.id, message);
 
         if let Err(err) = self.log_sender.send(log_msg) {
             eprintln!("Failed to forward logging to controller: {}", err);
         }
-
     }
     /// Al posto di chiamare initiate_flood() direttamente, uso questo
     fn schedule_flood(&mut self) {
@@ -507,19 +506,20 @@ impl Functionality for Host {
         // 3) Estraggo l’iniziatore dall’ultimo elemento di path_trace
         let (initiator, _) = response.path_trace.last().unwrap();
 
-        // 4) Controllo se è una flood-response per me
-        if *initiator != host_id
-            || !self
+        // 4) Se non sono l’iniziatore o non ho quel flood_id in cache, lo inoltro
+        let is_mio = *initiator == host_id
+            && self
             .flood_cache
             .get(&host_id)
-            .map_or(false, |ids| ids.contains(&flood_id))
-        {
-            //  “Non è una risposta per me”: devo forwardare verso l’iniziatore
+            .map_or(false, |ids| ids.contains(&flood_id));
+
+        if !is_mio {
+            // ◁ “Non è una risposta per me”: devo forwardare verso l’iniziatore
             //    routing_header.hop_index punta ora all’indice del nodo corrente.
             //    Per rimbalzare, incrementiamo hop_index e inviamo al prossimo hop.
             routing_header.hop_index += 1;
             // ATTENZIONE: verifichiamo che non sfori
-            if routing_header.hop_index <= routing_header.hops.len() {
+            if routing_header.hop_index < routing_header.hops.len() {
                 let next_hop = routing_header.hops[routing_header.hop_index];
                 self.send_logging(format!(
                     "Forwarding FloodResponse host={} flood_id={} verso next_hop={}",
@@ -540,6 +540,7 @@ impl Functionality for Host {
             }
             return;
         }
+
         // ◁ Se arrivo qui, “sono” l’iniziatore (e flood_id ∈ flood_cache[self.id]):
         //    posso far partire la logica che registra i nodi e gli archi
         self.send_logging(format!(
