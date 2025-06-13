@@ -36,22 +36,13 @@ pub trait MediaServer {
         let rgba = img.to_rgba8();
         
         
-        /*let compressed_data = Self::compress_data(&rgba)?;
+        let compressed_data = Self::compress_data(&rgba)?;
 
         Ok((Image {
             width,
             height,
             data: compressed_data,
         }, ext))
-        
-         */
-
-        Ok((Image {
-            width,
-            height,
-            data: rgba.to_vec(),
-        }, ext))
-        
     }
 
     /// Funzione per comprimere i dati

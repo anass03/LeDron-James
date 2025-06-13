@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::error::Error;
+use std::io::Cursor;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
@@ -6,6 +8,7 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet};
 use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand};
 use host::ServerTypes;
+use zstd::{decode_all, encode_all};
 
 pub struct GenServer {
     pub host: Host,
@@ -17,6 +20,8 @@ pub trait GenServerBehavior {
     fn handle_sim_command(&mut self, cmd: HostCommand);
     fn servertype(&mut self) -> Result<ServerTypes, String>;
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
+    fn decompress_anything(&self,compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
+    fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
 }
 
 impl GenServer {
@@ -162,8 +167,18 @@ impl GenServerBehavior for GenServer {
                 .collect::<Vec<u8>>();
 
             received.remove(&session_id);
-            return Some(data);
+            if let Ok(decompressed_data) = self.decompress_anything(&data){
+                return Some(decompressed_data);   
+            }
         }
         None
+    }
+    fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let decompressed = decode_all(Cursor::new(compressed))?;
+        Ok(decompressed)
+    }
+    fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+        let compressed = encode_all(data, 0)?;
+        Ok(compressed)
     }
 }

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::{env, fs, io};
+use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
@@ -34,6 +35,8 @@ impl ContentServer {
             fn handle_sim_command(&mut self, cmd: HostCommand);
             fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
+            fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
+            fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
         }
     }
 
@@ -90,12 +93,14 @@ impl ContentServer {
     fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         match serde_json::to_vec(&response) {
             Ok(data) => {
-                let msg = Message {
-                    session_id: generate_unique_session_id(),
-                    content: data,
-                };
-                if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                    self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                if let Ok(compressed_data)=self.compress_anything(data.as_slice()){
+                    let msg = Message {
+                        session_id: generate_unique_session_id(),
+                        content: compressed_data,
+                    };
+                    if let Err(e) = self.info.build_msg_fragment(destination, msg) {
+                        self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                    }
                 }
             }
             Err(e) => {

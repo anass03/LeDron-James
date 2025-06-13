@@ -3,6 +3,7 @@ use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use host::{ServerToClient, Message, Functionality, ServerTypes, generate_unique_session_id, HostEvent, HostCommand,ClientNetCommand};
 use std::collections::HashMap;
+use std::error::Error;
 use std::time::Duration;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
@@ -28,6 +29,8 @@ impl ChatServer {
             fn handle_sim_command(&mut self, cmd: HostCommand);
             fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
+            fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
+            fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
     
@@ -80,17 +83,19 @@ impl ChatServer {
             }
         }
     }
-    
-    
-    fn send_response(&mut self, response: ServerToClient, source: NodeId) {
+
+
+    fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         match serde_json::to_vec(&response) {
             Ok(data) => {
-                let msg = Message {
-                    session_id: generate_unique_session_id(),
-                    content: data,
-                };
-                if let Err(e) = self.info.build_msg_fragment(source, msg) {
-                    self.send_logging(format!(" Failed to send response to {}: {}", source, e));
+                if let Ok(compressed_data)=self.compress_anything(data.as_slice()){
+                    let msg = Message {
+                        session_id: generate_unique_session_id(),
+                        content: compressed_data,
+                    };
+                    if let Err(e) = self.info.build_msg_fragment(destination, msg) {
+                        self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                    }
                 }
             }
             Err(e) => {
@@ -98,7 +103,6 @@ impl ChatServer {
             }
         }
     }
-    
     
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
@@ -217,9 +221,9 @@ impl ChatServer {
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
-                    if let Ok(cmd) = serde_json::from_slice::<ClientNetCommand>(&data) {
-                        self.handle_command(cmd, packet.routing_header.hops[0]);
-                    }
+                        if let Ok(cmd) = serde_json::from_slice::<ClientNetCommand>(&data) {
+                            self.handle_command(cmd, packet.routing_header.hops[0]);
+                        }
                 }else {
                     self.send_logging("The packet is not complete and server is waiting".to_string());
                 }
