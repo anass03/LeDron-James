@@ -10,8 +10,8 @@ use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
 use zstd::stream::{Encoder, Decoder};
-use std::io::{Read};
-
+use std::io::{Cursor, Read};
+use zstd::{decode_all, encode_all};
 
 pub struct Client {
     host: Host,
@@ -135,35 +135,34 @@ impl Client {
         self.host.send_logging(format!("Preparing {} request", label));
         match self.servers.get(&srv_type) {
             Some(servers) if servers.contains(&server_id) => {
-                match serde_json::to_vec(&cmd) {
-                    Ok(content) => {
-                        // **Misuro l’upload qui**:
-
-                        let compressed = match compress_stream(&content, 3) {
-                            Ok(buf) => buf,
-                            Err(err) => {
-                                // gestisci l’errore a piacere, ad esempio log e fallimento
-                                self.host.send_logging(format!("Compression failed: {}", err));
-                                content.clone()
-                            }
-                        };
-                        self.tx_bytes.fetch_add(compressed.len(), Ordering::Relaxed);
-                        let message = Message {
-                            session_id: generate_unique_session_id(),
-                            content,
-                        };
-                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                            self.host.send_logging(format!(
-                                "Failed to send {} to server {}: {}",
-                                label, server_id, err
-                            ));
-                        } else {
-                            self.host.send_logging(format!("{} sent to server {}", label, server_id));
-                        }
-                    }
+                let raw = match serde_json::to_vec(&cmd) {
+                    Ok(buf) => buf,
                     Err(e) => {
-                        self.host.send_logging(format!("Serialization of {} failed: {}", label, e));
+                        self.host.send_logging(format!("Serialization failed: {}", e));
+                        return;
                     }
+                };
+
+                let payload = match compress_data(&raw) {
+                    Ok(c) => c,
+                    Err(err) => {
+                        self.host.send_logging(format!("Compression failed, invio raw: {}", err));
+                        raw.clone()
+                    }
+                };
+
+                // aggiorno il contatore di upload con la lunghezza del payload effettivo
+                self.tx_bytes.fetch_add(payload.len(), Ordering::Relaxed);
+
+                let message = Message {
+                    session_id: generate_unique_session_id(),
+                    content: payload,
+                };
+
+                if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                    self.host.send_logging(format!("Failed to send {}: {}", label, err));
+                } else {
+                    self.host.send_logging(format!("{} sent to server {}", label, server_id));
                 }
             }
             Some(_) => {
@@ -278,9 +277,23 @@ impl Client {
             PacketType::MsgFragment(fragment) => {
                 self.rx_bytes.fetch_add(fragment.length as usize, Ordering::Relaxed);
                 if let Some(compressed_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
+                    // 1) prima decomprimo
+                    let raw = match decompress_data(&compressed_bytes) {
+                        Ok(r) => r,
+                        Err(err) => {
+                            self.host.send_logging(format!("Decompression failed: {}", err));
+                            return Ok(());
+                        }
+                    };
 
-                    let message = decompress_stream(&compressed_bytes)?;
-
+                    // 2) poi deserializzo
+                    let cmd = match serde_json::from_slice::<ServerToClient>(&raw) {
+                        Ok(c) => c,
+                        Err(err) => {
+                            self.host.send_logging(format!("JSON parse failed: {}", err));
+                            return Ok(());
+                        }
+                    };
                     let send_reconstructed =
                         |evt: ServerToClient| {
                             self.host
@@ -288,76 +301,66 @@ impl Client {
                                 .send(HostEvent::PacketReconstructed(evt))
                                 .map_err(|e| e.to_string())
                         };
-                    match serde_json::from_slice::<ServerToClient>(&message) {
-                        Ok(cmd) => {
-                            // Ho un comando high-level, lo dispatcho
-                            match cmd {
-                                ServerType(st) => {
-                                    if let Some(src) = packet.routing_header.source() {
-                                        self.servers_discovered += 1;
-                                        let entry = self.servers.entry(st.clone()).or_insert_with(Vec::new);
-                                        if !entry.contains(&src) {
-                                            entry.push(src);
-                                            self.host.send_logging(format!("Registered {:?} server: {:?}", st, src));
-                                        }
-                                    } else {
-                                        self.host.send_logging("ServerType response without source".to_string());
-                                    }
+                    match cmd {
+                        ServerType(st) => {
+                            if let Some(src) = packet.routing_header.source() {
+                                self.servers_discovered += 1;
+                                let entry = self.servers.entry(st.clone()).or_insert_with(Vec::new);
+                                if !entry.contains(&src) {
+                                    entry.push(src);
+                                    self.host.send_logging(format!("Registered {:?} server: {:?}", st, src));
                                 }
-                                ClientList(server_id,clients) => {
-                                    self.host.send_logging(format!("Received Client List: {:?}", clients));
-                                    send_reconstructed(ClientList(server_id,clients))?;
-                                }
-
-                                MessageFrom(server_id,from, msg) => {
-                                    self.host.send_logging(format!("Message from {}: {:?}", from, msg.clone()));
-                                    send_reconstructed(MessageFrom(server_id,from, msg))?;
-                                }
-                                FileFrom(server_id,from,file_id, ext, data) => {
-                                    self.host.send_logging(format!("Received {}.{} from client {}", file_id, ext,from));
-                                    send_reconstructed(FileFrom(server_id,from,file_id, ext, data))?;
-                                }
-                                MediaFrom(server_id,from, media_id, ext, data) => {
-                                    self.host.send_logging(format!("Received {}.{} from client {}", media_id, ext,from));
-                                    send_reconstructed(MediaFrom(server_id, from, media_id, ext, data))?;
-                                }
-                                FilesList(server_id, files) => {
-                                    self.host.send_logging(format!("Files available: {:?}", files));
-                                    send_reconstructed(FilesList(server_id, files))?;
-                                }
-                                File(server_id,file_id,ext, data) => {
-                                    self.host.send_logging(format!("Received {}.{} of {} bytes",file_id,ext, data.len()));
-                                    send_reconstructed(File(server_id,file_id,ext, data))?;
-                                }
-                                MediaList(server_id,media_list) => {
-                                    self.host.send_logging(format!("Media available: {:?}", media_list));
-                                    send_reconstructed(MediaList(server_id,media_list))?;
-                                }
-                                Media(server_id,media_id,ext, media) => {
-                                    self.host.send_logging(format!("Received {}.{} of {} bytes",media_id,ext, media.data.len()));
-                                    send_reconstructed(Media(server_id,media_id,ext, media))?;
-                                }
-                                ErrClientId(server_id) => {
-                                    self.host.send_logging("Server responded: ErrClientId".to_string());
-                                    send_reconstructed(ErrClientId(server_id))?;
-                                }
-                                ErrNotFound(server_id) => {
-                                    self.host.send_logging("Server responded: ErrNotFound".to_string());
-                                    send_reconstructed(ErrNotFound(server_id))?;
-                                }
-                                WrongServer(server_id) => {
-                                    self.host.send_logging("Server responded: WrongServer".to_string());
-                                    send_reconstructed(WrongServer(server_id))?;
-                                }
+                            } else {
+                                self.host.send_logging("ServerType response without source".to_string());
                             }
-                            Ok(())
                         }
-                        Err(e) => {
-                            // Not a valid JSON of ServerToClient: read and put
-                            self.host.send_logging(format!("Invalid ServerToClient JSON: {}", e));
-                            Ok(())
+                        ClientList(server_id,clients) => {
+                            self.host.send_logging(format!("Received Client List: {:?}", clients));
+                            send_reconstructed(ClientList(server_id,clients))?;
+                        }
+
+                        MessageFrom(server_id,from, msg) => {
+                            self.host.send_logging(format!("Message from {}: {:?}", from, msg.clone()));
+                            send_reconstructed(MessageFrom(server_id,from, msg))?;
+                        }
+                        FileFrom(server_id,from,file_id, ext, data) => {
+                            self.host.send_logging(format!("Received {}.{} from client {}", file_id, ext,from));
+                            send_reconstructed(FileFrom(server_id,from,file_id, ext, data))?;
+                        }
+                        MediaFrom(server_id,from, media_id, ext, data) => {
+                            self.host.send_logging(format!("Received {}.{} from client {}", media_id, ext,from));
+                            send_reconstructed(MediaFrom(server_id, from, media_id, ext, data))?;
+                        }
+                        FilesList(server_id, files) => {
+                            self.host.send_logging(format!("Files available: {:?}", files));
+                            send_reconstructed(FilesList(server_id, files))?;
+                        }
+                        File(server_id,file_id,ext, data) => {
+                            self.host.send_logging(format!("Received {}.{} of {} bytes",file_id,ext, data.len()));
+                            send_reconstructed(File(server_id,file_id,ext, data))?;
+                        }
+                        MediaList(server_id,media_list) => {
+                            self.host.send_logging(format!("Media available: {:?}", media_list));
+                            send_reconstructed(MediaList(server_id,media_list))?;
+                        }
+                        Media(server_id,media_id,ext, media) => {
+                            self.host.send_logging(format!("Received {}.{} of {} bytes",media_id,ext, media.data.len()));
+                            send_reconstructed(Media(server_id,media_id,ext, media))?;
+                        }
+                        ErrClientId(server_id) => {
+                            self.host.send_logging("Server responded: ErrClientId".to_string());
+                            send_reconstructed(ErrClientId(server_id))?;
+                        }
+                        ErrNotFound(server_id) => {
+                            self.host.send_logging("Server responded: ErrNotFound".to_string());
+                            send_reconstructed(ErrNotFound(server_id))?;
+                        }
+                        WrongServer(server_id) => {
+                            self.host.send_logging("Server responded: WrongServer".to_string());
+                            send_reconstructed(WrongServer(server_id))?;
                         }
                     }
+                    Ok(())
                 } else {
                     // Message not yet assembled: wait for other fragments
                     self.host.send_logging(format!(
@@ -484,19 +487,14 @@ impl Client {
 
 }
 
-fn compress_stream<R: Read>(input: R, level: i32) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut encoder = Encoder::new(input, level)?;
-    let mut out = Vec::new();
-    std::io::copy(&mut encoder, &mut out)?;
-    encoder.finish()?;
-    Ok(out)
+fn compress_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let compressed = encode_all(data, 3)?;
+    Ok(compressed)
 }
 
-fn decompress_stream<R: Read>(input: R) -> Result<Vec<u8>, Box<dyn Error>> {
-    let mut decoder = Decoder::new(input)?;
-    let mut out = Vec::new();
-    std::io::copy(&mut decoder, &mut out)?;
-    Ok(out)
+fn decompress_data(compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+    let decompressed = decode_all(Cursor::new(compressed))?;
+    Ok(decompressed)
 }
 pub enum ClientCommand {
     /// Wraps a network-level command
