@@ -6,7 +6,7 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand, Edge};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
 use zstd::stream::{Encoder, Decoder};
@@ -240,8 +240,17 @@ impl Client {
                         } else if current >= 2 {
                             self.host.send_logging("Cannot add more than 2 channels: limit reached".to_string());
                         } else {
+                            // 1) Mantieni packet_send
                             self.host.packet_send.insert(id, sender);
-                            self.host.send_logging("Successfully added sender!".to_string());
+                            self.host.send_logging(format!("Added sender for {}", id));
+
+                            // 2) Reinserisci il nodo e i suoi archi in network.nodes, se lo vuoi "riattivare"
+                            //    (magari li ricavi da flood o dal TOML, qui ti mostro un placeholder)
+                            let entry = self.host.network.nodes
+                                .entry(self.host.id)
+                                .or_insert_with(|| (NodeType::Client, Vec::new()));
+                            entry.1.push(Edge { to: id, weight: 0.0 });
+
                         }
                     }
                     HostCommand::RemoveSender(id) => {
@@ -252,7 +261,12 @@ impl Client {
                             self.host.send_logging("Cannot remove last channel: at least one connection required".to_string());
                         } else {
                             self.host.packet_send.remove(&id);
-                            self.host.send_logging("Successfully removed sender!".to_string());
+                            self.host.send_logging(format!("Removed sender for {}", id));
+
+                            // 2) Elimina l’arco dalla topologia
+                            if let Some((_, edges)) = self.host.network.nodes.get_mut(&self.host.id) {
+                                edges.retain(|e| e.to != id);
+                            }
                         }
                     }
                 }

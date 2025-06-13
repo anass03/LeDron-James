@@ -78,7 +78,7 @@ pub struct SentSessionData {
 #[derive(Clone, Debug)]
 pub struct Edge {
     pub to:     NodeId,
-    weight: f64,
+    pub weight: f64,
 }
 #[derive(Clone)]
 pub struct Network {
@@ -210,12 +210,7 @@ impl Network {
 
     /// Come `find_best_route`, ma esclude tutti gli archi consecutivi già
     /// presenti in `used_route`.
-    pub fn find_alternate_route(
-        &self,
-        start: NodeId,
-        destination: NodeId,
-        used_route: &[NodeId],
-    ) -> Option<Vec<NodeId>> {
+    pub fn find_alternate_route(&self, start: NodeId, destination: NodeId, used_route: &[NodeId]) -> Option<Vec<NodeId>> {
         // clono la topologia e rimuovo gli archi usati
         let mut temp = self.nodes.clone();
         for window in used_route.windows(2) {
@@ -745,7 +740,7 @@ impl Functionality for Host {
 
         // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
         //    quindi droppo subito il lock.
-        let (fragment, mut current_route, destination) = {
+        let (fragment, current_route, destination) = {
             let mut sent = self.sent_fragments.lock().unwrap();
             if let Some(session) = sent.get_mut(&session_id) {
                 match session.buffer.get(frag_idx as usize) {
