@@ -2,12 +2,15 @@ use crossbeam_channel::{select_biased, tick, unbounded, Receiver, Sender};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
+use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
+use zstd::stream::{Encoder, Decoder};
+use std::io::{Read};
 
 
 pub struct Client {
@@ -35,6 +38,8 @@ impl Client {
 
     pub fn run(&mut self) {
         let cleanup_tick = tick(Duration::from_secs(15));
+
+        let speed_tick = tick(Duration::from_secs(1));
         let mut prev_tx = 0;
         let mut prev_rx = 0;
 
@@ -60,17 +65,23 @@ impl Client {
                 recv(cleanup_tick) -> _ => {
                     let timeout = Duration::from_secs(300);
                     self.host.cleanup_expired_sessions(timeout);
-
+                },
+                recv(speed_tick) -> _ => {
                     let total_tx = self.tx_bytes.load(Ordering::Relaxed);
                     let total_rx = self.rx_bytes.load(Ordering::Relaxed);
-                    let up_speed = total_tx - prev_tx;   // byte/sec
+                    let up_speed = total_tx - prev_tx;   // B/s
                     let down_speed = total_rx - prev_rx;
                     prev_tx = total_tx;
                     prev_rx = total_rx;
+
+                    // conversione in KiB/s
+                    let up_kb  = up_speed as f64 / 1024.0;
+                    let down_kb = down_speed as f64 / 1024.0;
+
                     self.host.send_logging(format!(
-                        "↗ Upload: {} B/s, ↙ Download: {} B/s",
-                        up_speed,
-                        down_speed
+                        "↗ Upload: {:.2} KiB/s, ↙ Download: {:.2} KiB/s",
+                        up_kb,
+                        down_kb
                     ));
                 },
             }
@@ -127,9 +138,16 @@ impl Client {
                 match serde_json::to_vec(&cmd) {
                     Ok(content) => {
                         // **Misuro l’upload qui**:
-                        let payload_len = content.len();
-                        self.tx_bytes.fetch_add(payload_len, Ordering::Relaxed);
 
+                        let compressed = match compress_stream(&content, 3) {
+                            Ok(buf) => buf,
+                            Err(err) => {
+                                // gestisci l’errore a piacere, ad esempio log e fallimento
+                                self.host.send_logging(format!("Compression failed: {}", err));
+                                content.clone()
+                            }
+                        };
+                        self.tx_bytes.fetch_add(compressed.len(), Ordering::Relaxed);
                         let message = Message {
                             session_id: generate_unique_session_id(),
                             content,
@@ -259,7 +277,9 @@ impl Client {
             }
             PacketType::MsgFragment(fragment) => {
                 self.rx_bytes.fetch_add(fragment.length as usize, Ordering::Relaxed);
-                if let Some(message) = self.handle_msg_fragment(packet.clone(), fragment) {
+                if let Some(compressed_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
+
+                    let message = decompress_stream(&compressed_bytes)?;
 
                     let send_reconstructed =
                         |evt: ServerToClient| {
@@ -464,6 +484,20 @@ impl Client {
 
 }
 
+fn compress_stream<R: Read>(input: R, level: i32) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut encoder = Encoder::new(input, level)?;
+    let mut out = Vec::new();
+    std::io::copy(&mut encoder, &mut out)?;
+    encoder.finish()?;
+    Ok(out)
+}
+
+fn decompress_stream<R: Read>(input: R) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut decoder = Decoder::new(input)?;
+    let mut out = Vec::new();
+    std::io::copy(&mut decoder, &mut out)?;
+    Ok(out)
+}
 pub enum ClientCommand {
     /// Wraps a network-level command
     Net(ClientNetCommand),
