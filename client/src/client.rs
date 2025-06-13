@@ -407,22 +407,34 @@ impl Client {
         // for each known server, i send ServerType query
         for server_id in self.host.network.servers.clone() {
             self.host.send_logging(format!("Requesting server type from node {}", server_id));
-
-            match serde_json::to_vec(&ClientNetCommand::ServerType) {
-                Ok(content) => {
-                    let message = Message {
-                        session_id: generate_unique_session_id(),
-                        content,
-                    };
-                    if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                        self.host.send_logging(format!("Failed to send ServerType request to {}: {}",server_id,err));
-                    } else {
-                        self.host.send_logging(format!("Sent ServerType request to {}", server_id));
-                    }
-                }
+            let raw = match serde_json::to_vec(&ClientNetCommand::ServerType) {
+                Ok(buf) => buf,
                 Err(e) => {
-                    self.host.send_logging(format!("Serialization of ServerType request failed: {}", e));
+                    self.host.send_logging(format!("Serialization failed: {}", e));
+                    return;
                 }
+            };
+
+            let payload = match compress_data(&raw) {
+                Ok(c) => c,
+                Err(err) => {
+                    self.host.send_logging(format!("Compression failed, invio raw: {}", err));
+                    raw.clone()
+                }
+            };
+
+            // aggiorno il contatore di upload con la lunghezza del payload effettivo
+            self.tx_bytes.fetch_add(payload.len(), Ordering::Relaxed);
+
+            let message = Message {
+                session_id: generate_unique_session_id(),
+                content: payload,
+            };
+
+            if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                self.host.send_logging(format!("Failed to send ServerType request: {}", err));
+            } else {
+                self.host.send_logging(format!("ServerType request sent to server {}", server_id));
             }
         }
     }
