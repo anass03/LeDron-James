@@ -292,13 +292,7 @@ impl Client {
                 self.rx_bytes.fetch_add(fragment.length as usize, Ordering::Relaxed);
                 if let Some(compressed_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
                     // 1) prima decomprimo
-                    let raw = match decompress_data(&compressed_bytes) {
-                        Ok(r) => r,
-                        Err(err) => {
-                            self.host.send_logging(format!("Decompression failed: {}", err));
-                            return Ok(());
-                        }
-                    };
+                    let raw = decompress_data(&compressed_bytes).unwrap_or_else(|_| compressed_bytes);
 
                     // 2) poi deserializzo
                     let cmd = match serde_json::from_slice::<ServerToClient>(&raw) {
