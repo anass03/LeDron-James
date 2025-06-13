@@ -2,10 +2,9 @@ use crossbeam_channel::{select_biased, tick, unbounded, Receiver, Sender};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
-use std::{thread};
-use std::fmt::format;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
 use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
@@ -15,7 +14,9 @@ pub struct Client {
     host: Host,
     controller_recv:Receiver<ClientCommand>,
     servers: HashMap<ServerTypes, Vec<NodeId>>,
-    servers_discovered: usize
+    servers_discovered: usize,
+    tx_bytes: Arc<AtomicUsize>,
+    rx_bytes: Arc<AtomicUsize>
 }
 impl Client {
     pub fn new(id:NodeId,
@@ -28,14 +29,14 @@ impl Client {
 
         let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
         Self{
-            host,controller_recv, servers: HashMap::new(),servers_discovered: 0
+            host,controller_recv, servers: HashMap::new(),servers_discovered: 0, tx_bytes: Arc::new(AtomicUsize::new(0)), rx_bytes: Arc::new(AtomicUsize::new(0))
         }
     }
 
     pub fn run(&mut self) {
         let cleanup_tick = tick(Duration::from_secs(15));
-        // “never‐timer” che non invierà mai un Instant
-        let (_never_tx, never_timer): (Sender<Instant>, Receiver<Instant>) = unbounded();
+        let mut prev_tx = 0;
+        let mut prev_rx = 0;
 
         self.host.initiate_flood();
         loop {
@@ -58,7 +59,19 @@ impl Client {
                 },
                 recv(cleanup_tick) -> _ => {
                     let timeout = Duration::from_secs(300);
-                    // self.host.cleanup_expired_sessions(timeout);
+                    self.host.cleanup_expired_sessions(timeout);
+
+                    let total_tx = self.tx_bytes.load(Ordering::Relaxed);
+                    let total_rx = self.rx_bytes.load(Ordering::Relaxed);
+                    let up_speed = total_tx - prev_tx;   // byte/sec
+                    let down_speed = total_rx - prev_rx;
+                    prev_tx = total_tx;
+                    prev_rx = total_rx;
+                    self.host.send_logging(format!(
+                        "↗ Upload: {} B/s, ↙ Download: {} B/s",
+                        up_speed,
+                        down_speed
+                    ));
                 },
             }
         }
@@ -85,41 +98,6 @@ impl Client {
                             self.host.send_logging(format!("Error processing packet: {}", e));
                         }
                     }
-                    // let packet = pkt.map_err(|e| e.to_string())?;
-                    // // Processing del packet: estraggo il payload, ricompongo il messaggio e provo a
-                    // // interpretarlo come ServerToClient.
-                    //
-                    // match packet.pack_type {
-                    //     PacketType::MsgFragment(fragment) => {
-                    //         if let Some(raw_bytes) = self.handle_msg_fragment(packet.clone(), fragment) {
-                    //             // qui provo a parsare esattamente un JSON ServerToClient
-                    //             if let Ok(cmd) = serde_json::from_slice::<ServerToClient>(&raw_bytes) {
-                    //                 match cmd {
-                    //                     ServerType(st) => {
-                    //                         // Se è un ServerType valido, registro l’ID del sender
-                    //                         if let Some(src) = packet.routing_header.source() {
-                    //                             let entry =
-                    //                                 self.servers.entry(st.clone()).or_insert_with(Vec::new);
-                    //                             if !entry.contains(&src) {
-                    //                                 entry.push(src);
-                    //                                 self.host.send_logging(format!(
-                    //                                     "Registered {:?} server: {:?}",
-                    //                                     st, src
-                    //                                 ));
-                    //                             }
-                    //                             // Incremento solo qui: ho effettivamente ricevuto un ServerType
-                    //                             servers_discovered += 1;
-                    //                         }
-                    //                     }
-                    //                     _ => {
-                    //                         // È una qualche altra risposta (File, Media, ecc.) che
-                    //                         // non ci interessa per il conteggio dei server.
-                    //                     }
-                    //                 }
-                    //             }
-                    //         }
-                    //     }
-                    // }
                 },
 
                 recv(self.controller_recv) -> _cmd => {
@@ -142,7 +120,45 @@ impl Client {
     }
 
 
+    fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, ) {
+        self.host.send_logging(format!("Preparing {} request", label));
+        match self.servers.get(&srv_type) {
+            Some(servers) if servers.contains(&server_id) => {
+                match serde_json::to_vec(&cmd) {
+                    Ok(content) => {
+                        // **Misuro l’upload qui**:
+                        let payload_len = content.len();
+                        self.tx_bytes.fetch_add(payload_len, Ordering::Relaxed);
 
+                        let message = Message {
+                            session_id: generate_unique_session_id(),
+                            content,
+                        };
+                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                            self.host.send_logging(format!(
+                                "Failed to send {} to server {}: {}",
+                                label, server_id, err
+                            ));
+                        } else {
+                            self.host.send_logging(format!("{} sent to server {}", label, server_id));
+                        }
+                    }
+                    Err(e) => {
+                        self.host.send_logging(format!("Serialization of {} failed: {}", label, e));
+                    }
+                }
+            }
+            Some(_) => {
+                self.host.send_logging(format!(
+                    "Node {} is NOT a valid {:?}-SERVER",
+                    server_id, srv_type
+                ));
+            }
+            None => {
+                self.host.send_logging(format!("No {:?} server available for {}", srv_type, label));
+            }
+        }
+    }
 
     fn handle_command(&mut self, client_command: ClientCommand) {
         if let Err(e) = self.ensure_all_servers_discovered() {
@@ -153,320 +169,50 @@ impl Client {
         match client_command {
             ClientCommand::Net(net_command) => {
                 match net_command {
-                    ClientNetCommand::ServerType =>{
-                        // self.host.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
-                        // for (&drone_id, &pdr) in &self.host.network.drone_pdr {
-                        //     // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
-                        //     let reliability = 1.0 - pdr.clamp(0.0, 1.0);
-                        //     self.host.send_logging(format!(
-                        //         "Drone {}: pdr = {:.3}, reliability = {:.3}",
-                        //         drone_id, pdr, reliability
-                        //     ));
-                        // }
-                        // self.host.send_logging("--------------------------".to_string());
+                    // rimane speciale
+                    ClientNetCommand::ServerType => {
                         self.host.send_logging("ServerType request received".to_string());
-                        // self.host.send_logging(format!("SERVERS ID {:?}", self.host.network.servers));
-                        // self.host.send_logging(format!("✅ {:?}", self.host.network.nodes));
-                        let servers_snapshot = self.servers.clone();
-                        self.host.send_logging(format!(
-                            "Servers discovered: {:?}",
-                            servers_snapshot.clone()
-                        ));
-                        if let Err(err) = self.host.controller_send.send(HostEvent::ServersDiscovered(servers_snapshot)) {
-                            self.host.send_logging(format!(
-                                "Error sending ServersDiscovered to controller: {}",
-                                err
-                            ));
-                        }
-
-                    }
-                    ClientNetCommand::FilesList(server_id) => {
-                        self.host.send_logging("Preparing FilesList request".to_string());
-                        if let Some(&ref content_serv) = self.servers.get(&Content) {
-                            if content_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::FilesList(server_id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send FilesList to server {}: {}", server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("FilesList sent to server {}", server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of FilesList failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CONTENT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging("No content server available for FilesList".to_string());
-                        }
+                        let snapshot = self.servers.clone();
+                        self.host.send_logging(format!("Servers discovered: {:?}", snapshot));
+                        let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(snapshot));
                     }
 
-                    ClientNetCommand::File(server_id,id) => {
-                        self.host.send_logging(format!("Preparing File({}) request", id));
-                        if let Some(&ref content_serv) = self.servers.get(&Content) {
-                            if content_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::File(server_id,id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send File({}) to server {}: {}", id, server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("File({}) request sent to server {}", id, server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of File({}) failed: {}", id, e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CONTENT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No content server available for File({})", id));
-                        }
+                    // Content-server
+                    ClientNetCommand::FilesList(sid) => {
+                        self.send_net_cmd(Content, sid, ClientNetCommand::FilesList(sid), "FilesList");
+                    }
+                    ClientNetCommand::File(sid, id) => {
+                        let label = format!("File({})", id);
+                        self.send_net_cmd(Content, sid, ClientNetCommand::File(sid, id), &label);
+                    }
+                    ClientNetCommand::MediaList(sid) => {
+                        self.send_net_cmd(Content, sid, ClientNetCommand::MediaList(sid), "MediaList");
+                    }
+                    ClientNetCommand::Media(sid, id) => {
+                        let label = format!("Media({})", id);
+                        self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id), &label);
                     }
 
-                    ClientNetCommand::MediaList(server_id) => {
-                        self.host.send_logging("Preparing MediaList request".to_string());
-                        if let Some(&ref content_serv) = self.servers.get(&Content) {
-                            if content_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::MediaList(server_id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send MediaList to server {}: {}", server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("MediaList sent to server {}", server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of MediaList failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CONTENT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging("No content server available for MediaList".to_string());
-                        }
+                    // Chat-server
+                    ClientNetCommand::RegistrationToChat(sid) => {
+                        self.send_net_cmd(Chat, sid, ClientNetCommand::RegistrationToChat(sid), "RegistrationToChat");
                     }
-
-                    ClientNetCommand::Media(server_id,id) => {
-                        self.host.send_logging(format!("Preparing Media({}) request", id));
-                        if let Some(&ref content_serv) = self.servers.get(&Content) {
-                            if content_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::Media(server_id,id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send Media({}) to server {}: {}", id, server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("Media({}) request sent to server {}", id, server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of Media({}) failed: {}", id, e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CONTENT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No content server available for Media({})", id));
-                        }
+                    ClientNetCommand::ClientList(sid) => {
+                        self.send_net_cmd(Chat, sid, ClientNetCommand::ClientList(sid), "ClientList");
                     }
-
-                    ClientNetCommand::RegistrationToChat(server_id) => {
-                        self.host.send_logging("Preparing RegistrationToChat request".to_string());
-                        if let Some(&ref chat_serv) = self.servers.get(&Chat) {
-                            if chat_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::RegistrationToChat(server_id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send RegistrationToChat to server {}: {}", server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("RegistrationToChat sent to server {}", server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of RegistrationToChat failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CHAT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No chat server available for RegistrationToChat host={}", self.host.id));
-                        }
+                    ClientNetCommand::MessageFor(cid, sid, msg) => {
+                        let label = format!("MessageFor({})", cid);
+                        self.send_net_cmd(Chat, sid, ClientNetCommand::MessageFor(cid, sid, msg), &label);
                     }
-
-                    ClientNetCommand::ClientList(server_id) => {
-                        self.host.send_logging("Preparing ClientList request".to_string());
-                        if let Some(&ref chat_serv) = self.servers.get(&Chat) {
-                            if chat_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::ClientList(server_id)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send ClientList to server {}: {}", server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("ClientList sent to server {}", server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of ClientList failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CHAT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging("No chat server available for ClientList".to_string());
-                        }
+                    ClientNetCommand::FileFor(cid, sid, fid, ext, file) => {
+                        let label = format!("FileFor({})", cid);
+                        self.send_net_cmd(Chat, sid,ClientNetCommand::FileFor(cid, sid, fid, ext, file), &label, );
                     }
-
-                    ClientNetCommand::MessageFor(client_id,server_id, msg) => {
-                        self.host.send_logging(format!("Preparing MessageFor({}, …) request", client_id));
-                        if let Some(&ref chat_serv) = self.servers.get(&Chat) {
-                            if chat_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::MessageFor(client_id,server_id, String::from(msg))) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send MessageFor({}, …) to server {}: {}", client_id, server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("MessageFor({}, …) sent to server {}", client_id, server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of MessageFor failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CHAT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No chat server available for MessageFor({})", client_id));
-                        }
-                    }
-                    ClientNetCommand::FileFor(client_id,server_id, file_id,ext, file) => {
-                        self.host.send_logging(format!("Preparing FileFor({}, …) request", client_id));
-                        if let Some(&ref chat_serv) = self.servers.get(&Chat) {
-                            if chat_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::FileFor(client_id,server_id,file_id, ext, file)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send FileFor({}, …) to server {}: {}", client_id, server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("FileFor({}, …) sent to server {}", client_id, server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of FileFor failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CHAT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No chat server available for FileFor({})", client_id));
-                        }
-                    }
-                    ClientNetCommand::MediaFor(client_id,server_id,media_id, ext, image) => {
-                        self.host.send_logging(format!("Preparing FileFor({}, …) request", client_id));
-                        if let Some(&ref chat_serv) = self.servers.get(&Chat) {
-                            if chat_serv.contains(&server_id) {
-                                match serde_json::to_vec(&ClientNetCommand::MediaFor(client_id, server_id, media_id, ext, image)) {
-                                    Ok(content) => {
-                                        let message = Message {
-                                            session_id: generate_unique_session_id(),
-                                            content,
-                                        };
-                                        if let Err(err) = self.host.build_msg_fragment(server_id, message) {
-                                            self.host.send_logging(format!("Failed to send MediaFor({}, …) to server {}: {}", client_id, server_id, err));
-                                        } else {
-                                            self.host.send_logging(format!("MediaFor({}, …) sent to server {}", client_id, server_id));
-                                        }
-                                    }
-                                    Err(e) => {
-                                        self.host.send_logging(format!("Serialization of MediaFor failed: {}", e));
-                                    }
-                                }
-                            }else {
-                                // target_id non è nella lista dei Content-server
-                                self.host.send_logging(format!(
-                                    "Node {} is NOT a valid CHAT-SERVER",
-                                    server_id
-                                ));
-                            }
-                        } else {
-                            self.host.send_logging(format!("No chat server available for MediaFor({})", client_id));
-                        }
+                    ClientNetCommand::MediaFor(cid, sid, mid, ext, img) => {
+                        let label = format!("MediaFor({})", cid);
+                        self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid, ext, img), &label, );
                     }
                 }
-
             }
             ClientCommand::Internal(host_command) => {
                 match host_command {
@@ -507,11 +253,12 @@ impl Client {
 
     fn handle_packet(&mut self, packet: Packet) -> Result<(), String> {
         match packet.pack_type.clone() {
-            PacketType::FloodResponse(response) => {
+            PacketType::FloodResponse(_) => {
                 self.host.process_flood_response(packet);
                 Ok(())
             }
             PacketType::MsgFragment(fragment) => {
+                self.rx_bytes.fetch_add(fragment.length as usize, Ordering::Relaxed);
                 if let Some(message) = self.handle_msg_fragment(packet.clone(), fragment) {
 
                     let send_reconstructed =

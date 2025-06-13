@@ -253,8 +253,11 @@ impl Network {
                             _ => continue,  // salta host o altri tipi intermedi
                         }
                     }
-                    // idem: leggo la stima EWMA per `u`
-                    let reliability = 1.0 - edge.weight;
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
                     }
