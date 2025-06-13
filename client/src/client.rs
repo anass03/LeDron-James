@@ -37,9 +37,9 @@ impl Client {
     }
 
     pub fn run(&mut self) {
-        let cleanup_tick = tick(Duration::from_secs(15));
+        let cleanup_tick = tick(Duration::from_secs(30));
 
-        let speed_tick = tick(Duration::from_secs(1));
+        let speed_tick = tick(Duration::from_secs(20));
         let mut prev_tx = 0;
         let mut prev_rx = 0;
 
