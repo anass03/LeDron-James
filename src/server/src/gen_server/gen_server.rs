@@ -4,7 +4,7 @@ use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet};
-use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand, FileId, MediaId, ClientId};
+use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand};
 use host::ServerTypes;
 
 pub struct GenServer {

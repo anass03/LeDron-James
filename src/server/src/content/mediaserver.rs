@@ -4,14 +4,12 @@ use reqwest;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use image::ImageReader;
-use image::DynamicImage;
 use host::{Image, MediaId};
+use zstd::stream::encode_all;
 
 pub trait MediaServer {
     /// Cerca "i{id}.{ext}" nella cartella, restituisce (byte, ext) se trovato.
-    fn read_file_any_with_ext<P: AsRef<Path>>(folder: P, id: usize, exts: &[&str])
-                                              -> io::Result<(Vec<u8>, String)>
-    {
+    fn read_file_any_with_ext<P: AsRef<Path>>(folder: P, id: usize, exts: &[&str]) -> io::Result<(Vec<u8>, String)> {
         let base: &Path = folder.as_ref();
         for ext in exts {
             let candidate = base.join(format!("i{}.{}", id, ext));
@@ -36,10 +34,29 @@ pub trait MediaServer {
         let width = img.width();
         let height = img.height();
         let rgba = img.to_rgba8();
+        
+        
+        /*let compressed_data = Self::compress_data(&rgba)?;
+
+        Ok((Image {
+            width,
+            height,
+            data: compressed_data,
+        }, ext))
+        
+         */
+
         Ok((Image {
             width,
             height,
             data: rgba.to_vec(),
         }, ext))
+        
+    }
+
+    /// Funzione per comprimere i dati
+    fn compress_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
+        let compressed = encode_all(data, 0)?;
+        Ok(compressed)
     }
 }

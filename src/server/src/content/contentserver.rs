@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
+use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
 use host::{ServerToClient, ServerTypes, generate_unique_session_id, Message, Functionality, HostEvent, HostCommand,ClientNetCommand};
 use delegate::delegate;
@@ -68,7 +68,7 @@ impl ContentServer {
     
     pub fn run(&mut self) {
         self.initiate_flood();
-        self.send_logging(format!("Starting Content Server..."));
+        self.send_logging("Starting Content Server...".to_string());
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {

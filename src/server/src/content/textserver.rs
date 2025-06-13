@@ -1,4 +1,3 @@
-use reqwest;
 use std::error::Error;
 use std::{fs, io};
 use std::path::{Path, PathBuf};

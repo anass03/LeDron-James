@@ -5,7 +5,7 @@ use host::{ServerToClient, Message, Functionality, ServerTypes, generate_unique_
 use std::collections::HashMap;
 use std::time::Duration;
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Ack, FloodRequest, FloodResponse, Fragment, Nack, NodeType, Packet, PacketType};
+use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 
 
 pub struct ChatServer {
@@ -61,7 +61,7 @@ impl ChatServer {
     
     pub fn run(&mut self) {
         self.initiate_flood();
-        self.send_logging(format!("Starting Chat Server..."));
+        self.send_logging("Starting Chat Server...".to_string());
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
