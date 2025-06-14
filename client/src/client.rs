@@ -9,7 +9,6 @@ use std::time::{Duration, Instant};
 use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand, Edge};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
-use zstd::stream::{Encoder, Decoder};
 use std::io::{Cursor, Read};
 use zstd::{decode_all, encode_all};
 

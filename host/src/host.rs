@@ -820,7 +820,7 @@ impl Functionality for Host {
 
                     // 3.b) Invio il frammento sulla nuova rotta
                     //current_route = new_route.clone();
-                    let header = SourceRoutingHeader::new(new_route, 0);
+                    let header = SourceRoutingHeader::new(new_route, 1);
                     let pkt = Packet::new_fragment(header, session_id, fragment.clone());
                     let res = self.send_packet(pkt, None);
                     self.send_logging(format!(
