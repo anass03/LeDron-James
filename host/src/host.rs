@@ -803,6 +803,34 @@ impl Functionality for Host {
                     if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
                         self.initiate_flood();
                         self.last_nack_flood = now;
+                        // Dopo il flood, riprova a cercare una rotta
+                        if let Some(new_route_after_flood) = self.network.find_best_route_excluding(host, destination, &banned_nodes) {
+                            self.send_logging(format!("Route found after flood: {:?}", new_route_after_flood));
+
+                            {
+                                let mut sent = self.sent_fragments.lock().unwrap();
+                                if let Some(session) = sent.get_mut(&session_id) {
+                                    session.route = new_route_after_flood.clone();
+                                    session.banned_nodes = banned_nodes.clone();
+                                    session.last_activity = Instant::now();
+                                } else { return; }
+                            }
+
+                            let header = SourceRoutingHeader::new(new_route_after_flood, 1);
+                            let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+                            let res = self.send_packet(pkt, None);
+                            self.send_logging(format!("Retransmission result after flood: {:?}", res));
+
+                        } else {
+                            self.send_logging(format!(
+                                "❌ No route available after flood. Aborting session {}",
+                                session_id
+                            ));
+
+                            let mut sent = self.sent_fragments.lock().unwrap();
+                            sent.remove(&session_id);
+                            // (opzionale) notificare il controller
+                        }
                     } else {
                         self.send_logging(format!("Flood backoff not expired"));
                     }
