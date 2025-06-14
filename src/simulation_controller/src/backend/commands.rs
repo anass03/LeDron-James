@@ -649,7 +649,7 @@ impl SimulationControllerData {
                     => {
                         // Construct filename based on file ID and inferred extension
                         let filename = format!("file_{}.{}", file_id, extension);
-                        let path = PathBuf::from("assets").join(&filename);
+                        let path = PathBuf::from("../../../assets").join(&filename);
 
                         fs::write(&path, &file).expect("file not downloaded");
 
@@ -749,9 +749,29 @@ impl SimulationControllerData {
     pub fn handle_log_event(&mut self, log: String) {
         self.logs.push_log(LogType::INFO, log.as_str())
     }
+
+    /// Populate the TopologyAlgorithm.map_links field from the running_network,
+    /// inserting each undirected edge exactly once.
+    pub fn populate_topology_links(&mut self)-> Vec<(NodeId, NodeId)>{
+        use std::collections::HashSet;
+        // Collect unique, undirected links
+        let mut links = HashSet::new();
+        for (netnode, neighbors) in &self.running_network {
+            // Extract the NodeId from NetNode
+            let id = match netnode {
+                NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
+            };
+            for &neighbor in neighbors {
+                // Order the pair to avoid duplicates (min, max)
+                let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
+                links.insert((a, b));
+            }
+        }
+        links.into_iter().collect()
+    }
 }
 
-fn open_image(path: &str) {
+    fn open_image(path: &str) {
     #[cfg(target_os = "macos")]
     {
         Command::new("open").arg(path).spawn().ok();
