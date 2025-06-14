@@ -11,9 +11,17 @@ serde_json = "1.0.133"
 crossbeam-channel = "0.5.13"
 toml = "0.8.19"
 
-drone = { path = "../drone"}
 simulation_controller = { path = "../simulation_controller"}
 initializer_utils = {path = "../initializer_utils"}
+drone = { path = "../drone"}
+rolling_drone = { git = "https://github.com/giorebecchi/RollingDrone.git"}
+lockheedrustin-drone = { git = "https://github.com/Lockheed-Rustin/drone.git"}
+bagel_bomber = { git = "https://github.com/daw-dev/bagel-bomber.git" }
+flyPath = { git = "https://github.com/panigiove/FlyPath.git" }
+wg_2024-rust = { git = "https://github.com/LuigiMiazzo17/unitn-advancedProgramming-WGL_2024-drone.git" }
+rustastic-drone = { git = "https://github.com/Rustastic/RustasticDrone.git" }
+bobry_w_locie = { git = "https://github.com/Seregno/Public_Bry_w_locie.git"}
+rusty_drones = { git = "https://github.com/rusty-drone-2024/rusty-drone.git" }
 
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}

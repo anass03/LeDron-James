@@ -5,7 +5,15 @@ use std::thread::JoinHandle;
 use wg_2024::drone::Drone;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
-use drone::Drone as LeDron;
+//use drone::Drone as LeDron;
+use rolling_drone::RollingDrone;
+use lockheedrustin_drone::LockheedRustin;
+use bagel_bomber::BagelBomber;
+use flyPath::FlyPath;
+use wg_2024_rust::drone::RustDrone;
+use rustastic_drone::RustasticDrone;
+use bobry_w_locie::drone::BoberDrone;
+use rusty_drones::RustyDrone;
 use client::Client as LeClient;
 use server::{ContentServer as LeContentServer};
 use server::ChatServer as LeChatServer;
@@ -73,12 +81,13 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     let mut server_command_senders = HashMap::new();
     // these hashmaps will contain the senders and receivers paired with each NodeId
 
-    /// - Initializing the drones
     //simulation controller has a single receiver for all drone events, while the sender is cloned
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
+
+    /// - Initializing the drones
     let (log_sender, log_receiver) = unbounded();
-    for drone in config.drone.iter() {
+    for (i, drone) in config.drone.iter().enumerate() {
 
         // creating the actual drone channel for commands
         let (controller_drone_send, controller_drone_recv) = unbounded();
@@ -96,10 +105,125 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-        let log_send = log_sender.clone();
+        //let log_send = log_sender.clone();
         /// - spawning the thread of the drone and collecting the handle in a vector
-        handles.insert(drone.id, thread::spawn(move || {
-            let mut drone = LeDron::new(
+        match i {
+            0 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = RollingDrone::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            1 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = LockheedRustin::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            2 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = FlyPath::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            3 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = RustDrone::new(
+                     drone_clone.id,
+                     drone_event_send,
+                     controller_drone_recv,
+                     drone_packet_recv,
+                     drone_packet_send,
+                     drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            4 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = BoberDrone::new(
+                       drone_clone.id,
+                       drone_event_send,
+                       controller_drone_recv,
+                       drone_packet_recv,
+                       drone_packet_send,
+                       drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            5 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = BagelBomber::new(
+                       drone_clone.id,
+                       drone_event_send,
+                       controller_drone_recv,
+                       drone_packet_recv,
+                       drone_packet_send,
+                       drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            6 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = RustyDrone::new(
+                       drone_clone.id,
+                       drone_event_send,
+                       controller_drone_recv,
+                       drone_packet_recv,
+                       drone_packet_send,
+                       drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            7 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = RustasticDrone::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            _ => panic!("Too many drones!!")
+        }
+        /*handles.insert(drone.id, thread::spawn(move || {
+            /*let mut drone = LeDron::new(
                 drone_clone.id,
                 drone_event_send,
                 controller_drone_recv,
@@ -109,12 +233,14 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             );
             drone.add_log_channel(log_send);
             /// - running the drone
-            drone.run();
-        }));
+            drone.run();*/
+
+        }));*/
     }
 
-    /// - Initializing the clients
     let (host_event_send, host_event_recv) = unbounded();
+
+    /// - Initializing the clients
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();

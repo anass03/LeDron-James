@@ -351,7 +351,7 @@ impl SimulationControllerData {
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
             DroneEvent::PacketSent(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 //handle_packet(&packet);
                 let _session_id = packet.session_id;
                 self.stats.received_packet();
@@ -359,14 +359,14 @@ impl SimulationControllerData {
                 //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::PacketDropped(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 //handle_packet(&packet);
                 let _session_id = packet.session_id;
                 Ok(())
                 //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::ControllerShortcut(packet) => {
-                let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
                 let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
                 match self.controller_shortcut(*receiver_id, packet) {
                     Ok(()) => Ok(()),
@@ -660,7 +660,7 @@ impl SimulationControllerData {
                     => {
                         // Construct filename based on file ID and inferred extension
                         let filename = format!("file_{}.{}", file_id, extension);
-                        let path = PathBuf::from("../../../assets").join(&filename);
+                        let path = PathBuf::from("assets").join(&filename);
 
                         fs::write(&path, &file).expect("file not downloaded");
 
