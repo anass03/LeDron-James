@@ -636,9 +636,9 @@ impl SimulationControllerData {
                 Err(e) => {self.logs.push_sc_log(e.0, e.1);},
             }
         }
-        /*while let Ok(log) = self.log_receiver.try_recv() {
+        while let Ok(log) = self.log_receiver.try_recv() {
             self.handle_log_event(log);
-        }*/
+        }
         while let Ok(event) = self.drone_event_receiver.try_recv() {
             match self.handle_drone_event(event) {
                 Ok(()) => {},
