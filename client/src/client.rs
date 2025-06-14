@@ -244,13 +244,17 @@ impl Client {
                             self.host.packet_send.insert(id, sender);
                             self.host.send_logging(format!("Added sender for {}", id));
 
-                            // 2) Reinserisci il nodo e i suoi archi in network.nodes, se lo vuoi "riattivare"
-                            //    (magari li ricavi da flood o dal TOML, qui ti mostro un placeholder)
+                            // Aggiungo l'arco dal client al drone
                             let entry = self.host.network.nodes
                                 .entry(self.host.id)
                                 .or_insert_with(|| (NodeType::Client, Vec::new()));
                             entry.1.push(Edge { to: id, weight: 0.0 });
 
+                            // Aggiungo anche l'arco inverso: dal drone al client
+                            let entry = self.host.network.nodes
+                                .entry(id)
+                                .or_insert_with(|| (NodeType::Drone, Vec::new()));
+                            entry.1.push(Edge { to: self.host.id, weight: 0.0 });
                         }
                     }
                     HostCommand::RemoveSender(id) => {
@@ -266,6 +270,10 @@ impl Client {
                             // 2) Elimina l’arco dalla topologia
                             if let Some((_, edges)) = self.host.network.nodes.get_mut(&self.host.id) {
                                 edges.retain(|e| e.to != id);
+                            }
+                            // Rimuovi anche l'arco inverso dal drone
+                            if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
+                                edges.retain(|e| e.to != self.host.id);
                             }
                         }
                     }
