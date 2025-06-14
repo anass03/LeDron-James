@@ -180,14 +180,14 @@ impl Client {
     fn handle_command(&mut self, client_command: ClientCommand) {
         match client_command {
             ClientCommand::Net(net_command) => {
+                if let Err(e) = self.ensure_all_servers_discovered(){
+                    self.host.send_logging(format!("Error during discovery: {}", e));
+                    return;
+                }
                 match net_command {
                     // rimane speciale
                     ClientNetCommand::ServerType => {
                         self.host.send_logging("ServerType request received".to_string());
-                        if let Err(e) = self.ensure_all_servers_discovered(){
-                            self.host.send_logging(format!("Error during discovery: {}", e));
-                            return;
-                        }
                         let snapshot = self.servers.clone();
                         self.host.send_logging(format!("Servers discovered: {:?}", snapshot));
                         let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(snapshot));
