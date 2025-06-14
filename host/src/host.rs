@@ -74,6 +74,7 @@ pub struct SentSessionData {
     pub destination: NodeId,        // Destinatario della sessione
     pub route: Vec<NodeId>,        // percorso pre-calcolato
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
+    banned_nodes: HashSet<NodeId>,
 }
 #[derive(Clone, Debug)]
 pub struct Edge {
@@ -210,19 +211,12 @@ impl Network {
 
     /// Come `find_best_route`, ma esclude tutti gli archi consecutivi già
     /// presenti in `used_route`.
-    pub fn find_alternate_route(&self, start: NodeId, destination: NodeId, used_route: &[NodeId]) -> Option<Vec<NodeId>> {
-        // clono la topologia e rimuovo gli archi usati
-        let mut temp = self.nodes.clone();
-        for window in used_route.windows(2) {
-            if let [u, v] = window {
-                if let Some((_, edges)) = temp.get_mut(u) {
-                    edges.retain(|e| e.to != *v);
-                }
-                if let Some((_, edges)) = temp.get_mut(v) {
-                    edges.retain(|e| e.to != *u);
-                }
-            }
-        }
+    pub fn find_best_route_excluding(
+        &self,
+        start: NodeId,
+        destination: NodeId,
+        banned_nodes: &HashSet<NodeId>,
+    ) -> Option<Vec<NodeId>> {
 
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
@@ -238,16 +232,23 @@ impl Network {
             if u == destination {
                 break;
             }
-            if let Some((_, edges)) = temp.get(&u) {
+            if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    // se v NON è né start né destination, allora deve essere un drone
+
+                    // Se il nodo è bannato, lo skippiamo subito
+                    if banned_nodes.contains(&v) {
+                        continue;
+                    }
+
+                    // Se v NON è né start né destination, allora deve essere un drone
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
                             Some((NodeType::Drone, _)) => { /* ok */ }
                             _ => continue,  // salta host o altri tipi intermedi
                         }
                     }
+
                     let pdr_v = self.drone_pdr
                         .get(&v)
                         .copied()
@@ -272,6 +273,7 @@ impl Network {
         if !dist.contains_key(&destination) {
             return None;
         }
+
         let mut path = Vec::new();
         let mut cur = destination;
         while cur != start {
@@ -282,6 +284,7 @@ impl Network {
         path.reverse();
         Some(path)
     }
+
 }
 pub trait Functionality{
     fn send_logging(&self, message: String);
@@ -738,157 +741,234 @@ impl Functionality for Host {
         let host = self.id;
         let frag_idx = nack.fragment_index;
 
-        // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
-        //    quindi droppo subito il lock.
-        let (fragment, current_route, destination) = {
-            let mut sent = self.sent_fragments.lock().unwrap();
-            if let Some(session) = sent.get_mut(&session_id) {
+        // 1) Recupero i dati di sessione (fragment, route, banned)
+        let (fragment, current_route, destination, mut banned_nodes) = {
+            let sent = self.sent_fragments.lock().unwrap();
+            if let Some(session) = sent.get(&session_id) {
                 match session.buffer.get(frag_idx as usize) {
-                    Some(Some(f)) => {
-                        let frag_clone = f.clone();
-                        let route_clone = session.route.clone();
-                        let dest = session.destination;
-                        (frag_clone, route_clone, dest)
-                    }
-                    Some(None) => {
-                        // frammento già confermato o non esistente
-                        self.send_logging(format!(
-                            "NACK per frammento inesistente/già confermato host={} session={} fragment={}",
-                            host, session_id, frag_idx
-                        ));
-                        return;
-                    }
-                    None => {
-                        // indice fuori range
-                        self.send_logging(format!(
-                            "NACK index out of range host={} session={} fragment={}",
-                            host, session_id, frag_idx
-                        ));
+                    Some(Some(f)) => (f.clone(), session.route.clone(), session.destination, session.banned_nodes.clone()),
+                    Some(None) | None => {
+                        self.send_logging(format!("NACK su frammento già confermato o out-of-range: session={} frag={}", session_id, frag_idx));
                         return;
                     }
                 }
             } else {
-                // sessione sconosciuta
-                self.send_logging(format!(
-                    "NACK per sessione sconosciuta host={} session={}",
-                    host, session_id
-                ));
+                self.send_logging(format!("NACK su sessione sconosciuta: {}", session_id));
                 return;
             }
         };
-        // Qui il MutexGuard su sent_fragments è già stato droppato.
 
         match nack.nack_type {
             NackType::Dropped => {
-                // 2) NACK “Dropped”: ritrasmetto subito il frammento
-                self.send_logging(format!(
-                    "Retransmitting dropped fragment host={} session={} fragment={}",
-                    host, session_id, frag_idx
-                ));
+                self.send_logging(format!("Retransmitting dropped fragment session={} frag={}", session_id, frag_idx));
                 self.send_fragment(session_id, fragment.clone());
                 self.network.pdr_from_nack(nack_generator);
             }
 
             NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
-                self.send_logging(format!(
-                    "Routing error, attempting alternate route host={} session={} fragment={} bad_hop={}",
-                    host, session_id, frag_idx, bad
-                ));
+                self.send_logging(format!("Routing error on bad_hop={} for session={} frag={}", bad, session_id, frag_idx));
 
-                // 3) Provo subito una rotta alternativa sulla route corrente
-                if let Some(new_route) = self.network.find_alternate_route(host, destination, &current_route) {
-                    self.send_logging(format!(
-                        "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
-                        host, session_id, frag_idx, new_route
-                    ));
+                // Se il bad node NON è già nella route corrente, allora la route corrente è già aggiornata
+                if !current_route.contains(&bad) {
+                    self.send_logging(format!("Bad node {} not in current route — keep current route.", bad));
+                    self.send_fragment(session_id, fragment.clone());
+                    return;
+                }
 
-                    // 3.a) Apro il lock solo per aggiornare session.route
+                // Aggiungo il nodo problematico nella blacklist
+                banned_nodes.insert(bad);
+
+                // Provo una route alternativa escludendo i banned_nodes
+                if let Some(new_route) = self.network.find_best_route_excluding(host, destination, &banned_nodes) {
+                    self.send_logging(format!("Found alternative route: {:?}", new_route));
+
                     {
                         let mut sent = self.sent_fragments.lock().unwrap();
                         if let Some(session) = sent.get_mut(&session_id) {
                             session.route = new_route.clone();
+                            session.banned_nodes = banned_nodes.clone();
                             session.last_activity = Instant::now();
-                        } else {
-                            // La sessione è già stata rimossa nel frattempo: esco
-                            self.send_logging(format!(
-                                "Session {} già rimossa, non ritrasmetto",
-                                session_id
-                            ));
-                            return;
-                        }
-                    } // il lock viene droppato qui
+                        } else { return; }
+                    }
 
-                    // 3.b) Invio il frammento sulla nuova rotta
-                    //current_route = new_route.clone();
                     let header = SourceRoutingHeader::new(new_route, 1);
                     let pkt = Packet::new_fragment(header, session_id, fragment.clone());
                     let res = self.send_packet(pkt, None);
-                    self.send_logging(format!(
-                        "Retransmission result host={} session={} fragment={} result={:?}",
-                        host, session_id, frag_idx, res
-                    ));
+                    self.send_logging(format!("Retransmission result: {:?}", res));
+
                 } else {
-                    // 3.c) Non c'è rotta alternativa: incremento flood_attempts e valuto se abortire o floodare
+                    self.send_logging(format!("No alternative route found, flooding..."));
                     let now = Instant::now();
+
                     if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
-                        self.send_logging("NACK backoff scaduto: avvio flood".to_string());
                         self.initiate_flood();
-                        if let Some(new_route) = self.network.find_best_route(host, destination) {
-                            self.send_logging(format!(
-                                "route found after flooding, updating and retransmitting host={} session={} fragment={} route={:?}",
-                                host, session_id, frag_idx, new_route
-                            ));
-
-                            // 3.a) Apro il lock solo per aggiornare session.route
-                            {
-                                let mut sent = self.sent_fragments.lock().unwrap();
-                                if let Some(session) = sent.get_mut(&session_id) {
-                                    session.route = new_route.clone();
-                                    session.last_activity = Instant::now();
-                                } else {
-                                    // La sessione è già stata rimossa nel frattempo: esco
-                                    self.send_logging(format!(
-                                        "Session {} già rimossa, non ritrasmetto",
-                                        session_id
-                                    ));
-                                    return;
-                                }
-                            } // il lock viene droppato qui
-
-                            // 3.b) Invio il frammento sulla nuova rotta
-                            //current_route = new_route.clone();
-                            let header = SourceRoutingHeader::new(new_route, 0);
-                            let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-                            let res = self.send_packet(pkt, None);
-                            self.send_logging(format!(
-                                "Retransmission result host={} session={} fragment={} result={:?}",
-                                host, session_id, frag_idx, res
-                            ));
-                        }else {
-                            self.send_logging(format!(
-                                "❌ NET DISCONNECTED, session {} failed --> aborting flood!",
-                                session_id,
-
-                            ));
-                        }
                         self.last_nack_flood = now;
                     } else {
-                        self.send_logging(format!(
-                            "NACK ricevuto ma backoff non scaduto ({:.1}s rimanenti)",
-                            (self.nack_flood_backoff - now.duration_since(self.last_nack_flood)).as_secs_f32()
-                        ));
+                        self.send_logging(format!("Flood backoff not expired"));
                     }
                 }
             }
 
             NackType::DestinationIsDrone => {
-                self.send_logging(format!(
-                    "DestinationIsDrone NACK — dropping fragment host={} session={} fragment={}",
-                    host, session_id, frag_idx
-                ));
+                self.send_logging(format!("Destination is drone, dropping fragment."));
             }
         }
     }
+
+    // fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64) {
+    //     let host = self.id;
+    //     let frag_idx = nack.fragment_index;
+    //
+    //     // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
+    //     //    quindi droppo subito il lock.
+    //     let (fragment, current_route, destination) = {
+    //         let mut sent = self.sent_fragments.lock().unwrap();
+    //         if let Some(session) = sent.get_mut(&session_id) {
+    //             match session.buffer.get(frag_idx as usize) {
+    //                 Some(Some(f)) => {
+    //                     let frag_clone = f.clone();
+    //                     let route_clone = session.route.clone();
+    //                     let dest = session.destination;
+    //                     (frag_clone, route_clone, dest)
+    //                 }
+    //                 Some(None) => {
+    //                     // frammento già confermato o non esistente
+    //                     self.send_logging(format!(
+    //                         "NACK per frammento inesistente/già confermato host={} session={} fragment={}",
+    //                         host, session_id, frag_idx
+    //                     ));
+    //                     return;
+    //                 }
+    //                 None => {
+    //                     // indice fuori range
+    //                     self.send_logging(format!(
+    //                         "NACK index out of range host={} session={} fragment={}",
+    //                         host, session_id, frag_idx
+    //                     ));
+    //                     return;
+    //                 }
+    //             }
+    //         } else {
+    //             // sessione sconosciuta
+    //             self.send_logging(format!(
+    //                 "NACK per sessione sconosciuta host={} session={}",
+    //                 host, session_id
+    //             ));
+    //             return;
+    //         }
+    //     };
+    //     // Qui il MutexGuard su sent_fragments è già stato droppato.
+    //
+    //     match nack.nack_type {
+    //         NackType::Dropped => {
+    //             // 2) NACK “Dropped”: ritrasmetto subito il frammento
+    //             self.send_logging(format!(
+    //                 "Retransmitting dropped fragment host={} session={} fragment={}",
+    //                 host, session_id, frag_idx
+    //             ));
+    //             self.send_fragment(session_id, fragment.clone());
+    //             self.network.pdr_from_nack(nack_generator);
+    //         }
+    //
+    //         NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
+    //             self.send_logging(format!(
+    //                 "Routing error, attempting alternate route host={} session={} fragment={} bad_hop={}",
+    //                 host, session_id, frag_idx, bad
+    //             ));
+    //
+    //             // 3) Provo subito una rotta alternativa sulla route corrente
+    //             if let Some(new_route) = self.network.find_alternate_route(host, destination, &current_route) {
+    //                 self.send_logging(format!(
+    //                     "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
+    //                     host, session_id, frag_idx, new_route
+    //                 ));
+    //
+    //                 // 3.a) Apro il lock solo per aggiornare session.route
+    //                 {
+    //                     let mut sent = self.sent_fragments.lock().unwrap();
+    //                     if let Some(session) = sent.get_mut(&session_id) {
+    //                         session.route = new_route.clone();
+    //                         session.last_activity = Instant::now();
+    //                     } else {
+    //                         // La sessione è già stata rimossa nel frattempo: esco
+    //                         self.send_logging(format!(
+    //                             "Session {} già rimossa, non ritrasmetto",
+    //                             session_id
+    //                         ));
+    //                         return;
+    //                     }
+    //                 } // il lock viene droppato qui
+    //
+    //                 // 3.b) Invio il frammento sulla nuova rotta
+    //                 //current_route = new_route.clone();
+    //                 let header = SourceRoutingHeader::new(new_route, 1);
+    //                 let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+    //                 let res = self.send_packet(pkt, None);
+    //                 self.send_logging(format!(
+    //                     "Retransmission result host={} session={} fragment={} result={:?}",
+    //                     host, session_id, frag_idx, res
+    //                 ));
+    //             } else {
+    //                 let now = Instant::now();
+    //                 if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
+    //                     self.send_logging("NACK backoff scaduto: avvio flood".to_string());
+    //                     self.initiate_flood();
+    //                     if let Some(new_route) = self.network.find_best_route(host, destination) {
+    //                         self.send_logging(format!(
+    //                             "route found after flooding, updating and retransmitting host={} session={} fragment={} route={:?}",
+    //                             host, session_id, frag_idx, new_route
+    //                         ));
+    //
+    //                         // 3.a) Apro il lock solo per aggiornare session.route
+    //                         {
+    //                             let mut sent = self.sent_fragments.lock().unwrap();
+    //                             if let Some(session) = sent.get_mut(&session_id) {
+    //                                 session.route = new_route.clone();
+    //                                 session.last_activity = Instant::now();
+    //                             } else {
+    //                                 // La sessione è già stata rimossa nel frattempo: esco
+    //                                 self.send_logging(format!(
+    //                                     "Session {} già rimossa, non ritrasmetto",
+    //                                     session_id
+    //                                 ));
+    //                                 return;
+    //                             }
+    //                         } // il lock viene droppato qui
+    //
+    //                         // 3.b) Invio il frammento sulla nuova rotta
+    //                         //current_route = new_route.clone();
+    //                         let header = SourceRoutingHeader::new(new_route, 0);
+    //                         let pkt = Packet::new_fragment(header, session_id, fragment.clone());
+    //                         let res = self.send_packet(pkt, None);
+    //                         self.send_logging(format!(
+    //                             "Retransmission result host={} session={} fragment={} result={:?}",
+    //                             host, session_id, frag_idx, res
+    //                         ));
+    //                     }else {
+    //                         self.send_logging(format!(
+    //                             "❌ NET DISCONNECTED, session {} failed --> aborting flood!",
+    //                             session_id,
+    //
+    //                         ));
+    //                     }
+    //                     self.last_nack_flood = now;
+    //                 } else {
+    //                     self.send_logging(format!(
+    //                         "NACK ricevuto ma backoff non scaduto ({:.1}s rimanenti)",
+    //                         (self.nack_flood_backoff - now.duration_since(self.last_nack_flood)).as_secs_f32()
+    //                     ));
+    //                 }
+    //             }
+    //         }
+    //
+    //         NackType::DestinationIsDrone => {
+    //             self.send_logging(format!(
+    //                 "DestinationIsDrone NACK — dropping fragment host={} session={} fragment={}",
+    //                 host, session_id, frag_idx
+    //             ));
+    //         }
+    //     }
+    // }
 
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
         self.send_logging(format!(
@@ -931,6 +1011,7 @@ impl Functionality for Host {
                     route: route.clone(),
                     destination,
                     pending: total,
+                    banned_nodes: HashSet::new()
                 }
             });
 
