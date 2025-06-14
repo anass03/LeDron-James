@@ -1,11 +1,9 @@
 use std::error::Error;
 use std::{fs, io};
-use reqwest;
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use image::ImageReader;
 use host::{Image, MediaId};
-use zstd::stream::encode_all;
 
 pub trait MediaServer {
     /// Cerca "i{id}.{ext}" nella cartella, restituisce (byte, ext) se trovato.

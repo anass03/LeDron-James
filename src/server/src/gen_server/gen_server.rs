@@ -6,8 +6,7 @@ use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet};
-use host::{Functionality, Host, Message, RecSessionData, HostEvent, HostCommand};
-use host::ServerTypes;
+use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionData, HostEvent, Edge};
 use zstd::{decode_all, encode_all};
 
 pub struct GenServer {
@@ -20,7 +19,7 @@ pub trait GenServerBehavior {
     fn handle_sim_command(&mut self, cmd: HostCommand);
     fn servertype(&mut self) -> Result<ServerTypes, String>;
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
-    fn decompress_anything(&self,compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
+    fn decompress_anything(&self,compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
     fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
 }
 
@@ -58,7 +57,7 @@ impl GenServer {
 }
 
 impl GenServerBehavior for GenServer {
-    fn handle_sim_command(&mut self, cmd: HostCommand){
+    fn handle_sim_command(&mut self, cmd: HostCommand) {
         match cmd {
             HostCommand::AddSender(id, sender) => {
                 let current = self.host.packet_send.len();
@@ -68,6 +67,18 @@ impl GenServerBehavior for GenServer {
                     self.send_logging("Cannot add more than 2 channels: limit reached".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
+
+
+                    let entry = self.host.network.nodes
+                        .entry(self.host.id)
+                        .or_insert_with(|| (NodeType::Server, Vec::new()));
+                    entry.1.push(Edge { to: id, weight: 0.0 });
+
+
+                    let entry = self.host.network.nodes
+                        .entry(id)
+                        .or_insert_with(|| (NodeType::Drone, Vec::new()));
+                    entry.1.push(Edge { to: self.host.id, weight: 0.0 });
                     self.send_logging("Successfully added sender!".to_string());
                 }
             }
@@ -79,13 +90,24 @@ impl GenServerBehavior for GenServer {
                     self.send_logging("Cannot remove last channel: at least one connection required".to_string());
                 } else {
                     self.host.packet_send.remove(&id);
-                    self.send_logging("Successfully removed sender!".to_string());
+
+
+                    if let Some((_, edges)) = self.host.network.nodes.get_mut(&self.host.id) {
+                        edges.retain(|e| e.to != id);
+                    }
+
+
+                    if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
+                        edges.retain(|e| e.to != self.host.id);
+
+                        self.send_logging("Successfully removed sender!".to_string());
+                    }
                 }
             }
         }
     }
     fn servertype(&mut self) -> Result<ServerTypes, String> {
-            if let NodeType::Server = self.host.type_host {
+        if let NodeType::Server = self.host.type_host {
                 let response = match self.server_type {
                     ServerTypes::Chat => ServerTypes::Chat,
                     ServerTypes::Content => ServerTypes::Content,
@@ -173,7 +195,7 @@ impl GenServerBehavior for GenServer {
         }
         None
     }
-    fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let decompressed = decode_all(Cursor::new(compressed))?;
         Ok(decompressed)
     }

@@ -29,7 +29,6 @@ impl ChatServer {
             fn handle_sim_command(&mut self, cmd: HostCommand);
             fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
-            fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn std::error::Error>>;
             fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
