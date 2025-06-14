@@ -16,7 +16,6 @@ dependencies = [
  "server",
  "simulation_controller",
  "toml",
- "tracing-subscriber",
  "wg_2024",
 ]
 

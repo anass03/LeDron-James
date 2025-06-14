@@ -116,17 +116,26 @@ impl SimulationControllerData {
             Some(_) => (),
             None => return Err(format!("Drone {drone_id} is not in the net!"))
         }
-
         //check hosts constraints
         for (node, neighbors) in crashed_net.iter() {
             match node {
                 NetNode::Client(client_id) => {
+                    let neighbors: Vec<NodeId> = neighbors
+                        .iter()
+                        .filter(|id| **id!= drone_id)
+                        .cloned()
+                        .collect();
                     let adj = neighbors.len();
                     if adj <= 0 || adj > 2 {
                         return Err(format!("Cannot Crash Drone {drone_id} because Client {client_id} would have {adj} Neighbors!"));
                     }
                 }
                 NetNode::Server(server_id) => {
+                    let neighbors: Vec<NodeId> = neighbors
+                        .iter()
+                        .filter(|id| **id!= drone_id)
+                        .cloned()
+                        .collect();
                     let adj = neighbors.len();
                     if adj <= 1 {
                         return Err(format!("Cannot Crash Drone {drone_id} because Server {server_id} would have only {adj} Neighbors!"));
@@ -156,7 +165,6 @@ impl SimulationControllerData {
                 drone_net.insert(*drone_id, adj);
             }
         }
-        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
 
         // Check if crashing splits the network without considering hosts (they are at the edges)
         let mut visited = HashSet::new();
@@ -218,13 +226,25 @@ impl SimulationControllerData {
                 _ => continue
             }
         }
-
+        let mut host_ids = Vec::new();
+        for node in net_map.keys() {
+            match node {
+                NetNode::Client(client_id) => {host_ids.push(*client_id);},
+                NetNode::Server(server_id) => {host_ids.push(*server_id);},
+                _ => continue
+            }
+        }
 
         // Build a net without hosts
         let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         for (drone, neighbors) in &modified_net_map {
             if let NetNode::Drone(drone_id) = drone {
-                drone_net.insert(*drone_id, neighbors.clone());
+                let adj: Vec<_> = neighbors
+                    .iter()
+                    .filter(|id| !host_ids.contains(id))
+                    .cloned()
+                    .collect();
+                drone_net.insert(*drone_id, adj);
             }
         }
 
@@ -347,7 +367,6 @@ impl SimulationControllerData {
     }
 
     /// - Drone Events
-
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
             DroneEvent::PacketSent(packet) => {
@@ -767,9 +786,9 @@ impl SimulationControllerData {
         use std::collections::HashSet;
         // Collect unique, undirected links
         let mut links = HashSet::new();
-        for (netnode, neighbors) in &self.running_network {
+        for (net_node, neighbors) in &self.running_network {
             // Extract the NodeId from NetNode
-            let id = match netnode {
+            let id = match net_node {
                 NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
             };
             for &neighbor in neighbors {
