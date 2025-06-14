@@ -135,16 +135,25 @@ impl SimulationControllerData {
                 _ => continue
             }
         }
-
+        let mut host_ids = Vec::new();
         for node in net_map.keys() {
-
+            match node {
+                NetNode::Client(client_id) => {host_ids.push(*client_id);},
+                NetNode::Server(server_id) => {host_ids.push(*server_id);},
+                _ => continue
+            }
         }
 
         // Build a net without hosts
         let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         for (drone, neighbors) in &net_map {
             if let NetNode::Drone(drone_id) = drone {
-                drone_net.insert(*drone_id, neighbors.clone());
+                let adj: Vec<_> = neighbors
+                    .iter()
+                    .filter(|id| !host_ids.contains(id))
+                    .cloned()
+                    .collect();
+                drone_net.insert(*drone_id, adj);
             }
         }
         self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
@@ -153,15 +162,9 @@ impl SimulationControllerData {
         let mut visited = HashSet::new();
         let &start = drone_net.keys().find(|&&id| id != drone_id).ok_or("No other nodes to start DFS")?;
         dfs(start, &drone_net, Some(drone_id), &mut visited);
-        if visited.len() != drone_net.len() + 1 {
-            self.logs.push_sc_log(LogType::DEBUG, format!("NETWORK DISCONNECTED"));
-            self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", visited));
-            self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
+        if visited.len() + 1 != drone_net.len() {
             return Ok(true);
         }
-        self.logs.push_sc_log(LogType::DEBUG, format!("NETWORK FULLY CONNECTED"));
-        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", visited));
-        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
         Ok(false)
     }
 
