@@ -37,7 +37,7 @@ impl Client {
     }
 
     pub fn run(&mut self) {
-        let cleanup_tick = tick(Duration::from_secs(30));
+        let cleanup_tick = tick(Duration::from_secs(60));
 
         let speed_tick = tick(Duration::from_secs(20));
         let mut prev_tx = 0;
@@ -62,28 +62,28 @@ impl Client {
                     }
 
                 },
-                recv(cleanup_tick) -> _ => {
-                    let timeout = Duration::from_secs(300);
-                    self.host.cleanup_expired_sessions(timeout);
-                },
-                recv(speed_tick) -> _ => {
-                    let total_tx = self.tx_bytes.load(Ordering::Relaxed);
-                    let total_rx = self.rx_bytes.load(Ordering::Relaxed);
-                    let up_speed = total_tx - prev_tx;   // B/s
-                    let down_speed = total_rx - prev_rx;
-                    prev_tx = total_tx;
-                    prev_rx = total_rx;
-
-                    // conversione in KiB/s
-                    let up_kb  = up_speed as f64 / 1024.0;
-                    let down_kb = down_speed as f64 / 1024.0;
-
-                    self.host.send_logging(format!(
-                        "↗ Upload: {:.2} KiB/s, ↙ Download: {:.2} KiB/s",
-                        up_kb,
-                        down_kb
-                    ));
-                },
+                // recv(cleanup_tick) -> _ => {
+                //     let timeout = Duration::from_secs(300);
+                //     self.host.cleanup_expired_sessions(timeout);
+                // },
+                // recv(speed_tick) -> _ => {
+                //     let total_tx = self.tx_bytes.load(Ordering::Relaxed);
+                //     let total_rx = self.rx_bytes.load(Ordering::Relaxed);
+                //     let up_speed = total_tx - prev_tx;   // B/s
+                //     let down_speed = total_rx - prev_rx;
+                //     prev_tx = total_tx;
+                //     prev_rx = total_rx;
+                //
+                //     // conversione in KiB/s
+                //     let up_kb  = up_speed as f64 / 1024.0;
+                //     let down_kb = down_speed as f64 / 1024.0;
+                //
+                //     self.host.send_logging(format!(
+                //         "↗ Upload: {:.2} KiB/s, ↙ Download: {:.2} KiB/s",
+                //         up_kb,
+                //         down_kb
+                //     ));
+                // },
             }
         }
     }
@@ -178,17 +178,16 @@ impl Client {
     }
 
     fn handle_command(&mut self, client_command: ClientCommand) {
-        if let Err(e) = self.ensure_all_servers_discovered() {
-            self.host.send_logging(format!("Error during discovery: {}", e));
-            return;
-        }
-
         match client_command {
             ClientCommand::Net(net_command) => {
                 match net_command {
                     // rimane speciale
                     ClientNetCommand::ServerType => {
                         self.host.send_logging("ServerType request received".to_string());
+                        if let Err(e) = self.ensure_all_servers_discovered(){
+                            self.host.send_logging(format!("Error during discovery: {}", e));
+                            return;
+                        }
                         let snapshot = self.servers.clone();
                         self.host.send_logging(format!("Servers discovered: {:?}", snapshot));
                         let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(snapshot));
