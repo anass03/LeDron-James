@@ -71,9 +71,7 @@ fn dfs(
     visited: &mut HashSet<NodeId>,
 )
 {
-    if Some(current) == exclude {
-        return;
-    }
+    if Some(current) == exclude {return}
     visited.insert(current);
     if let Some(neighbors) = graph.get(&current) {
         for &neighbor in neighbors {
@@ -138,6 +136,10 @@ impl SimulationControllerData {
             }
         }
 
+        for node in net_map.keys() {
+
+        }
+
         // Build a net without hosts
         let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
         for (drone, neighbors) in &net_map {
@@ -145,15 +147,21 @@ impl SimulationControllerData {
                 drone_net.insert(*drone_id, neighbors.clone());
             }
         }
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
 
         // Check if crashing splits the network without considering hosts (they are at the edges)
         let mut visited = HashSet::new();
         let &start = drone_net.keys().find(|&&id| id != drone_id).ok_or("No other nodes to start DFS")?;
         dfs(start, &drone_net, Some(drone_id), &mut visited);
-        if visited.len() + 1 != drone_net.len() {
+        if visited.len() != drone_net.len() + 1 {
+            self.logs.push_sc_log(LogType::DEBUG, format!("NETWORK DISCONNECTED"));
+            self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", visited));
+            self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
             return Ok(true);
         }
-
+        self.logs.push_sc_log(LogType::DEBUG, format!("NETWORK FULLY CONNECTED"));
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", visited));
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
         Ok(false)
     }
 
@@ -275,11 +283,11 @@ impl SimulationControllerData {
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
         match self.cannot_crash(drone_id) {
-            Ok(not_crashable) => {
-                if not_crashable {
+            Ok(cannot_crash) => {
+                if cannot_crash {
                     return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
                 }
-            },
+            }
             Err(e) => return Err(e)
         }
         self.logs.push_sc_log(LogType::DEBUG, format!("Trying to Crash Drone: {drone_id}"));
