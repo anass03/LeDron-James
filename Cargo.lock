@@ -3161,7 +3161,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#ab2942b7dbb18eb9504cd4d6ad3733c4c35260ca"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#8dd895c7e87740e6e9454f94c9cfd8e3f8a32f73"
 dependencies = [
  "anyhow",
  "chrono",

@@ -321,14 +321,15 @@ impl SimulationControllerData {
                     Ok(_) => {
                         //removing all neighboring channels
                         let mut neighbors = vec![];
-                        match self.drones.get((drone_id as usize) - 1) {
-                            Some(drone) => {
+                        for drone in self.drones.iter() {
+                            if drone.id == drone_id{
                                 for neighbor in drone.connected_node_ids.iter() {
                                     neighbors.push(*neighbor);
                                 }
-                            },
-                            None => { return Err(format!("Drone {drone_id} does not exist")); }
+                            }
                         }
+                        if neighbors.is_empty() { return Err(format!("Drone {drone_id} does not exist")); }
+
                         for neighbor in neighbors.iter() {
                             let forward_node_type = NodeType::from(&self, drone_id);
                             let backwards_node_type = NodeType::from(&self, *neighbor);
