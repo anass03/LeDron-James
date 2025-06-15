@@ -337,7 +337,15 @@ impl SimulationControllerData {
                             self.mono_remove_sender(forward_node_type, drone_id, backwards_node_type, *neighbor)?;
                             self.mono_remove_sender(backwards_node_type, *neighbor, forward_node_type, drone_id)?
                         }
-                        Ok(())
+
+                    // ———> qui rimuovo COMPLETAMENTE il drone dallo stato
+                        self.drones.retain(|d| d.id != drone_id);
+                        self.drone_command_sender.remove(&drone_id);
+                        self.packet_sender.remove(&drone_id);
+                        // se tieni altri mappi (es. self.running_network, self.stats, ecc.)
+                        // rimuovi anche lì drone_id
+
+                    Ok(())
                     },
                     Err(e) => Err(format!("Error sending crash command - {}", e.to_string())),
                 }
