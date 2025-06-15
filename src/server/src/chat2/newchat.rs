@@ -10,14 +10,14 @@ use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 
-pub struct ChatServer {
+pub struct ChatServer2 {
     info: GenServer,
     client_list: Vec<NodeId>,
     chats: Vec<Chat>
 }
 
 
-impl ChatServer {
+impl ChatServer2 {
     delegate! {
         to self.info.host {
             fn initiate_flood(&mut self);
