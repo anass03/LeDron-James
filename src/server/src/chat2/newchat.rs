@@ -6,7 +6,6 @@ use std::collections::HashMap;
 use std::error::Error;
 use host::Image as LeImage;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
@@ -309,7 +308,7 @@ impl ChatServer {
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
-                let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat));
+                // let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat)); 
             }
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));

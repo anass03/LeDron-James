@@ -15,6 +15,8 @@ pub struct ContentServer {
     info: GenServer,
     files: Vec<usize>,
     media: Vec<usize>,
+    file_map: HashMap<usize, PathBuf>,
+    media_map: HashMap<usize, PathBuf>,  
 }
 
 pub trait ContentServerBehavior: MediaServer + TextServer {
@@ -64,6 +66,8 @@ impl ContentServer {
             ),
             files: vec![],
             media: vec![],
+            file_map: Default::default(),
+            media_map: Default::default(),
         }
     }
 
@@ -108,52 +112,53 @@ impl ContentServer {
         }
     }
 
-    
+
     pub fn count_files(&mut self) {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let files_dir  = manifest_dir.join("src/content/files");
+        let files_dir = manifest_dir.join("src/content/files");
         let images_dir = manifest_dir.join("src/content/images");
-        self.send_logging(format!(" Files directory: {}", files_dir.to_str().unwrap().to_string()));
-        self.send_logging(format!(" Images directory: {}", images_dir.to_str().unwrap().to_string()));
-        // il resto rimane invariato
-        if let Ok(media) = self.list_media_ids(&images_dir) {
-            self.media = media;
-            self.send_logging(format!(" media -> {:?}", self.media));
-        }
-        if let Ok(files) = self.list_media_ids(&files_dir) {
-            self.files = files;
-            self.send_logging(format!(" files -> {:?}", self.files));
-        }
-    }
 
-    
-    pub fn list_media_ids<P: AsRef<Path>>(&self, folder_path: P) -> io::Result<Vec<usize>> {
-        let mut ids = Vec::new();
-        for entry in fs::read_dir(&folder_path)? {
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_file() {
-                if let Some(stem) = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                {
-                    // Prendo solo i caratteri numerici dallo stem
-                    let digits: String = stem.chars()
-                        .filter(|c| c.is_ascii_digit())
-                        .collect();
-                    if !digits.is_empty() {
+        self.send_logging(format!("Scanning files: {}", files_dir.display()));
+        self.send_logging(format!("Scanning images: {}", images_dir.display()));
+
+        self.file_map.clear();
+        self.media_map.clear();
+        self.files.clear();
+        self.media.clear();
+
+        if let Ok(entries) = fs::read_dir(&files_dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        let digits: String = stem.chars().filter(|c| c.is_ascii_digit()).collect();
                         if let Ok(id) = digits.parse::<usize>() {
-                            ids.push(id);
+                            self.file_map.insert(id, path.clone());
+                            self.files.push(id);
                         }
                     }
                 }
             }
         }
-        ids.sort_unstable();
-        Ok(ids)
+
+        if let Ok(entries) = fs::read_dir(&images_dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_file() {
+                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                        let digits: String = stem.chars().filter(|c| c.is_ascii_digit()).collect();
+                        if let Ok(id) = digits.parse::<usize>() {
+                            self.media_map.insert(id, path.clone());
+                            self.media.push(id);
+                        }
+                    }
+                }
+            }
+        }
+
+        self.files.sort_unstable();
+        self.media.sort_unstable();
     }
-    
-    
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
@@ -176,21 +181,23 @@ impl ContentServer {
                     } 
                 }
             }
-            ClientNetCommand::File(receiver_id,file_id) => {
-                match receiver_id==self.info.host.id {
-                    true => {                
-                        match Self::convert_file(file_id) {
-                        Ok((data, ext)) => {
-                            self.send_logging("Sending file".to_string());
-                            self.send_response(ServerToClient::File(self.info.host.id,file_id, ext.clone(), data), source);
+            ClientNetCommand::File(receiver_id, file_id) => {
+                if receiver_id == self.info.host.id {
+                    if let Some(path) = self.file_map.get(&file_id) {
+                        match Self::convert_file_path(path) {
+                            Ok((data, ext)) => {
+                                self.send_logging("Sending file".to_string());
+                                self.send_response(ServerToClient::File(self.info.host.id, file_id, ext, data), source);
+                            }
+                            Err(_) => {
+                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                            }
                         }
-                        Err(_) => {
-                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                        }
-                    }}
-                    false => {
-                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                    } else {
+                        self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
                     }
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
             ClientNetCommand::MediaList(receiver_id) => {
@@ -204,20 +211,23 @@ impl ContentServer {
                     }
                 }
             }
-            ClientNetCommand::Media(receiver_id,file_id) => {
-                match receiver_id==self.info.host.id{
-                    true => {match Self::process_image(file_id) {
-                        Ok((image, ext)) => {
-                            self.send_logging("Sending image".to_string());
-                            self.send_response(ServerToClient::Media(self.info.host.id,file_id, ext.clone(), image), source);
+            ClientNetCommand::Media(receiver_id, file_id) => {
+                if receiver_id == self.info.host.id {
+                    if let Some(path) = self.media_map.get(&file_id) {
+                        match Self::process_image_path(path) {
+                            Ok((image, ext)) => {
+                                self.send_logging(format!("Image {} loaded: {}x{}", file_id, image.width, image.height));
+                                self.send_response(ServerToClient::Media(self.info.host.id, file_id, ext, image), source);
+                            }
+                            Err(_) => {
+                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                            }
                         }
-                        Err(_) => {
-                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                        }
-                    }}
-                    false => {
-                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                    } 
+                    } else {
+                        self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                    }
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
             _ => {
@@ -225,6 +235,7 @@ impl ContentServer {
             }
         }
     }
+    
     fn handling_packets(&mut self, packet: Packet) {
         match packet.clone().pack_type {
             PacketType::Nack(nack) => {
