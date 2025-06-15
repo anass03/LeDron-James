@@ -308,7 +308,7 @@ impl ChatServer2 {
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
-                // let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat)); 
+                // let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat));  // still waiting to use it 
             }
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));

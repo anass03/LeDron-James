@@ -1,6 +1,6 @@
-use image::{ImageReader, ImageFormat};
+use image::ImageReader;
 use std::fs;
-use std::io::{self, Cursor};
+use std::io::{Cursor};
 use std::path::PathBuf;
 use host::Image;
 
