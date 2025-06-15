@@ -14,10 +14,13 @@ use wg_2024_rust::drone::RustDrone;
 use rustastic_drone::RustasticDrone;
 use bobry_w_locie::drone::BoberDrone;
 use rusty_drones::RustyDrone;
+use rustaceans_wit_attitudes::RustaceansWitAttitudesDrone;
+use Krusty_Club::Krusty_C;
 use client::Client as LeClient;
 use server::{ContentServer as LeContentServer};
 use server::ChatServer as LeChatServer;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
+use rand::{random_range, Rng};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerType {
@@ -87,7 +90,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
     /// - Initializing the drones
     let (log_sender, log_receiver) = unbounded();
-    for (i, drone) in config.drone.iter().enumerate() {
+    for drone in config.drone.iter() {
 
         // creating the actual drone channel for commands
         let (controller_drone_send, controller_drone_recv) = unbounded();
@@ -106,6 +109,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
 
         let drone_clone = drone.clone();
         //let log_send = log_sender.clone();
+        let mut i = random_range(0..10);
         /// - spawning the thread of the drone and collecting the handle in a vector
         match i {
             0 => {
@@ -220,7 +224,35 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                     drone.run();
                 }));
             },
-            _ => panic!("Too many drones!!")
+            8 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = RustaceansWitAttitudesDrone::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            9 => {
+                handles.insert(drone.id, thread::spawn(move || {
+                    let mut drone = Krusty_C::new(
+                        drone_clone.id,
+                        drone_event_send,
+                        controller_drone_recv,
+                        drone_packet_recv,
+                        drone_packet_send,
+                        drone_clone.pdr,
+                    );
+                    /// - running the drone
+                    drone.run();
+                }));
+            },
+            _ => panic!("Error initializing Drones")
         }
         /*handles.insert(drone.id, thread::spawn(move || {
             /*let mut drone = LeDron::new(

@@ -3,6 +3,18 @@
 version = 4
 
 [[package]]
+name = "Krusty_Club"
+version = "0.1.0"
+source = "git+https://github.com/Ossyk/Krusty_Club.git#fd42ea290774d51f3c923cb05053a29cf3fbae0e"
+dependencies = [
+ "crossbeam-channel",
+ "rand 0.9.1",
+ "serde",
+ "toml",
+ "wg_2024",
+]
+
+[[package]]
 name = "LeDron-James"
 version = "0.1.0"
 dependencies = [
@@ -90,6 +102,21 @@ checksum = "db8fee663d06c4e303404ef5f40488a53e062f89ba8bfed81f42325aafad1527"
 dependencies = [
  "libc",
  "pkg-config",
+]
+
+[[package]]
+name = "android-tzdata"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
+
+[[package]]
+name = "android_system_properties"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -413,6 +440,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9555578bc9e57714c812a1f84e4fc5b4d21fcb063490c624de019f7464c91268"
 
 [[package]]
+name = "chrono"
+version = "0.4.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
+dependencies = [
+ "android-tzdata",
+ "iana-time-zone",
+ "js-sys",
+ "num-traits",
+ "wasm-bindgen",
+ "windows-link",
+]
+
+[[package]]
 name = "chunked_transfer"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -438,7 +479,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#42d69a965bf9a527bbc030f7c5808658c4185cc2"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#68d8d55ed4430975a04031d57e6305e6ea41fd98"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -478,7 +519,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1268,7 +1309,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#42d69a965bf9a527bbc030f7c5808658c4185cc2"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#68d8d55ed4430975a04031d57e6305e6ea41fd98"
 dependencies = [
  "crossbeam-channel",
  "image 0.25.6",
@@ -1379,6 +1420,30 @@ dependencies = [
  "native-tls",
  "tokio",
  "tokio-native-tls",
+]
+
+[[package]]
+name = "iana-time-zone"
+version = "0.1.63"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0c919e5debc312ad217002b8048a17b7d83f80703865bbfcfebb0458b0b27d8"
+dependencies = [
+ "android_system_properties",
+ "core-foundation-sys",
+ "iana-time-zone-haiku",
+ "js-sys",
+ "log",
+ "wasm-bindgen",
+ "windows-core 0.61.2",
+]
+
+[[package]]
+name = "iana-time-zone-haiku"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f31827a206f56af32e590ba56d5d2d085f558508192593743f16b2306495269f"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -1584,6 +1649,7 @@ dependencies = [
 name = "initializer"
 version = "0.1.0"
 dependencies = [
+ "Krusty_Club",
  "bagel_bomber",
  "bobry_w_locie",
  "client",
@@ -1593,7 +1659,9 @@ dependencies = [
  "host",
  "initializer_utils",
  "lockheedrustin-drone",
+ "rand 0.9.1",
  "rolling_drone",
+ "rustaceans_wit_attitudes",
  "rustastic-drone",
  "rusty_drones",
  "serde",
@@ -2848,6 +2916,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustaceans_wit_attitudes"
+version = "0.0.0"
+source = "git+https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git#8c7e91328982291f3172453de89637b59c1824e8"
+dependencies = [
+ "crossbeam-channel",
+ "rand 0.8.5",
+ "wg_2024",
+]
+
+[[package]]
 name = "rustastic-drone"
 version = "0.1.0"
 source = "git+https://github.com/Rustastic/RustasticDrone.git#107c57f8eb0ac2e7caa1aa21c83c0d651b2f4277"
@@ -2928,7 +3006,7 @@ version = "0.0.0"
 source = "git+https://github.com/rusty-drone-2024/rusty-drone.git#81aff862f2a0f43166ef1f86130d1d144a5cb4bc"
 dependencies = [
  "crossbeam-channel",
- "rand 0.8.5",
+ "rand 0.9.1",
  "wg_2024",
 ]
 
@@ -3083,9 +3161,10 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#60ed7d2ccb938b896ca217a6804fd248d0efede1"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#ab2942b7dbb18eb9504cd4d6ad3733c4c35260ca"
 dependencies = [
  "anyhow",
+ "chrono",
  "crossbeam-channel",
  "delegate",
  "host",
@@ -3230,12 +3309,9 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 
 [[package]]
 name = "slab"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f92a496fb766b417c996b9c5e57daf2f7ad3b0bebe1ccfca4856390e3d3bb67"
-dependencies = [
- "autocfg",
-]
+checksum = "04dc19736151f35336d325007ac991178d504a119863a2fcb3758cdb5e52c50d"
 
 [[package]]
 name = "smallvec"
@@ -4133,7 +4209,7 @@ version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9252e5725dbed82865af151df558e754e4a3c2c30818359eb17465f1346a1b49"
 dependencies = [
- "windows-core",
+ "windows-core 0.54.0",
  "windows-targets 0.52.6",
 ]
 
@@ -4143,9 +4219,50 @@ version = "0.54.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12661b9c89351d684a50a8a643ce5f608e20243b9fb84687800163429f161d65"
 dependencies = [
- "windows-result",
+ "windows-result 0.1.2",
  "windows-targets 0.52.6",
 ]
+
+[[package]]
+name = "windows-core"
+version = "0.61.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c0fdd3ddb90610c7638aa2b3a3ab2904fb9e5cdbecc643ddb3647212781c4ae3"
+dependencies = [
+ "windows-implement",
+ "windows-interface",
+ "windows-link",
+ "windows-result 0.3.4",
+ "windows-strings",
+]
+
+[[package]]
+name = "windows-implement"
+version = "0.60.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
+name = "windows-interface"
+version = "0.59.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd9211b69f8dcdfa817bfd14bf1c97c9188afa36f4750130fcdf3f400eca9fa8"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.103",
+]
+
+[[package]]
+name = "windows-link"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e6ad25900d524eaabdbbb96d20b4311e1e7ae1699af4fb28c17ae66c80d798a"
 
 [[package]]
 name = "windows-result"
@@ -4154,6 +4271,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e383302e8ec8515204254685643de10811af0ed97ea37210dc26fb0032647f8"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-result"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56f42bd332cc6c8eac5af113fc0c1fd6a8fd2aa08a0119358686e5160d0586c6"
+dependencies = [
+ "windows-link",
+]
+
+[[package]]
+name = "windows-strings"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
+dependencies = [
+ "windows-link",
 ]
 
 [[package]]

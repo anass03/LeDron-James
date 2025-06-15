@@ -10,6 +10,7 @@ serde = { version = "1.0.215", features = ["derive"] }
 serde_json = "1.0.133"
 crossbeam-channel = "0.5.13"
 toml = "0.8.19"
+rand = "0.9.1"
 
 simulation_controller = { path = "../simulation_controller"}
 initializer_utils = {path = "../initializer_utils"}
@@ -22,6 +23,8 @@ wg_2024-rust = { git = "https://github.com/LuigiMiazzo17/unitn-advancedProgrammi
 rustastic-drone = { git = "https://github.com/Rustastic/RustasticDrone.git" }
 bobry_w_locie = { git = "https://github.com/Seregno/Public_Bry_w_locie.git"}
 rusty_drones = { git = "https://github.com/rusty-drone-2024/rusty-drone.git" }
+rustaceans_wit_attitudes = { git = "https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git" }
+Krusty_Club = { git = "https://github.com/Ossyk/Krusty_Club.git " }
 
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
