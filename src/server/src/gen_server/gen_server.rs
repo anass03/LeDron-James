@@ -133,7 +133,10 @@ impl GenServerBehavior for GenServer {
                 pending: total,  // <— inizializzo qui
             }
         });
-
+        if idx >= session.buffer.len() {
+            self.send_logging(format!("Fragment index {} out of bounds (total {})", idx, total));
+            return None;
+        }
         // aggiorna timestamp
         session.last_activity = Instant::now();
 
@@ -189,15 +192,21 @@ impl GenServerBehavior for GenServer {
                 .collect::<Vec<u8>>();
 
             received.remove(&session_id);
-            if let Ok(decompressed_data) = self.decompress_anything(&data){
-                return Some(decompressed_data);   
+            match self.decompress_anything(&data) {
+                Ok(decompressed_data) => return Some(decompressed_data),
+                Err(e) => {
+                    self.send_logging(format!("Failed to decompress fragments: {}", e));
+                }
             }
         }
         None
     }
     fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        let decompressed = decode_all(Cursor::new(compressed))?;
-        Ok(decompressed)
+        if let Ok(decompressed) = decode_all(Cursor::new(compressed)) {
+            Ok(decompressed)
+        }else{
+            Err("Failed to decompress anything".to_string())?
+        }
     }
     fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         let compressed = encode_all(data, 0)?;

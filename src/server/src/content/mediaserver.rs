@@ -6,7 +6,10 @@ use host::Image;
 
 pub trait MediaServer {
     fn process_image_path(path: &PathBuf) -> Result<(Image, String), Box<dyn std::error::Error>> {
-        let data_bytes = fs::read(path)?;
+        let data_bytes = fs::read(path).map_err(|e| {
+            eprintln!("Error reading image: {}", e);
+            e
+        })?;
         let img = ImageReader::new(Cursor::new(&data_bytes))
             .with_guessed_format()?
             .decode()?;

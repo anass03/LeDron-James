@@ -87,7 +87,8 @@ impl ContentServer {
                          self.handling_packets(packet)
                     }
                 }
-                default(Duration::from_millis(10)) => {}
+                
+                default(Duration::from_millis(3)) => {}
             }
         }
     }
@@ -158,6 +159,8 @@ impl ContentServer {
 
         self.files.sort_unstable();
         self.media.sort_unstable();
+        self.send_logging(format!("Loaded {} text files and {} images.", self.files.len(), self.media.len()));
+
     }
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
@@ -248,7 +251,10 @@ impl ContentServer {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
                         Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                        Err(_) => self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0]),
+                        Err(e) => {
+                            self.send_logging(format!("Failed to parse ClientNetCommand: {}", e));
+                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0])
+                        }
                     }
                 }else {
                     self.send_logging("The packet is not complete and server is waiting".to_string());

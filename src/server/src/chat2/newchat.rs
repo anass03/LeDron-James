@@ -72,14 +72,13 @@ impl ChatServer2 {
                        self.handle_sim_command(command);
                     }
                 }
-
                 recv(self.info.host.packet_recv) -> pkt => {
                     if let Ok(packet) = pkt {
                          self.handling_packets(packet)
                     }
                 }
-
-                default(Duration::from_millis(10)) => {}
+                
+                default(Duration::from_millis(3)) => {}
             }
         }
     }
@@ -224,8 +223,11 @@ impl ChatServer2 {
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
-                    if let Ok(cmd) = serde_json::from_slice::<ClientNetCommand>(&data) {
-                        self.handle_command(cmd, packet.routing_header.hops[0]);
+                    match serde_json::from_slice::<ClientNetCommand>(&data) {
+                        Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
+                        Err(e) => {
+                            self.send_logging(format!("Failed to parse ClientNetCommand: {}", e));
+                        }
                     }
                 }else {
                     self.send_logging("The packet is not complete and server is waiting".to_string());
@@ -252,7 +254,6 @@ impl ChatServer2 {
                     TextMessage::Message(msg)
                 );
             }
-
             ClientNetCommand::MediaFor(destination, _receiver_id, media_id, extension, message) => {
                 // Qui puoi estendere se vuoi salvare i contenuti multimediali
                 self.insert_message(
@@ -261,7 +262,6 @@ impl ChatServer2 {
                     TextMessage::Media(MediaSC::Image(media_id,extension,message))
                 );
             }
-
             ClientNetCommand::FileFor(destination, _receiver_id, file_id, extension, message) => {
                 self.insert_message(
                     source,
@@ -269,9 +269,8 @@ impl ChatServer2 {
                     TextMessage::Media(MediaSC::File(file_id,extension,message))  // placeholder, da migliorare
                 );
             }
-
             _ => {
-                self.send_logging("Panicked because message arrived in the wrong function".to_string());
+                self.send_logging("Unexpected ClientNetCommand type received in save_message.".to_string());
             }
         }
     }
@@ -308,7 +307,7 @@ impl ChatServer2 {
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
-                // let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat));  // still waiting to use it 
+                 //let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat));  // still waiting to use it 
             }
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));
