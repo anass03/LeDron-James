@@ -195,17 +195,21 @@ impl SimulationControllerData {
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate removing connection
-        match modified_net_map.get_mut(&first) {
-            Some(mut first_node_neighbors) => {
-                first_node_neighbors.retain(|&id| id != second_node);
-            },
-            None => return Err(format!("{first_type} {first_node} is not in the map!"))
+        if let Some(first_neighbors) = modified_net_map.get_mut(&first) {
+            if !first_neighbors.contains(&second_node) {
+                return Err(format!("{first_type} {first_node} is not connected to {second_type} {second_node}!"));
+            }
+            first_neighbors.retain(|&id| id != second_node);
+        } else {
+            return Err(format!("{first_type} {first_node} is not in the map!"));
         }
-        match modified_net_map.get_mut(&second) {
-            Some(mut second_node_neighbors) => {
-                second_node_neighbors.retain(|&id| id != first_node);
-            },
-            None => return Err(format!("{second_type} {second_node} is not in the map!"))
+        if let Some(second_neighbors) = modified_net_map.get_mut(&second) {
+            if !second_neighbors.contains(&first_node) {
+                return Err(format!("{first_type} {first_node} is not connected to {second_type} {second_node}!"));
+            }
+            second_neighbors.retain(|&id| id != first_node);
+        } else {
+            return Err(format!("{second_type} {second_node} is not in the map!"));
         }
 
         //check hosts constraints
@@ -237,8 +241,8 @@ impl SimulationControllerData {
 
         // Build a net without hosts
         let mut drone_net: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-        for (drone, neighbors) in &modified_net_map {
-            if let NetNode::Drone(drone_id) = drone {
+        for (node, neighbors) in &modified_net_map {
+            if let NetNode::Drone(drone_id) = node {
                 let adj: Vec<_> = neighbors
                     .iter()
                     .filter(|id| !host_ids.contains(id))
@@ -247,14 +251,14 @@ impl SimulationControllerData {
                 drone_net.insert(*drone_id, adj);
             }
         }
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", drone_net));
 
         // Check if removing connection splits the network without considering hosts (they are at the edges)
         let mut visited = HashSet::new();
         dfs(first_node, &drone_net, None, &mut visited);
-        if visited.len() + 1 != drone_net.len() {
+        if visited.len() != drone_net.len() {
             return Ok(true);
         }
-
         Ok(false)
     }
 
