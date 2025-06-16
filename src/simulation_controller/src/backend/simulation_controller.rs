@@ -77,9 +77,9 @@ impl SimulationControllerData {
         use std::collections::HashSet;
         // Collect unique, undirected links
         let mut links = HashSet::new();
-        for (netnode, neighbors) in &running_network {
+        for (net_node, neighbors) in &running_network {
             // Extract the NodeId from NetNode
-            let id = match netnode {
+            let id = match net_node {
                 NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
             };
             for &neighbor in neighbors {

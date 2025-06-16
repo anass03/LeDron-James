@@ -65,14 +65,6 @@ impl NetNode {
     }
 }
 
-// Gets updated each time we receive the relative data-packet
-// Each client has its own list in each server.
-// First Key is ClientID, Value is all the contacts it has associated with the relative server.
-type  known_contacts = HashMap<NodeId, HashMap<NodeId, Vec<NodeId>>>;
-
-// Simply all the chat server the Client knows.
-type known_chat_servers = HashMap<NodeId, Vec<NodeId>>;
-
 fn dfs(
     current: NodeId,
     graph: &HashMap<NodeId, Vec<NodeId>>,
@@ -768,12 +760,11 @@ impl SimulationControllerData {
                     },
                     ServerToClient::ClientList(client_id, server_id, client_list)
                     => {
-                        let mut updated_list = match self.known_contacts.get(&client_id) {
-                            Some(map) => map.clone(),
-                            None => HashMap::new(),
-                        };
-                        updated_list.insert(server_id, client_list.clone());
-                        self.known_contacts.insert(client_id, updated_list);
+                        self.chat_cache
+                            .known_contacts
+                            .entry(client_id)
+                            .or_default()
+                            .insert(server_id, client_list.clone());
                         self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
                     ServerToClient::MessageFrom(server_id, client_id, message) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
@@ -798,9 +789,12 @@ impl SimulationControllerData {
             HostEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
             },
-            HostEvent::ServersDiscovered(servers) => {
-                let chat_servers = servers.clone().retain(|list| list == Chat );
-                self.known_chat_servers.insert(client_id, chat_servers);
+            HostEvent::ServersDiscovered(client_id, servers) => {
+                if let Some(chat_servers) = servers.get(&Chat) {
+                    self.chat_cache
+                        .known_chat_servers
+                        .insert(client_id, chat_servers.clone());
+                }
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             }
         }
