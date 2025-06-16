@@ -4,6 +4,7 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Tabs, Widget, Wrap};
+use crate::backend::sc_models::LogType;
 use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::SelectedTab;
 
@@ -51,26 +52,8 @@ pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
         .map(|(log,msg)| {
             // Single color matching not working
             // Ratatui BUG ? When changing tabs some colored chars stay visible
-            // in the frame even in different tabs.
-            /*
-            match log{
-                LogType::WARN => {
-                    Line::from(Span::raw(format!("[WARN]\t{}", msg)).style(Style::default().fg(Color::LightYellow)))
-                }
-                LogType::ERROR => {
-                    Line::from(Span::raw(format!("[ERROR]\t{}", msg)).style(Style::default().fg(Color::LightRed)))
-                }
-                LogType::INFO => {
-                    Line::from(Span::raw(format!("[INFO]\t{}", msg)).style(Style::default().fg(Color::White)))
-                }
-                LogType::DEBUG => {
-                    Line::from(Span::raw(format!("[DEBUG]\t{}", msg)).style(Style::default().fg(Color::LightBlue)))
-                }
-                LogType::FATAL => {
-                    Line::from(Span::raw(format!("[ERROR]\t{}", msg)).style(Style::default().fg(Color::Red)))
-                }
-            }
-             */
+            // in the frame even in different tab
+
             Line::from(Span::raw(msg)).style(Style::default().fg(Color::White))
         }
         )

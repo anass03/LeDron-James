@@ -1,20 +1,114 @@
+use std::collections::HashMap;
+use ratatui::layout::Rect;
 use wg_2024::network::NodeId;
+use crate::backend::sc_models::LogType;
+use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
+use crate::frontend::app::topology_algorithm::vectors::{generate_force_vec, Vector};
+use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
 
 impl App<'_>{
-    fn compute_best_positions(){
+    pub fn check_topology_status(&mut self){
+        match self.simulation_controller_data.topology_algorithm_data.status{
+            TopologyStatus::Stopped => {
+                // Do NUN
+            }
+            TopologyStatus::ToInitialize => {
+                // Initialize each necessary field
+                self.topology_status_initialize();
+            }
+            TopologyStatus::Computing => {
+                // Keep going generating forces and iterating algorithm
+                self.topology_status_computing();
+            }
+            TopologyStatus::Converged => {
+                // Do nothing
 
+            }
+        }
     }
-    fn generate_forces_for_node(&self, id:NodeId){
+    fn topology_status_initialize(&mut self){
+        let mut top_alg = &mut self.simulation_controller_data.topology_algorithm_data;
+        top_alg.status = TopologyStatus::Computing;
+        // Generate random positions for network
+        for (node,_) in self.simulation_controller_data.running_network.clone(){
+            top_alg.map.insert(node.id().clone(), DisplayedNode::new_with_position(node, Vector::random(100,80)));
+        }
+    }
+    fn topology_status_computing(&mut self){
+        match self.generate_all_forces(){
+            Ok(hsh) => {
+                for element in hsh{
+                    self.simulation_controller_data.topology_algorithm_data.nodes_resultant_vec.insert(element.0,element.1);
+                }
+            }
+            Err(str) => {
+                self.simulation_controller_data.topology_algorithm_data.increase_counter(1);
+                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str);
+            }
+        }
+        match self.apply_all_forces(){
+            Ok(u) => {
+                self.simulation_controller_data.topology_algorithm_data.increase_counter(u);
+            }
+            Err(str) => {
+                self.simulation_controller_data.topology_algorithm_data.increase_counter(1);
+                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str);
+            }
+        }
+        self.compute_and_set_avg_magnitude();
 
+        if self.simulation_controller_data.topology_algorithm_data.avg_positioning_score < 1.5 {
+            self.simulation_controller_data.topology_algorithm_data.status = TopologyStatus::Converged;
+            self.simulation_controller_data.topology_algorithm_data.computed();
+        }
     }
-    fn generate_client_force(){
+    fn generate_all_forces(&self)->Result<HashMap<NodeId, Vector>,String>{
+        let mut ret_hash:HashMap<NodeId, Vector> = HashMap::new();
 
-    }
-    fn generate_server_force(){
+        for (node_id, displayable) in &self.simulation_controller_data.topology_algorithm_data.map{
+            match displayable.clone().node{
+                NetNode::Drone(id) => {
+                    let res = self.generate_fundamental_force(id, displayable.position)?;
+                    ret_hash.insert(id, res);
+                }
+                NetNode::Client(id) => {
+                    let res = self.generate_fundamental_force(id, displayable.position)?;
+                    ret_hash.insert(id, res);
+                }
+                NetNode::Server(id) => {
+                    let res = self.generate_fundamental_force(id, displayable.position)?;
+                    ret_hash.insert(id, res);
+                }
+            }
+         }
 
+        Ok(ret_hash)
     }
-    fn generate_drone_force(){
+    fn apply_all_forces(&mut self)->Result<u8,String>{
+        let mut error_counter:u8 = 0;
+        for (ids,res) in &self.simulation_controller_data.topology_algorithm_data.nodes_resultant_vec{
+            match self.simulation_controller_data.topology_algorithm_data.map.get_mut(ids){
+                Some(displayable) => {
+                   displayable.position = displayable.position.add(&res.scale(0.025));
+                },
+                None => {
+                    error_counter += 1;
+                }
+            }
+        }
+        Ok(error_counter)
+    }
+    fn compute_and_set_avg_magnitude(&mut self){
+        let mut sum_magnitude = 0.0;
+        let mut counter: u16 = 0;
+        for (_,vec) in self.simulation_controller_data.topology_algorithm_data.nodes_resultant_vec.clone(){
+            sum_magnitude += vec.magnitude();
+            counter += 1;
+        }
+        self.simulation_controller_data.topology_algorithm_data.avg_positioning_score = sum_magnitude/counter as f32;
+    }
 
-    }
 }
+
+

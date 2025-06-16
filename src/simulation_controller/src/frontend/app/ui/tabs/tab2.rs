@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph, Tabs, Widget, Wrap};
 use crate::frontend::app::App;
-use crate::frontend::app::model::TOMLmessages;
+use crate::frontend::app::models::general_types::TOMLmessages;
 
 const SELECTED_STYLE: Style = Style::new().bg(Color::Blue).add_modifier(Modifier::BOLD);
 

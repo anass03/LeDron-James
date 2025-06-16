@@ -1,10 +1,10 @@
-
-pub(in crate::frontend::app) struct Vector{
-    x: f32,
-    y: f32,
+#[derive(Copy, Clone, Debug)]
+pub struct Vector{
+    pub x: f32,
+    pub y: f32,
 }
 impl Vector{
-    pub(in crate::frontend::app) fn new(x: f32, y: f32) -> Vector {
+    pub fn new(x: f32, y: f32) -> Vector {
         Vector{x, y}
     }
     /// 'dimx' is the max x value, 'dimy' is the max y value of the area
@@ -27,9 +27,13 @@ impl Vector{
     pub(in crate::frontend::app) fn scale(&self, scale_factor: f32) -> Vector{
         Vector::new(self.x*scale_factor, self.y*scale_factor)
     }
-    pub(in crate::frontend::app) fn normalize(&self) -> Vector {
-        let magnitude = self.magnitude();
-        self.scale(magnitude)
+    pub fn normalize(&self) -> Vector {
+        let mag = self.magnitude();
+        if mag == 0.0 {
+            Vector::new(0.0, 0.0)
+        } else {
+            self.scale(1.0 / mag)
+        }
     }
     pub(in crate::frontend::app) fn sub(&self, other: &Self) -> Vector {
         Vector::new(self.x - other.x, self.y - other.y)
@@ -46,9 +50,9 @@ impl Vector{
     }
 }
 
-fn generate_force_vec(pos_a: Vector, pos_b: Vector, k: f32, attract: bool) -> Vector {
-    let direction = pos_b.sub(&pos_a);
-    let distance = direction.magnitude().max(0.01); // evita divisione per zero
+pub(super) fn generate_force_vec(pos_a: &Vector, pos_b: &Vector, k: f32, attract: bool) -> Vector {
+    let direction = pos_b.sub(pos_a);
+    let distance = direction.magnitude().max(0.5); // evita divisione per zero
     let force_magnitude = if attract {
         k * distance // forza attrattiva (Hooke)
     } else {
@@ -57,9 +61,9 @@ fn generate_force_vec(pos_a: Vector, pos_b: Vector, k: f32, attract: bool) -> Ve
     direction.normalize().scale(force_magnitude)
 }
 
-fn generate_force_exponential_repulsion_vec(pos_a: Vector, pos_b: Vector, k: f32, r: f32) -> Vector {
+pub(crate) fn generate_force_exponential_repulsion_vec(pos_a: Vector, pos_b: Vector, k: f32, r: f32) -> Vector {
     let direction = pos_b.sub(&pos_a);
-    let distance = direction.magnitude().max(0.01);
+    let distance = direction.magnitude().max(0.5);
     let force_magnitude = k * (-distance / r).exp(); // F = k * e^(-d / r)
     direction.normalize().scale(-force_magnitude) // Repulsive force so it is negative :D
 }

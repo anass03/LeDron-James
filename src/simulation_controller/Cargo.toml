@@ -19,6 +19,8 @@ tui-textarea = "0.7.0"
 log = "0.4.27"
 petgraph = "0.7.1"
 infer = "0.19.0"
+ratatui-splash-screen = "0.1.4"
+tui-popup = "0.7.0-alpha.0"
 
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
@@ -30,6 +32,7 @@ initializer_utils = { path = "../initializer_utils" } # FIX TO ERROR CYCLIC PACK
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
 server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
+textwrap = "0.16.2"
 
 
 

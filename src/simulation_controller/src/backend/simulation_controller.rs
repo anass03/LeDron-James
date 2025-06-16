@@ -30,7 +30,7 @@ pub struct SimulationControllerData {
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
-    pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has!
+    pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has! Has to be updated by Initializer / SC Backend
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
@@ -70,8 +70,22 @@ impl SimulationControllerData {
         let mut servers = vec![];
         for server in config.server {
             let connected_ids = server.connected_drone_ids.clone();
-            running_network.insert(NetNode::Client(server.id), connected_ids);
+            running_network.insert(NetNode::Server(server.id), connected_ids);
             servers.push(server);
+        }
+        use std::collections::HashSet;
+        // Collect unique, undirected links
+        let mut links = HashSet::new();
+        for (netnode, neighbors) in &running_network {
+            // Extract the NodeId from NetNode
+            let id = match netnode {
+                NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
+            };
+            for &neighbor in neighbors {
+                // Order the pair to avoid duplicates (min, max)
+                let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
+                links.insert((a, b));
+            }
         }
         Self {
             drones,
@@ -87,7 +101,7 @@ impl SimulationControllerData {
             running_network,
             logs: Logs::default(),
             stats: Statistics::default(),
-            topology_algorithm_data: TopologyAlgorithm::default(),
+            topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
         }
     }
 }

@@ -5,7 +5,7 @@ pub(super) mod chart_rendering{
     use ratatui::layout::Rect;
     use ratatui::style::{Color, Style};
     use ratatui::widgets::{Block, Sparkline, Widget};
-    use super::super::super::model::ChartsData;
+    use crate::frontend::app::models::tab0_types::ChartsData;
 
     // Chart showing messages dropped each n secs.
     pub(crate) fn render_sparkline_1(chdata:&ChartsData,mut block:Block,area:Rect, buf:&mut Buffer){

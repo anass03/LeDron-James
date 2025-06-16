@@ -1,5 +1,5 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use crate::frontend::app::model::AppMode;
+use crate::frontend::app::models::main_types::AppMode;
 use super::super::App;
 use super::super::ui;
 impl App<'_>{

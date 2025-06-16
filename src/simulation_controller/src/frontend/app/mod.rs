@@ -1,10 +1,10 @@
 mod app_methods;
 mod ui;
-mod model;
 pub mod topology_algorithm;
+mod models;
 
 use ui::tabs::{render_footer, render_inner, render_top};
-use model::Cache;
+use models::main_types::{AppMode, Cache, Settings};
 
 use ratatui::{
     buffer::Buffer,
@@ -19,10 +19,12 @@ use std::{io, time};
 use std::time::Duration;
 use time::Instant;
 use rand::Rng;
+use ratatui::style::Stylize;
+use ratatui::widgets::Block;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
-use crate::frontend::app::model::{AppMode, Settings, TOMLmessages};
-use crate::frontend::app::ui::tabs::SelectedTab;
+use models::general_types::TOMLmessages;
+use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
   SPECIFICATAMENTE LO SCORRIMENTO DELLE SINGOLE TAB
@@ -68,7 +70,7 @@ impl App<'_>{
             // Listening to channels
 
             self.simulation_controller_data.handle_channels();
-
+            self.check_topology_status();
             /*self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
             self.simulation_controller_data.handle_log_event();
 
@@ -143,6 +145,8 @@ impl App<'_>{
     }
 
     /// Update cache & tabs data
+    ///
+    /// Gotta add a refresher that based on the currently selected option does some requests / refreshes.
     fn tick_refresh(&mut self) {
         if self.cache.tab0_data.charts_data.sentmessages.len()>=100{
             self.cache.tab0_data.charts_data.sentmessages.pop();
@@ -171,13 +175,20 @@ impl App<'_>{
 }
 
 impl Widget for &App<'_>{
+    // Each tab render function returns to this fn
     fn render(mut self, area: Rect, buf: &mut Buffer)
     {
         use ratatui::layout::Constraint::{Length, Min};
         use ui::tabs::{render_top,render_inner,render_footer};
 
+
+        let app_colored_area = Block::default()
+            .bg(BG_COLOR);
+        let inner_colored = app_colored_area.inner(area);
+        app_colored_area.render(area, buf);
+
         let vertical = Layout::vertical([Length(3), Min(0), Length(3)]);
-        let [top_area, inner_area, footer_area] = vertical.areas(area);
+        let [top_area, inner_area, footer_area] = vertical.areas(inner_colored);
 
         render_top(self, top_area, buf);
         render_inner(self, inner_area, buf);

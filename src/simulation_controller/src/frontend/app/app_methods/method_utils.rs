@@ -9,16 +9,22 @@ use std::thread::Thread;
 use ratatui::text::Text;
 use rodio::{Decoder, OutputStream, Sink};
 use tui_textarea::TextArea;
+use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::sc_models::LogType;
+use crate::backend::simulation_controller::NetNode;
+use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
+use crate::frontend::app::topology_algorithm::vectors::Vector;
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
+
 
 
 fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
 }
 impl App<'_> {
+
     pub(crate) fn check_lists_initialized(&mut self){
         if !self.cache.tab1_data.nodelist.initialized{
             let dronec = self.simulation_controller_data.drones.clone();
