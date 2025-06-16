@@ -804,7 +804,7 @@ impl Functionality for Host {
                         self.initiate_flood();
                         self.last_nack_flood = now;
                         // Dopo il flood, riprova a cercare una rotta
-                        if let Some(new_route_after_flood) = self.network.find_best_route_excluding(host, destination, &banned_nodes) {
+                        if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
                             self.send_logging(format!("Route found after flood: {:?}", new_route_after_flood));
 
                             {
