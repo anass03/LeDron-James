@@ -811,7 +811,7 @@ impl Functionality for Host {
                         self.initiate_flood();
                         self.last_nack_flood = now;
                         // Dopo il flood, riprova a cercare una rotta
-                        //sleep(Duration::from_secs(4));
+                        sleep(Duration::from_secs(4));
                         self.send_logging(format!("NODES AFTER REFLODING: {:?}, drone_pdr: {:?}", self.network.nodes, self.network.drone_pdr));
 
                         if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
