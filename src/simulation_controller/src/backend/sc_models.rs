@@ -62,7 +62,7 @@ impl Statistics{
 
 
 
-pub(crate) struct ChatCache{
+pub struct ChatCache{
     // Gets updated each time a chat-history gets modified via-server
     // Each server has its own ChatList saved
     pub local_chats: HashMap<NodeId, ChatList>,
@@ -82,7 +82,7 @@ pub(crate) struct ChatCache{
 }
 
 impl ChatCache{
-    pub(crate) fn default() ->Self{
+    pub fn default() ->Self{
         Self{
             local_chats: {
                 let mut map = HashMap::new();

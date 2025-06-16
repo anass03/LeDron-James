@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
-use simulation_controller::backend::sc_models::{Logs, Statistics};
+use simulation_controller::backend::sc_models::{ChatCache, Logs, Statistics};
 use initializer::initializer::initialize;
 use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
@@ -22,6 +22,7 @@ fn main() -> std::io::Result<()> {
         logs: Logs::default(),
         stats: Statistics::default(),
         topology_algorithm_data: TopologyAlgorithm::default(),
+        chat_cache: ChatCache::default(),
     };
     match initialize("init_file.toml") {
         Ok((simulation_controller, handles)) => {

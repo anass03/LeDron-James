@@ -767,9 +767,11 @@ pub(super) mod net_rendering{
         match client_popup {
             ClientNetPopup::FirstPage(st) => {
                 // Choose the Content Server
+
             }
             ClientNetPopup::SecondPage(nd) => {
                 // See the file lists, renderize images and upload your file
+
             }
         }
     }
