@@ -328,6 +328,9 @@ impl Functionality for Host {
         if !self.network.drone_pdr.is_empty() {
             self.network.drone_pdr.clear();
         }
+        if !self.flood_cache.is_empty(){
+            self.flood_cache.clear();
+        }
         if self.packet_send.is_empty() {
             self.send_logging(format!("No neighbors to flood to host={}",  self.id));
             return;
@@ -809,7 +812,7 @@ impl Functionality for Host {
                         self.last_nack_flood = now;
                         // Dopo il flood, riprova a cercare una rotta
                         sleep(Duration::from_secs(4));
-                        self.send_logging(format!("NODES AFTER REFLODING: {:?}, dorne_pdr: {:?}", self.network.nodes, self.network.drone_pdr));
+                        self.send_logging(format!("NODES AFTER REFLODING: {:?}, drone_pdr: {:?}", self.network.nodes, self.network.drone_pdr));
 
                         if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
                             self.send_logging(format!("Route found after flood: {:?}", new_route_after_flood));
