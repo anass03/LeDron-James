@@ -811,7 +811,7 @@ impl Functionality for Host {
                         self.initiate_flood();
                         self.last_nack_flood = now;
                         // Dopo il flood, riprova a cercare una rotta
-                        sleep(Duration::from_secs(4));
+                        //sleep(Duration::from_secs(4));
                         self.send_logging(format!("NODES AFTER REFLODING: {:?}, drone_pdr: {:?}", self.network.nodes, self.network.drone_pdr));
 
                         if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
@@ -820,17 +820,27 @@ impl Functionality for Host {
                             {
                                 let mut sent = self.sent_fragments.lock().unwrap();
                                 if let Some(session) = sent.get_mut(&session_id) {
+                                    // aggiorno route e banned
                                     session.route = new_route_after_flood.clone();
                                     session.banned_nodes = banned_nodes.clone();
                                     session.last_activity = Instant::now();
-                                } else { return; }
+
+                                    // ** RI-TRASMETTO TUTTI I FRAMMENTI **
+                                    for (idx, opt_frag) in session.buffer.iter().enumerate() {
+                                        if let Some(frag) = opt_frag {
+                                            let header = SourceRoutingHeader::new(new_route_after_flood.clone(), 1);
+                                            let pkt = Packet::new_fragment(header, session_id, frag.clone());
+                                            let res = self.send_packet(pkt, None);
+                                            self.send_logging(format!(
+                                                "Retransmission fragment #{} result: {:?}",
+                                                idx, res
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    return;
+                                }
                             }
-
-                            let header = SourceRoutingHeader::new(new_route_after_flood, 1);
-                            let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-                            let res = self.send_packet(pkt, None);
-                            self.send_logging(format!("Retransmission result after flood: {:?}", res));
-
                         } else {
                             self.send_logging(format!(
                                 "❌ No route available after flood. Aborting session {}",
