@@ -1,24 +1,26 @@
 use std::collections::HashMap;
 use std::{env, fs};
-use std::error::Error;
-use std::path::{PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
-use host::{ServerToClient, ServerTypes, generate_unique_session_id, Message, Functionality, HostEvent, HostCommand,ClientNetCommand};
+use host::{ServerToClient, ServerTypes, Functionality, HostEvent, HostCommand, ClientNetCommand};
 use delegate::delegate;
 
-
+/// ContentServer implements both TextServer and MediaServer functionality.
+/// It handles client requests for files and media, processes protocol packets,
+/// and communicates with clients through source routing.
 pub struct ContentServer {
-    info: GenServer,
-    files: Vec<usize>,
-    media: Vec<usize>,
-    file_map: HashMap<usize, PathBuf>,
-    media_map: HashMap<usize, PathBuf>,  
+    info: GenServer,                 // Internal GenServer used for common server logic
+    files: Vec<usize>,               // List of file IDs (text files)
+    media: Vec<usize>,               // List of media IDs (images)
+    file_map: HashMap<usize, PathBuf>,  // Map file ID -> file path
+    media_map: HashMap<usize, PathBuf>, // Map media ID -> media path
 }
 
+/// Trait defining the ContentServer behavior, composed by both MediaServer and TextServer.
 pub trait ContentServerBehavior: MediaServer + TextServer {
     fn handling_packets(&mut self, packet: Packet);
 }
@@ -26,22 +28,27 @@ pub trait ContentServerBehavior: MediaServer + TextServer {
 impl ContentServer {
     delegate! {
         to self.info.host {
+            /// Flood discovery logic (initialization and processing)
             fn initiate_flood(&mut self);
             fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
             fn process_flood_response(&mut self, packet: Packet);
+
+            /// Handles acknowledgements and negative acknowledgements for reliable delivery
             fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
             fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64);
             fn send_logging(&self, message: String);
         }
         to self.info {
+            /// Simulation controller interface
+            fn send_response(&mut self, response: ServerToClient, destination: NodeId);
             fn handle_sim_command(&mut self, cmd: HostCommand);
             fn servertype(&mut self) -> Result<ServerTypes, String>;
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
-            fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
         }
     }
 
-    
+    /// Creates a new ContentServer instance.
+    /// Validates that it connects to the proper number of drones as required by the protocol.
     pub fn new(
         id: NodeId,
         type_host: NodeType,
@@ -71,7 +78,9 @@ impl ContentServer {
         }
     }
 
-    
+    /// Main server loop.
+    /// Continuously listens for simulation commands and incoming packets,
+    /// and processes them accordingly.
     pub fn run(&mut self) {
         self.initiate_flood();
         self.send_logging("Starting Content Server...".to_string());
@@ -79,41 +88,20 @@ impl ContentServer {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
                     if let Ok(command) = cmd {
-                       self.handle_sim_command(command);
+                        self.handle_sim_command(command);
                     }
                 }
                 recv(self.info.host.packet_recv) -> pkt => {
                     if let Ok(packet) = pkt {
-                         self.handling_packets(packet)
+                        self.handling_packets(packet)
                     }
                 }
-                
                 default(Duration::from_millis(3)) => {}
             }
         }
     }
-
-    
-    fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
-        match serde_json::to_vec(&response) {
-            Ok(data) => {
-                if let Ok(compressed_data)=self.compress_anything(data.as_slice()){
-                    let msg = Message {
-                        session_id: generate_unique_session_id(),
-                        content: compressed_data,
-                    };
-                    if let Err(e) = self.info.build_msg_fragment(destination, msg) {
-                        self.send_logging(format!("Failed to send response to {}: {}", destination, e));
-                    }
-                }
-            }
-            Err(e) => {
-                self.send_logging(format!(" Failed to serialize ServerToClient: {}", e));
-            }
-        }
-    }
-
-
+    /// Scans the file system to load available text and media files.
+    /// Populates internal maps that associate file IDs to disk paths.
     pub fn count_files(&mut self) {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         let files_dir = manifest_dir.join("src/content/files");
@@ -127,6 +115,7 @@ impl ContentServer {
         self.files.clear();
         self.media.clear();
 
+        // Scan text files
         if let Ok(entries) = fs::read_dir(&files_dir) {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
@@ -142,6 +131,7 @@ impl ContentServer {
             }
         }
 
+        // Scan media files
         if let Ok(entries) = fs::read_dir(&images_dir) {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
@@ -160,28 +150,26 @@ impl ContentServer {
         self.files.sort_unstable();
         self.media.sort_unstable();
         self.send_logging(format!("Loaded {} text files and {} images.", self.files.len(), self.media.len()));
-
     }
+
+    /// Handles high-level client commands after full message reassembly.
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
-                if let Ok(server_type)=self.servertype(){
+                if let Ok(server_type) = self.servertype() {
                     self.send_logging("Sending server type".to_string());
-                    self.send_response(ServerToClient::ServerType(server_type),source);
-                }else{
+                    self.send_response(ServerToClient::ServerType(server_type), source);
+                } else {
                     self.send_logging("Failed to send ServerToClient::ServerType".to_string());
                 }
             }
-            ClientNetCommand::FilesList(receiver_id) => { 
-                match receiver_id==self.info.host.id{
-                    true => {                 
-                        self.count_files();
-                        self.send_logging("Checking files ids".to_string());
-                        self.send_response(ServerToClient::FilesList(self.info.host.id,self.files.clone()), source);
-                    }
-                    false => {
-                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                    } 
+            ClientNetCommand::FilesList(receiver_id) => {
+                if receiver_id == self.info.host.id {
+                    self.count_files();
+                    self.send_logging("Checking files ids".to_string());
+                    self.send_response(ServerToClient::FilesList(self.info.host.id, self.files.clone()), source);
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
             ClientNetCommand::File(receiver_id, file_id) => {
@@ -204,14 +192,12 @@ impl ContentServer {
                 }
             }
             ClientNetCommand::MediaList(receiver_id) => {
-                match receiver_id==self.info.host.id{
-                    true => {
-                        self.count_files();
-                        self.send_logging("Checking Medias ids".to_string());
-                        self.send_response(ServerToClient::MediaList(self.info.host.id,self.media.clone()), source);}
-                    false => {
-                        self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                    }
+                if receiver_id == self.info.host.id {
+                    self.count_files();
+                    self.send_logging("Checking Medias ids".to_string());
+                    self.send_response(ServerToClient::MediaList(self.info.host.id, self.media.clone()), source);
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
             ClientNetCommand::Media(receiver_id, file_id) => {
@@ -238,13 +224,17 @@ impl ContentServer {
             }
         }
     }
-    
+
+    /// Handles any protocol packet received by the server.
+    /// Distinguishes between fragments, flooding, ACK/NACK, and fully reassembled commands.
     fn handling_packets(&mut self, packet: Packet) {
         match packet.clone().pack_type {
             PacketType::Nack(nack) => {
                 self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id)
             }
-            PacketType::Ack(ack) => self.handle_ack(ack, &*packet.routing_header.hops, packet.session_id),
+            PacketType::Ack(ack) => {
+                self.handle_ack(ack, &packet.routing_header.hops, packet.session_id)
+            }
             PacketType::FloodResponse(_) => self.process_flood_response(packet),
             PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
             PacketType::MsgFragment(fragment) => {
@@ -256,8 +246,8 @@ impl ContentServer {
                             self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0])
                         }
                     }
-                }else {
-                    self.send_logging("The packet is not complete and server is waiting".to_string());
+                } else {
+                    self.send_logging("The packet is not complete; server is waiting.".to_string());
                 }
             }
         }
@@ -267,7 +257,5 @@ impl ContentServer {
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
 
-
 #[test]
-fn main() {
-}
+fn main() {}
