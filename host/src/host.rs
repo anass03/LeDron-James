@@ -1264,7 +1264,9 @@ pub enum HostEvent {
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
     ///Servers discovered, response at ServerType
-    ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>)
+    ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
+    ///for real time chat
+    ChatUpdate
 }
 
 #[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
