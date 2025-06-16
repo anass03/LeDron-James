@@ -3,7 +3,7 @@ use wg_2024::network::NodeId;
 use drone::Drone;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
-use crate::frontend::app::models::tab1_types::{ClFirstPage, ClSecondPage, ClientChatPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ClientChatPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyCode) {
@@ -57,7 +57,7 @@ impl App<'_> {
                                                     cl.id,
                                                     NodePopup::Client(ClientPopup::ChatPage(
                                                         ClientChatPopup::FirstPage(
-                                                            ClFirstPage::default()
+                                                            ChFirstPage::default()
                                                         )
                                                     ))
                                                 ))
@@ -111,7 +111,7 @@ impl App<'_> {
                         id,
                         NodePopup::Client(ClientPopup::ChatPage(
                             ClientChatPopup::FirstPage(
-                                ClFirstPage::default()
+                                ChFirstPage::default()
                             )
                         ))
                     ))
@@ -184,7 +184,7 @@ impl App<'_> {
                     ClientPopup::DataPage(data_page) => {
 
                     }
-                    ClientPopup::SettingsPage() => {
+                    ClientPopup::SettingsPage(_) => {
 
                     }
                 }
@@ -253,7 +253,7 @@ impl App<'_> {
                                                 id,
                                                 NodePopup::Client(ClientPopup::ChatPage(
                                                     ClientChatPopup::SecondPage(
-                                                        ClSecondPage{
+                                                        ChSecondPage {
                                                             selected_server: *selected_server_id,
                                                         }
                                                     )

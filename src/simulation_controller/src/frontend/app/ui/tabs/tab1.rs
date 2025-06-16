@@ -17,9 +17,9 @@ fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(12),
-            Constraint::Percentage(75),
-            Constraint::Percentage(13),
+            Constraint::Percentage(6),
+            Constraint::Percentage(88),
+            Constraint::Percentage(6),
         ])
         .split(area);
 
@@ -28,9 +28,9 @@ fn centered_popup_area(area: Rect) -> Rect {
     let horizontal = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(12),
-            Constraint::Percentage(75),
-            Constraint::Percentage(13),
+            Constraint::Percentage(6),
+            Constraint::Percentage(88),
+            Constraint::Percentage(6),
         ])
         .split(vertical_center);
 

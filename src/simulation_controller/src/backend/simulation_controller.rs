@@ -9,7 +9,7 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{Logs, Statistics};
+use crate::backend::sc_models::{ChatCache, Logs, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -40,6 +40,7 @@ pub struct SimulationControllerData {
     pub log_receiver: Receiver<String>,
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
+    pub chat_cache: ChatCache,
 }
 
 impl SimulationControllerData {
@@ -102,6 +103,7 @@ impl SimulationControllerData {
             logs: Logs::default(),
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
+            chat_cache: ChatCache::default(),
         }
     }
 }
