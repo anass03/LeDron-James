@@ -202,7 +202,7 @@ impl App<'_> {
                     },
                     _ => (),
                 }
-                match &self.cache.tab1_data.data_chat.known_chat_servers.get(&id){
+                match &self.simulation_controller_data.chat_cache.known_chat_servers.get(&id){
                     None => {
                         match key {
                             KeyCode::Left => {

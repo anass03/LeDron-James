@@ -14,10 +14,6 @@ pub(in crate::frontend::app) struct Tab1{
     pub popup_selection: PopupSelection,
 
     pub viewing: ViewedTab1,
-
-
-
-    pub data_chat: ChatCache,
 }
 
 #[derive(PartialEq,Eq)]
@@ -117,7 +113,6 @@ impl Tab1{
                 selected_contact: 2,
             })))))*/,
 
-            data_chat: ChatCache::default(),
         }
     }
 }

@@ -213,7 +213,7 @@ pub(super) mod chat_rendering{
     // First Menù rendering ( Choose the server )
     fn render_chat_first_menu(app: &App, area: Rect, buf: &mut Buffer, selected_cl:NodeId) {
 
-        match app.cache.tab1_data.data_chat.known_chat_servers.get(&selected_cl){
+        match app.simulation_controller_data.chat_cache.known_chat_servers.get(&selected_cl){
             None => {
                 render_no_chatservers_available(app, area, buf);
             }
@@ -247,11 +247,11 @@ pub(super) mod chat_rendering{
 
         let vec_len = known_servers.len();
         // Now depending on how many server do we have we scroll the tabs.
-        if app.cache.tab1_data.data_chat.first_menu_scroll_offset>=vec_len{
+        if app.simulation_controller_data.chat_cache.first_menu_scroll_offset>=vec_len{
             // We're overflowing the Vec
             // Should be unreachable as increasing / decreasing cursor is pretty firm.
         }else{
-            let tab_num = app.cache.tab1_data.data_chat.first_menu_scroll_offset / 2;
+            let tab_num = app.simulation_controller_data.chat_cache.first_menu_scroll_offset / 2;
             let total_tabs_num = (known_servers.len()-1)/2;
 
             let [left_last,right_last] = Layout::default()
@@ -277,7 +277,7 @@ pub(super) mod chat_rendering{
 
 
             // Siamo in una lista di lunghezza dispari!
-            if (vec_len % 2 == 0 && app.cache.tab1_data.data_chat.first_menu_scroll_offset.add(1) == vec_len) || app.cache.tab1_data.data_chat.first_menu_scroll_offset+1<vec_len{
+            if (vec_len % 2 == 0 && app.simulation_controller_data.chat_cache.first_menu_scroll_offset.add(1) == vec_len) || app.simulation_controller_data.chat_cache.first_menu_scroll_offset+1<vec_len{
                 let second_block = Block::default()
                     .borders(Borders::ALL);
                 let [second_canvas_area, second_paragraph_area] = Layout::default()
@@ -348,7 +348,7 @@ pub(super) mod chat_rendering{
 
     // Second Menù rendering ( Choose contact menù )
     fn render_chat_second_menu(app:&App, area: Rect, buf: &mut Buffer, selected_cl:NodeId, sec_page_data: &ChSecondPage) {
-        match app.cache.tab1_data.data_chat.known_contacts.get(&selected_cl) {
+        match app.simulation_controller_data.chat_cache.known_contacts.get(&selected_cl) {
             None => {
                 render_no_contacts_available(app,area,buf);
             }
@@ -385,7 +385,7 @@ pub(super) mod chat_rendering{
             .vertical_margin(1)
             .areas(others);
 
-        let selected_index = app.cache.tab1_data.data_chat.first_menu_scroll_offset;
+        let selected_index = app.simulation_controller_data.chat_cache.first_menu_scroll_offset;
         let offset = selected_index.saturating_sub(3);
         let visible_contacts = &contacts.iter().skip(offset).take(4).collect::<Vec<_>>();
 
@@ -423,7 +423,7 @@ pub(super) mod chat_rendering{
                 .style(if is_selected { Style::default().add_modifier(Modifier::BOLD) } else { Style::default() });
             id_text.render(info_main, buf);
 
-            match app.cache.tab1_data.data_chat.local_chats.get(&sec_page_data.selected_server){
+            match app.simulation_controller_data.chat_cache.local_chats.get(&sec_page_data.selected_server){
                 None => {
                     // Server has no messages stored
                     let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
@@ -565,7 +565,7 @@ pub(super) mod chat_rendering{
         attach_para.render(select_file_area, buf);
 
         //
-        match app.cache.tab1_data.data_chat.local_chats.get(&third_page_data.selected_server) {
+        match app.simulation_controller_data.chat_cache.local_chats.get(&third_page_data.selected_server) {
             None => {
                 // Server has no chats
                 render_empty_chat(app,chat_area,buf);
@@ -600,7 +600,7 @@ pub(super) mod chat_rendering{
         let msgs = &ch.chat;
         let total = msgs.len();
         // Single offset: 0 = newest (bottom), increasing walks upward through history
-        let offset = app.cache.tab1_data.data_chat.first_menu_scroll_offset;
+        let offset = app.simulation_controller_data.chat_cache.first_menu_scroll_offset;
         // Row height approximation (~3 lines per message bubble)
         let view_count = (area.height as usize / 3).max(1);
 
