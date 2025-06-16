@@ -114,7 +114,7 @@ impl ChatServer {
 
             ClientNetCommand::ClientList(receiver_id) => {
                 if receiver_id == self.info.host.id {
-                    self.send_response(ServerToClient::ClientList(self.info.host.id, self.client_list.clone()), source);
+                    self.send_response(ServerToClient::ClientList(source,self.info.host.id,self.client_list.clone()),source);
                     self.send_logging("Sending client list".to_string());
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);

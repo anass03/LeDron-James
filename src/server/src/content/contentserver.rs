@@ -257,5 +257,3 @@ impl ContentServer {
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
 
-#[test]
-fn main() {}
