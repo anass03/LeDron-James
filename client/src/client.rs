@@ -102,23 +102,23 @@ impl Client {
 
             while self.servers_discovered < expected {
                 crossbeam_channel::select! {
-                recv(self.host.packet_recv) -> pkt => {
-                     if let Ok(packet) = pkt {
-                        if let Err(e) = self.handle_packet(packet) {
-                            self.host.send_logging(format!("Error processing packet: {}", e));
+                    recv(self.host.packet_recv) -> pkt => {
+                         if let Ok(packet) = pkt {
+                            if let Err(e) = self.handle_packet(packet) {
+                                self.host.send_logging(format!("Error processing packet: {}", e));
+                            }
                         }
+                    },
+
+                    recv(self.controller_recv) -> _cmd => {
+                        self.host.send_logging("Got a command while discovering".to_string());
+                    },
+
+                    default(Duration::from_millis(200)) => {
+                        // Se non arriva nulla per 200 ms, rilancio una nuova ondata di ServerType
+                        self.request_server_type();
                     }
-                },
-
-                recv(self.controller_recv) -> _cmd => {
-                    self.host.send_logging("Got a command while discovering".to_string());
-                },
-
-                default(Duration::from_millis(200)) => {
-                    // Se non arriva nulla per 200 ms, rilancio una nuova ondata di ServerType
-                    self.request_server_type();
                 }
-            }
             }
 
             self.host.send_logging(format!(
@@ -189,7 +189,7 @@ impl Client {
                         self.host.send_logging("ServerType request received".to_string());
                         let snapshot = self.servers.clone();
                         self.host.send_logging(format!("Servers discovered: {:?}", snapshot));
-                        let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(snapshot));
+                        let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(self.host.id, snapshot));
                     }
 
                     // Content-server
@@ -328,9 +328,9 @@ impl Client {
                                 self.host.send_logging("ServerType response without source".to_string());
                             }
                         }
-                        ClientList(server_id,clients) => {
+                        ClientList(client_id, server_id,clients) => {
                             self.host.send_logging(format!("Received Client List: {:?}", clients));
-                            send_reconstructed(ClientList(server_id,clients))?;
+                            send_reconstructed(ClientList(client_id, server_id,clients))?;
                         }
 
                         MessageFrom(server_id,from, msg) => {

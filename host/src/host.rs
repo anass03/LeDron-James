@@ -1248,7 +1248,7 @@ pub enum ServerToClient{
     Media(ServerId, MediaId, Extension, Image),
 
     //chat server
-    ClientList(ServerId, Vec<ClientId>),
+    ClientList(ClientId, ServerId, Vec<ClientId>),
     MessageFrom(ServerId, ClientId, String),
     FileFrom(ServerId, ClientId, FileId, Extension, Vec<u8>),
     MediaFrom(ServerId, ClientId, MediaId, Extension, Image),
@@ -1264,7 +1264,7 @@ pub enum HostEvent {
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
     ///Servers discovered, response at ServerType
-    ServersDiscovered(HashMap<ServerTypes,Vec<ServerId>>)
+    ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>)
 }
 
 #[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
