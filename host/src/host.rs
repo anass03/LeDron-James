@@ -5,6 +5,7 @@ use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rand::Rng;
 use rand::rngs::ThreadRng;
@@ -323,6 +324,9 @@ impl Functionality for Host {
     fn initiate_flood(&mut self) {
         if !self.network.nodes.is_empty() {
             self.network.nodes.clear();
+        }
+        if !self.network.drone_pdr.is_empty() {
+            self.network.drone_pdr.clear();
         }
         if self.packet_send.is_empty() {
             self.send_logging(format!("No neighbors to flood to host={}",  self.id));
@@ -797,13 +801,14 @@ impl Functionality for Host {
                     self.send_logging(format!("Retransmission result: {:?}", res));
 
                 } else {
-                    self.send_logging(format!("No alternative route found, flooding..."));
+                    self.send_logging("No alternative route found, flooding...".to_string());
                     let now = Instant::now();
 
                     if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
                         self.initiate_flood();
                         self.last_nack_flood = now;
                         // Dopo il flood, riprova a cercare una rotta
+                        sleep(Duration::from_secs(1));
                         if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
                             self.send_logging(format!("Route found after flood: {:?}", new_route_after_flood));
 
