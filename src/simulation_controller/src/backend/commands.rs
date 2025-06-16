@@ -6,13 +6,14 @@ use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
+use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient, ServerTypes};
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::LogType;
+use host::ServerTypes::*;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -63,6 +64,14 @@ impl NetNode {
         }
     }
 }
+
+// Gets updated each time we receive the relative data-packet
+// Each client has its own list in each server.
+// First Key is ClientID, Value is all the contacts it has associated with the relative server.
+type  known_contacts = HashMap<NodeId, HashMap<NodeId, Vec<NodeId>>>;
+
+// Simply all the chat server the Client knows.
+type known_chat_servers = HashMap<NodeId, Vec<NodeId>>;
 
 fn dfs(
     current: NodeId,
@@ -757,8 +766,15 @@ impl SimulationControllerData {
                             self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
                         }
                     },
-                    ServerToClient::ClientList(server_id, client_list) 
-                    => self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)),
+                    ServerToClient::ClientList(client_id, server_id, client_list)
+                    => {
+                        let mut updated_list = match self.known_contacts.get(&client_id) {
+                            Some(map) => map.clone(),
+                            None => HashMap::new(),
+                        };
+                        updated_list.insert(server_id, client_list.clone());
+                        self.known_contacts.insert(client_id, updated_list);
+                        self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
                     ServerToClient::MessageFrom(server_id, client_id, message) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
                     ServerToClient::FileFrom(server_id, client_id,..)
@@ -783,6 +799,8 @@ impl SimulationControllerData {
                 self.stats.received_packet();
             },
             HostEvent::ServersDiscovered(servers) => {
+                let chat_servers = servers.clone().retain(|list| list == Chat );
+                self.known_chat_servers.insert(client_id, chat_servers);
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             }
         }

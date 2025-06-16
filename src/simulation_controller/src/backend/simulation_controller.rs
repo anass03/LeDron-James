@@ -8,7 +8,7 @@ use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Packet};
-use host::{HostCommand, HostEvent};
+use host::{ClientId, HostCommand, HostEvent, ServerId};
 use crate::backend::sc_models::{Logs, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
@@ -40,6 +40,8 @@ pub struct SimulationControllerData {
     pub log_receiver: Receiver<String>,
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
+    pub known_contacts: HashMap<ClientId, HashMap<ServerId, Vec<ClientId>>>,
+    pub known_chat_servers: HashMap<NodeId, Vec<NodeId>>
 }
 
 impl SimulationControllerData {
@@ -102,6 +104,8 @@ impl SimulationControllerData {
             logs: Logs::default(),
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
+            known_contacts: HashMap::new(),
+            known_chat_servers: HashMap::new(),
         }
     }
 }
