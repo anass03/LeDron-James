@@ -636,6 +636,27 @@ impl SimulationControllerData {
     }
 
     pub fn request_client_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
+        match self.chat_cache.known_contacts.get(&client_id) {
+            Some(contact_map) => {
+                match contact_map.get(&server_id) {
+                    Some(contacts) => {
+                        if contacts.is_empty() {
+                            match self.request_registration_to_chat(client_id, server_id) {
+                                Ok(_) => {}
+                                Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
+                            }
+                        }
+                    }
+                    None => {}
+                }
+            },
+            None => {
+                match self.request_registration_to_chat(client_id, server_id) {
+                    Ok(_) => {}
+                    Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
+                }
+            }
+        }
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Client List Request to Client {client_id} for Server {server_id}"));
         let command = Net(ClientList(server_id));
         self.send_client_command(client_id, command)
@@ -760,18 +781,12 @@ impl SimulationControllerData {
                     },
                     ServerToClient::ClientList(client_id, server_id, client_list)
                     => {
-                        match self.chat_cache.known_contacts.get(&client_id) {
-
-                        }
-                        match self.request_registration_to_chat(client_id, server_id) {
-                            Ok(_) => {}
-                            Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
-                        }
+                        let contacts: Vec<NodeId> = client_list.iter().filter(|id| **id != client_id).cloned().collect();
                         self.chat_cache
                             .known_contacts
                             .entry(client_id)
                             .or_default()
-                            .insert(server_id, client_list.clone());
+                            .insert(server_id, contacts);
                         self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
                     ServerToClient::MessageFrom(server_id, client_id, message) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
