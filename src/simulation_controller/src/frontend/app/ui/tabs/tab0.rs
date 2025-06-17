@@ -49,12 +49,9 @@ pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
         .logs
         .logs_memory
         .iter()
-        .map(|(log,msg)| {
-            // Single color matching not working
-            // Ratatui BUG ? When changing tabs some colored chars stay visible
-            // in the frame even in different tab
+        .map(|(_,msg)| {
 
-            Line::from(Span::raw(msg)).style(Style::default().fg(Color::White))
+            Line::from(Span::raw(msg)).style(Style::default().fg(Color::Gray))
         }
         )
         .collect();
@@ -77,5 +74,5 @@ pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
         )
         .wrap(Wrap { trim: true })
         .scroll((app.simulation_controller_data.logs.log_scroll_offset as u16, 0));
-    return a
+    a
 }

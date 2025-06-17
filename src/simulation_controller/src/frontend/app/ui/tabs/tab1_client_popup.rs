@@ -2,15 +2,16 @@ use std::cmp::PartialEq;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::buffer::Buffer;
 use wg_2024::network::NodeId;
-use ratatui::prelude::{Color, Modifier, Style, Widget};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine, Map};
 use std::ops::Add;
-use ratatui::style::{Styled, Stylize};
+use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
 use ratatui::text::ToSpan;
+use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{ClientPopup, PopupSelection};
 use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
+use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
 use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_chat_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
 
@@ -97,66 +98,19 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
     internet_canvas.render(server_symb, buf);
 
     // Draw function graph icon (sine wave)
-    let data_canvas = Canvas::default()
-        .background_color(POPUP_BG_COLOR)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(if app.cache.tab1_data.popup_cursor == 2 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
-                Style::default().fg(app.animation_color())
-            }else{
-                Style::default()
-            })
-            .title("Data"))
-        .x_bounds([0.0, 20.0])
-        .y_bounds([0.0, 20.0])
-        .paint(|ctx| {
-            let steps = 40;
-            for i in 0..steps {
-                let x1 = i         as f64 * 20.0 / (steps - 1) as f64;
-                let y1 = 10.0 + 8.0 * ((std::f64::consts::PI * i as f64 / (steps - 1) as f64)).sin();
-                let x2 = (i + 1)   as f64 * 20.0 / (steps - 1) as f64;
-                let y2 = 10.0 + 8.0 * ((std::f64::consts::PI * (i + 1) as f64 / (steps - 1) as f64)).sin();
-                ctx.draw(&CanvasLine { x1, y1, x2, y2, color: Color::White, ..Default::default() });
-            }
-        });
+    let data_canvas = get_data_canvas(app, NetNode::Client(0));
     data_canvas.render(barchart_symb, buf);
 
     // Draw settings icon
-    let settings_canvas = Canvas::default()
-        .background_color(POPUP_BG_COLOR)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(if app.cache.tab1_data.popup_cursor == 3 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
-                Style::default().fg(app.animation_color())
-            }else{
-                Style::default()
-            })
-            .title("Settings"))
-        .x_bounds([0.0, 20.0])
-        .y_bounds([0.0, 20.0])
-        .paint(|ctx| {
-            let cx = 10.0;
-            let cy = 10.0;
-            let r = 6.0;
-            // gear outer circle
-            ctx.draw(&Circle { x: cx, y: cy, radius: r, color: Color::White, ..Default::default() });
-            // gear spokes
-            let spoke = 4.0;
-            for &(dx, dy) in &[(0.0, spoke), (spoke, 0.0), (0.0, -spoke), (-spoke, 0.0)] {
-                ctx.draw(&CanvasLine {
-                    x1: cx, y1: cy,
-                    x2: cx + dx, y2: cy + dy,
-                    color: Color::White,
-                    ..Default::default()
-                });
-            }
-        });
+    let settings_canvas = get_settings_canvas(app, NetNode::Client(0));
     settings_canvas.render(settings_symb, buf);
 
+    let opt_block = Block::default().borders(Borders::ALL);
+    let opt_inner = opt_block.inner(opt_area);
+    opt_block.render(opt_area, buf);
+
     // Now I render the selected option in opt_area
-    render_client_options(app, opt_area, buf, client_popup,&id);
+    render_client_options(app, opt_inner, buf, client_popup,&id);
 }
 
 fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientPopup, selected_node: &NodeId) {
@@ -235,8 +189,13 @@ pub(super) mod chat_rendering{
             .horizontal_margin(1)
             .areas(first_second);
 
-        let first_block = Block::default()
-            .borders(Borders::ALL);
+        let mut first_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded);
+        if app.cache.tab1_data.popup_cursor % 2 == 0{
+            first_block = first_block.border_style(Style::default().fg(app.animation_color()));
+        }
+
         let [first_canvas_area, first_paragraph_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
@@ -247,11 +206,11 @@ pub(super) mod chat_rendering{
 
         let vec_len = known_servers.len();
         // Now depending on how many server do we have we scroll the tabs.
-        if app.simulation_controller_data.chat_cache.first_menu_scroll_offset>=vec_len{
+        if usize::from(app.cache.tab1_data.popup_cursor)>=vec_len{
             // We're overflowing the Vec
             // Should be unreachable as increasing / decreasing cursor is pretty firm.
         }else{
-            let tab_num = app.simulation_controller_data.chat_cache.first_menu_scroll_offset / 2;
+            let tab_num = app.cache.tab1_data.popup_cursor / 2;
             let total_tabs_num = (known_servers.len()-1)/2;
 
             let [left_last,right_last] = Layout::default()
@@ -277,9 +236,13 @@ pub(super) mod chat_rendering{
 
 
             // Siamo in una lista di lunghezza dispari!
-            if (vec_len % 2 == 0 && app.simulation_controller_data.chat_cache.first_menu_scroll_offset.add(1) == vec_len) || app.simulation_controller_data.chat_cache.first_menu_scroll_offset+1<vec_len{
-                let second_block = Block::default()
-                    .borders(Borders::ALL);
+            if (vec_len % 2 == 0 && app.cache.tab1_data.popup_cursor.add(1) as usize == vec_len) || app.cache.tab1_data.popup_cursor as usize +1<vec_len{
+                let mut second_block = Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded);
+                if app.cache.tab1_data.popup_cursor % 2 == 1{
+                    second_block = second_block.border_style(Style::default().fg(app.animation_color()));
+                }
                 let [second_canvas_area, second_paragraph_area] = Layout::default()
                     .direction(Direction::Horizontal)
                     .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
@@ -299,10 +262,6 @@ pub(super) mod chat_rendering{
     }
 
     fn render_no_chatservers_available(_app: &App, area: Rect, buf: &mut Buffer) {
-        let block = Block::default().borders(Borders::ALL);
-        let inner = block.inner(area);
-        block.render(area, buf);
-
         let text = Text::from(vec![
             Line::from("No Chat Server FOUND")
                 .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
@@ -313,7 +272,7 @@ pub(super) mod chat_rendering{
         Paragraph::new(text)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
-            .render(inner, buf);
+            .render(area, buf);
     }
 
     fn draw_server_canvas<'a>() -> Canvas<'a, fn(&mut Context)> {
@@ -385,7 +344,7 @@ pub(super) mod chat_rendering{
             .vertical_margin(1)
             .areas(others);
 
-        let selected_index = app.simulation_controller_data.chat_cache.first_menu_scroll_offset;
+        let selected_index = app.cache.tab1_data.popup_cursor;
         let offset = selected_index.saturating_sub(3);
         let visible_contacts = &contacts.iter().skip(offset).take(4).collect::<Vec<_>>();
 
@@ -501,7 +460,18 @@ pub(super) mod chat_rendering{
     }
 
     fn render_no_contacts_available(app:&App, area: Rect, buf: &mut Buffer){
-        todo!()
+
+        let text = Text::from(vec![
+            Line::from("No Contacts Available")
+                .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
+            Line::from("Press 'r' to send network request to find new contacts")
+                .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+        ]);
+
+        Paragraph::new(text)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .render(area, buf);
     }
 
     // Util function for both second and third menù
@@ -600,7 +570,7 @@ pub(super) mod chat_rendering{
         let msgs = &ch.chat;
         let total = msgs.len();
         // Single offset: 0 = newest (bottom), increasing walks upward through history
-        let offset = app.simulation_controller_data.chat_cache.first_menu_scroll_offset;
+        let offset = app.cache.tab1_data.popup_cursor as usize;
         // Row height approximation (~3 lines per message bubble)
         let view_count = (area.height as usize / 3).max(1);
 

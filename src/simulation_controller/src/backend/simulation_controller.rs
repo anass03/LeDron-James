@@ -40,6 +40,7 @@ pub struct SimulationControllerData {
     pub log_receiver: Receiver<String>,
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
+
     pub chat_cache: ChatCache,
 }
 
