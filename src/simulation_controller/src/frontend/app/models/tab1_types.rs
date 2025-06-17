@@ -6,15 +6,18 @@ use crate::frontend::app::models::general_types::{FnList, NodeList};
 /// Tab n.01 data
 pub(in crate::frontend::app) struct Tab1{
     pub nodelist: NodeList,
-    pub selected_fn: FnList,
+
 
     // Popup cursor and selection works accordingly to each other.
     // Popup selection helps to understand which item cursor refers to
-    pub popup_cursor: u8,
+    pub popup_cursor: usize,
     pub popup_selection: PopupSelection,
 
     pub viewing: ViewedTab1,
+
+    pub selected_fn: FnList, // Deprecated
 }
+
 
 #[derive(PartialEq,Eq)]
 pub(crate) enum PopupSelection{
@@ -114,5 +117,10 @@ impl Tab1{
             })))))*/,
 
         }
+    }
+    pub(crate) fn return_to_main(&mut self){
+        self.popup_selection = PopupSelection::MenuArea;
+        self.popup_cursor = 0;
+        self.viewing = ViewedTab1::Main;
     }
 }

@@ -19,7 +19,7 @@ impl App<'_>{
                 _ => {
                     match self.selected_tab {
                         ui::tabs::SelectedTab::Overview => (self.handle_event_tab0(key.code)),
-                        ui::tabs::SelectedTab::Topology => self.handle_event_tab1(key.code),
+                        ui::tabs::SelectedTab::Topology => self.handle_event_tab1(key),
                         ui::tabs::SelectedTab::TOMLEditor => self.handle_event_tab2(key.code),
                         ui::tabs::SelectedTab::Settings => self.handle_event_tab3(key.code),
                     }

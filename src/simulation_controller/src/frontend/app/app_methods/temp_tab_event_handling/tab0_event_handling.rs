@@ -5,13 +5,13 @@ use crate::frontend::app::models::main_types::AppMode;
 impl App<'_> {
     pub(in super::super) fn handle_event_tab0(&mut self, key: KeyCode) {
         match key {
-            KeyCode::Up => {
+            KeyCode::Left => {
                 if self.cache.cursor != 0 {
                     //println!("zio");
                     self.cache.cursor -= 1
                 }
             }
-            KeyCode::Down => {
+            KeyCode::Right => {
                 if self.cache.cursor != 2 {
                     //println!("zio");
                     self.cache.cursor += 1
