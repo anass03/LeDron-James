@@ -760,6 +760,13 @@ impl SimulationControllerData {
                     },
                     ServerToClient::ClientList(client_id, server_id, client_list)
                     => {
+                        match self.chat_cache.known_contacts.get(&client_id) {
+
+                        }
+                        match self.request_registration_to_chat(client_id, server_id) {
+                            Ok(_) => {}
+                            Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
+                        }
                         self.chat_cache
                             .known_contacts
                             .entry(client_id)
