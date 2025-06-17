@@ -467,7 +467,7 @@ impl App<'_> {
                             SelectedNode::Client(client_fn) => {
                                 match client_fn {
                                     7 => {
-                                        self.parse_and_send_message(id_origin)
+                                        self.parse_and_send_message_old(id_origin)
                                     }
                                     _ => (),
                                 }

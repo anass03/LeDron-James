@@ -1,3 +1,4 @@
+use host::{ClientId, ServerId};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
 use crate::frontend::app::models::general_types::{FnList, NodeList};
@@ -13,9 +14,43 @@ pub(in crate::frontend::app) struct Tab1{
     pub popup_cursor: usize,
     pub popup_selection: PopupSelection,
 
+    // Needed fast accessible data for Tab1-Third Page
+    pub chat_third_page_selection: ChatThirdPageSelection,
+
+    pub file_exploring_data: FileExploring,
+
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
+}
+pub(crate) struct FileExploring {
+    last_selected_cl_sender: ClientId,
+    last_selected_cl_receiver: ClientId,
+    last_selected_sr: ServerId,
+}
+impl FileExploring {
+    fn default()->Self{
+        Self{
+            last_selected_cl_sender: 0,
+            last_selected_cl_receiver: 0,
+            last_selected_sr: 0,
+        }
+    }
+    pub(crate) fn set_fields(&mut self, cl_sender:ClientId, cl_receiver:ClientId, server_id:ServerId) {
+        self.last_selected_cl_receiver = cl_receiver;
+        self.last_selected_cl_sender = cl_sender;
+        self.last_selected_sr = server_id;
+    }
+
+    /// ( Client Sender, Client Receiver, Server )
+    pub(crate) fn get_fields(&self)->(ClientId, ClientId, ServerId) {
+        (self.last_selected_cl_sender, self.last_selected_cl_receiver, self.last_selected_sr)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ChatThirdPageSelection{
+    ScrollingMessages, BottomTab
 }
 
 
@@ -94,7 +129,8 @@ pub(crate) enum ServerPopup{
 }
 #[derive(Debug, Clone)]
 pub(crate) enum DronePopup{
-    FirstPage()
+    DataPage(),
+    SettingsPage()
 }
 
 // END LOGIC SECTION
@@ -110,6 +146,8 @@ impl Tab1{
             popup_cursor: 0,
 
             popup_selection: PopupSelection::MenuArea,
+            chat_third_page_selection: ChatThirdPageSelection::BottomTab,
+            file_exploring_data: FileExploring::default(),
             viewing: ViewedTab1::Main
             /*ViewedTab1::Popup((1, NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(ClThirdPage{
                 selected_server: 1,

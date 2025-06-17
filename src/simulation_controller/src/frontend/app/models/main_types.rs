@@ -1,3 +1,4 @@
+use ratatui_explorer::{FileExplorer, Theme};
 use crate::frontend::app::models::tab2_types::Tab2;
 use crate::frontend::app::models::general_types::TextBuffer;
 use crate::frontend::app::models::tab0_types::Tab0;
@@ -7,8 +8,10 @@ pub(in crate::frontend::app) struct Settings{
     pub toml_path: String,
 }
 
+#[derive(PartialEq)]
 pub(in crate::frontend::app) enum AppMode{
-    Normal, Input, Scrolling
+    // CONTINUA CON QUESTO
+    Normal, Input, Scrolling, FileExploring
 }
 
 pub(in crate::frontend::app) struct Cache<'a> {
@@ -17,6 +20,8 @@ pub(in crate::frontend::app) struct Cache<'a> {
     pub counter: u8, // Counting cycles, used to update colors in TUI
 
     pub text_buffer: TextBuffer<'a>,
+    pub file_explorer: FileExplorer,
+
     pub tab0_data: Tab0, // Data needed by tab0 encapsulated in a struct
     pub tab1_data: Tab1,
     pub tab2_data: Tab2
@@ -43,6 +48,7 @@ impl<'a> Cache<'a> {
         Cache {
             text_buffer:TextBuffer::default(),
             cursor:0,
+            file_explorer: FileExplorer::new().unwrap(),
             tab0_data: Tab0::default(),
             tab1_data: Tab1::default(),
             tab2_data: Tab2::default(),

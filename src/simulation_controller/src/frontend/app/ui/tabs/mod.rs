@@ -155,6 +155,10 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
         }
         AppMode::Scrolling => {
             block = block.title(" [SCROLLING MODE] ESC to quit scrolling-mode | ↑ - ↓ to scroll ")
+        },
+
+        AppMode::FileExploring => {
+            block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
         }
     }
 

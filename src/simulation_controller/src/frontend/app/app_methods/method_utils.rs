@@ -38,6 +38,7 @@ impl App<'_> {
         self.cache.text_buffer.inputfirst_text_area = TextArea::default();
         self.cache.text_buffer.inputsecond_text_area = TextArea::default();
         self.cache.text_buffer.inputthird_text_area = TextArea::default();
+        self.cache.text_buffer.chat_text_area = TextArea::default();
     }
     pub(super) fn save_text_buffer(&mut self) {
         let lines = self.cache.text_buffer.toml_text_area.clone().into_lines();

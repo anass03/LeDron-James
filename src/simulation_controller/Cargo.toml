@@ -19,8 +19,8 @@ tui-textarea = "0.7.0"
 log = "0.4.27"
 petgraph = "0.7.1"
 infer = "0.19.0"
-ratatui-splash-screen = "0.1.4"
 tui-popup = "0.7.0-alpha.0"
+ratatui-explorer = "0.2.0"
 
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}

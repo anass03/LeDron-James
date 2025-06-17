@@ -105,7 +105,15 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
     let settings_canvas = get_settings_canvas(app, NetNode::Client(0));
     settings_canvas.render(settings_symb, buf);
 
-    let opt_block = Block::default().borders(Borders::ALL);
+    let mut opt_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+    match app.cache.tab1_data.popup_selection{
+        PopupSelection::MenuArea => (),
+        PopupSelection::OptArea => {
+            opt_block = opt_block.border_style(Style::default().fg(app.animation_color()));
+        }
+    }
     let opt_inner = opt_block.inner(opt_area);
     opt_block.render(opt_area, buf);
 
@@ -132,9 +140,10 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
 
 }
 pub(super) mod chat_rendering{
+    use std::cmp::PartialEq;
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
-    use crate::frontend::app::models::tab1_types::ClientChatPopup;
+    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup};
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
     use ratatui::buffer::{Buffer, Cell};
 
@@ -148,7 +157,10 @@ pub(super) mod chat_rendering{
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::ToSpan;
     use crate::backend::sc_models::{Chat, Message};
+    use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
+    use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
+
     pub(super) fn render_chat_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientChatPopup, selected_node: &NodeId){
         match client_popup {
             // Chat Server view option
@@ -159,7 +171,10 @@ pub(super) mod chat_rendering{
                 render_chat_second_menu(app,area,buf,*selected_node,data)
             }
             ClientChatPopup::ThirdPage(data) => {
-                render_chat_third_menu(app,area,buf,*selected_node,data)
+                render_chat_third_menu(app,area,buf,*selected_node,data);
+                if app.app_mode == AppMode::FileExploring{
+                    app.cache.file_explorer.widget().render(centered_popup_area(area), buf);
+                }
             }
         }
     }
@@ -331,8 +346,8 @@ pub(super) mod chat_rendering{
             /*.vertical_margin(1)*/
             .areas(area);
 
-        let info = Line::from("Press 'r' to find new server chats in the network!")
-            .style(Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC))
+        let info = Line::from(" Press 'r' to find new server chats in the network! ")
+            .style(Style::default().add_modifier(Modifier::ITALIC))
             .alignment(Alignment::Left);
         info.render(last, buf);
 
@@ -360,7 +375,8 @@ pub(super) mod chat_rendering{
 
             let contact_block = Block::default()
                 .borders(Borders::ALL)
-                .border_type(if is_selected { BorderType::Thick } else { BorderType::Plain });
+                .border_type(BorderType::Rounded)
+                .border_style(if is_selected {Style::default().fg(app.animation_color())} else {Style::default()});
             let inner_contact_block = contact_block.inner(block);
             contact_block.render(block, buf);
 
@@ -391,7 +407,91 @@ pub(super) mod chat_rendering{
                     last_msg.render(info_msg, buf);
                 }
                 Some(chat_list) => {
-                    'inner: for ((us1,us2),ch) in &chat_list.chats_stored{
+                    let mut found_chat:Option<&Chat> = None;
+                    match chat_list.chats_stored.get(&(selected_cl,**contact_id )){
+                        None => {
+                            match chat_list.chats_stored.get(&(**contact_id, selected_cl)){
+                                None => (),
+                                Some(ch) => {
+                                    found_chat = Some(ch);
+                                }
+                            }
+                        }
+                        Some(ch) => {
+                            found_chat = Some(ch);
+                        }
+                    }
+                    match found_chat{
+                        None => {
+                            // No messages are sent
+                            let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                .alignment(Alignment::Left)
+                                .wrap(Wrap { trim: true });
+                            last_msg.render(info_msg, buf);
+                        }
+                        Some(ch) => {
+                            match ch.get_last_message(){
+                                None => {
+                                    // No messages are sent
+                                    let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                        .alignment(Alignment::Left)
+                                        .wrap(Wrap { trim: true });
+                                    last_msg.render(info_msg, buf);
+                                }
+                                Some((mess,messdata)) => {
+                                    /*let [message_area, data_area] = Layout::default()
+                                        .direction(Direction::Horizontal)
+                                        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
+                                    if messdata.id_sender==selected_cl {
+                                        match mess{
+                                            Message::Message(str) => {
+                                                let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess
+                                                                                                  .set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                              str.to_span()]))
+                                                    .alignment(Alignment::Left)
+                                                    .wrap(Wrap { trim: true });
+                                                last_msg.render(info_msg, buf);
+                                            }
+                                            Message::Media(med) => {
+                                                let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                    .alignment(Alignment::Left)
+                                                    .wrap(Wrap { trim: true });
+                                                last_msg.render(info_msg, buf);
+                                            }
+                                        }
+                                    }else {
+                                        match mess{
+                                            Message::Message(str) => {
+                                                let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
+                                                                           messdata.id_sender);
+                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                              str.to_span()]))
+                                                    .alignment(Alignment::Left)
+                                                    .wrap(Wrap { trim: true });
+                                                last_msg.render(info_msg, buf);
+                                            }
+                                            Message::Media(med) => {
+                                                let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
+                                                                           ,messdata.id_sender);
+                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                    .alignment(Alignment::Left)
+                                                    .wrap(Wrap { trim: true });
+                                                last_msg.render(info_msg, buf);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    /*'inner: for ((us1,us2),ch) in &chat_list.chats_stored_temp {
                         if (*us1 == selected_cl && *us2 == **contact_id) || (*us1 == **contact_id && *us2 == selected_cl){
                             match ch.get_last_message(){
                                 None => {
@@ -453,7 +553,7 @@ pub(super) mod chat_rendering{
                             }
                             break 'inner;
                         }
-                    }
+                    }*/
                 }
             }
         }
@@ -517,21 +617,46 @@ pub(super) mod chat_rendering{
             .areas(input_area);
         let [_,select_file_area,_] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(50),Constraint::Min(1), Constraint::Percentage(50)])
+            .constraints([Constraint::Percentage(50),Constraint::Min(3), Constraint::Percentage(50)])
             .areas(three_lines_select_file_area);
 
         let text_buffer_block = Block::default()
             .border_type(BorderType::Rounded)
             .borders(Borders::ALL)
-            .style(Style::default().fg(Color::Rgb(89, 72, 198)));
+            .border_style(
+                match app.cache.tab1_data.chat_third_page_selection{
+                    ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
+                    ChatThirdPageSelection::BottomTab => {
+                        if app.cache.tab1_data.popup_cursor==0{
+                            Style::default().fg(app.animation_color())
+                        }else{
+                            Style::default().fg(Color::Rgb(89, 72, 198))
+                        }
+                    }
+                }
+            );
         let inner_text_buffer_block = text_buffer_block.inner(text_buffer_area);
         text_buffer_block.render(text_buffer_area, buf);
+        app.cache.text_buffer.chat_text_area.render(inner_text_buffer_block, buf);
 
         // Draw attach-file option (paperclip icon + label)
         let attach_para = Paragraph::new("🖇️")
-            /*        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded).border_style(Style::default().fg(Color::Rgb(89, 72, 198))))
-            */        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .block(Block::default().borders(Borders::ALL)
+                        .border_type(BorderType::Rounded)
+                        .border_style(
+                            match app.cache.tab1_data.chat_third_page_selection{
+                                ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
+                                ChatThirdPageSelection::BottomTab => {
+                                    if app.cache.tab1_data.popup_cursor==1{
+                                        Style::default().fg(app.animation_color())
+                                    }else{
+                                        Style::default().fg(Color::Rgb(89, 72, 198))
+                                    }
+                                }
+                            }
+                        ))
             .alignment(Alignment::Center);
+
         attach_para.render(select_file_area, buf);
 
         //
@@ -541,16 +666,16 @@ pub(super) mod chat_rendering{
                 render_empty_chat(app,chat_area,buf);
             }
             Some(chat_list) => {
-                let mut found_chat:Option<&Chat> = None;
-                for ((us1,us2),chat) in &chat_list.chats_stored {
-                    if (*us1 == selected_cl && *us2 == third_page_data.selected_contact) || (*us1 == third_page_data.selected_contact && *us2 == selected_cl){
-                        found_chat=Some(chat);
-                        break;
-                    }
-                }
-                match found_chat{
+                match chat_list.chats_stored.get(&(selected_cl,third_page_data.selected_contact )){
                     None => {
-                        render_empty_chat(app,chat_area,buf);
+                        match chat_list.chats_stored.get(&(third_page_data.selected_contact, selected_cl)){
+                            None => {
+                                render_empty_chat(app,chat_area,buf);
+                            }
+                            Some(ch) => {
+                                render_chats(app,chat_area,buf,selected_cl,third_page_data,ch)
+                            }
+                        }
                     }
                     Some(ch) => {
                         render_chats(app,chat_area,buf,selected_cl,third_page_data,ch)

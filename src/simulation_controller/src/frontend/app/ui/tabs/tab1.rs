@@ -15,7 +15,7 @@ use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine,};
 use tui_popup::Popup;
 use crate::backend::simulation_controller::NetNode;
 
-fn centered_popup_area(area: Rect) -> Rect {
+pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -157,5 +157,19 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
                 ctx.draw(&CanvasLine { x1, y1, x2, y2, color: Color::White, ..Default::default() });
             }
         })
+}
+
+pub(super) fn render_data_page(app:&App, area:Rect, buf: &mut Buffer) {
+    let [charts_area, terminal_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+        .areas(area);
+    let [first_ch, second_ch, third_ch] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+        .margin(1)
+        .areas(charts_area);
+
+
 }
 

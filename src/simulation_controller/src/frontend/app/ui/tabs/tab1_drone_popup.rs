@@ -27,7 +27,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
         .areas(inner_sim_popup_block_area);
 
     // Draw centered title in title_area
-    let title_para = Paragraph::new(format!("Client {}", id))
+    let title_para = Paragraph::new(format!("Drone {}", id))
         .alignment(Alignment::Center)
         .style(Style::default().add_modifier(Modifier::RAPID_BLINK));
     title_para.render(title_area, buf);
@@ -51,9 +51,29 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
     let settings_canvas = get_settings_canvas(app, NetNode::Drone(0));
     settings_canvas.render(settings_symb, buf);
 
-    render_drone_options(app,opt_area,buf,drone_popup,&id)
+    let mut opt_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+
+    match app.cache.tab1_data.popup_selection{
+        PopupSelection::MenuArea => (),
+        PopupSelection::OptArea => {
+            opt_block = opt_block.border_style(Style::default().fg(app.animation_color()));
+        }
+    }
+    let opt_inner = opt_block.inner(opt_area);
+    opt_block.render(opt_area, buf);
+
+    render_drone_options(app,opt_inner,buf,drone_popup,&id)
 }
 
 fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &DronePopup, selected_node: &NodeId){
+    match drone_popup{
+        DronePopup::DataPage() => {
 
+        }
+        DronePopup::SettingsPage() => {
+
+        }
+    }
 }

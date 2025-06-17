@@ -1,10 +1,13 @@
+use std::ops::DerefMut;
+use host::ClientId;
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
 use drone::Drone;
-use crate::backend::sc_models::LogType;
+use crate::backend::sc_models::{Chat, ChatList, LogType};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ClientChatPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -74,7 +77,7 @@ impl App<'_> {
                                             self.cache.tab1_data.viewing =
                                                 ViewedTab1::Popup((
                                                     dr.id,
-                                                    NodePopup::Drone(DronePopup::FirstPage())
+                                                    NodePopup::Drone(DronePopup::DataPage())
                                                 ))
                                         }
                                     }
@@ -97,7 +100,7 @@ impl App<'_> {
         }
     }
 
-    fn handle_popup(&mut self, key:KeyEvent,id:NodeId, node_popup: NodePopup) {
+    fn handle_popup(&mut self, key:KeyEvent, id: NodeId, node_popup: NodePopup) {
         match key.code{
             KeyCode::Esc => {
                 self.cache.tab1_data.return_to_main()
@@ -237,28 +240,19 @@ impl App<'_> {
                         let chat_servers_len = known_chat_servers.len();
                         match key.code {
                             KeyCode::Up => {
-                                if self.cache.tab1_data.popup_cursor as isize -3 >=0{
-                                    self.cache.tab1_data.popup_cursor-=3
+                                if self.cache.tab1_data.popup_cursor>0{
+                                    self.cache.tab1_data.popup_cursor-=1;
                                 }
                             }
                             KeyCode::Down => {
-                                if self.cache.tab1_data.popup_cursor+3 < chat_servers_len  {
-                                    self.cache.tab1_data.popup_cursor+=3
-                                }
-                            }
-                            KeyCode::Left => {
-                                if self.cache.tab1_data.popup_cursor>0{
-                                    self.cache.tab1_data.popup_cursor-=1;
-                                }else{
-                                    // Return on Menu
-                                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
-                                    self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
-                                }
-                            }
-                            KeyCode::Right => {
                                 if self.cache.tab1_data.popup_cursor + 1 < chat_servers_len  {
                                     self.cache.tab1_data.popup_cursor+=1;
                                 }
+                            }
+                            KeyCode::Left => {
+                                    // Return on Menu
+                                self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
                             }
                             KeyCode::Enter => {
                                 // I get the selected item and pass it to the second page struct
@@ -304,9 +298,177 @@ impl App<'_> {
                     }
                     _ => (),
                 }
+                // Devo capire dove mi trovo
+                match self.simulation_controller_data.chat_cache.known_contacts.get(&id){
+                    None => {
+                        // Pagina vuota
+                    },
+                    Some(known_contacts) => {
+                        match known_contacts.get(&contacts_data.selected_server){
+                            None => {
+                                // Pagina vuota
+                            }
+                            Some(contacts) => {
+                                let contacts_len = contacts.len();
+                                match key.code {
+                                    KeyCode::Left => {
+                                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                        self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                                    }
+                                    KeyCode::Up => {
+                                        if self.cache.tab1_data.popup_cursor as isize -1 >=0{
+                                            self.cache.tab1_data.popup_cursor-=1
+                                        }
+                                    }
+                                    KeyCode::Down => {
+                                        if self.cache.tab1_data.popup_cursor+1 < contacts_len  {
+                                            self.cache.tab1_data.popup_cursor+=1
+                                        }
+                                    }
+                                    KeyCode::Enter => {
+                                        match contacts.get(self.cache.tab1_data.popup_cursor){
+                                            None => {
+                                                // Bug, shouldn't arrive here.
+                                                // Means I can select non existing items
+                                            }
+                                            Some(contact) => {
+                                                self.cache.tab1_data.popup_cursor = 0;
+                                                self.cache.tab1_data.viewing =
+                                                    ViewedTab1::Popup((
+                                                        id,
+                                                        NodePopup::Client(ClientPopup::ChatPage(
+                                                            ClientChatPopup::ThirdPage(
+                                                                ChThirdPage {
+                                                                    selected_server: contacts_data.selected_server,
+                                                                    selected_contact: *contact,
+                                                                }
+                                                            )
+                                                        ))
+                                                    ))
+                                            }
+                                        }
+                                    }
+                                    _ => (),
+                                }
+                            }
+                        }
+                    }
+                }
             }
             ClientChatPopup::ThirdPage(chat_data) => {
+                // Fundamental Matching
+                match key.code.to_string().to_lowercase().as_str(){
+                    "s" => {
+                        self.parse_and_send_message(id, chat_data.selected_contact, chat_data.selected_server);
+                    },
+                    _ => {
 
+                    }
+                }
+                // Scrolling messages or bottom tab
+                match self.cache.tab1_data.chat_third_page_selection.clone(){
+                    ChatThirdPageSelection::ScrollingMessages => {
+                        match self.simulation_controller_data.chat_cache.local_chats.get(&chat_data.selected_server){
+                            None => {
+                                // Empty chat, do NUN but go down
+                                match key.code {
+                                    KeyCode::Down => {
+                                        self.cache.tab1_data.chat_third_page_selection = ChatThirdPageSelection::BottomTab;
+                                        self.cache.tab1_data.popup_cursor = 0;
+                                    },
+                                    _ => ()
+                                }
+                            }
+                            Some(chat_list) => {
+                                let found:Option<&Chat> = match chat_list.chats_stored.get(&(id, chat_data.selected_contact)){
+                                    None => {
+                                        match chat_list.chats_stored.get(&(id, chat_data.selected_contact)){
+                                            None => None,
+                                            Some(chat_list) => Some(chat_list),
+                                        }
+                                    }
+                                    Some(chat_list) => Some(chat_list),
+                                };
+                                match found {
+                                    None => {
+                                        // Empty chat, do NUN but go down
+                                        match key.code {
+                                            KeyCode::Down => {
+                                                self.cache.tab1_data.chat_third_page_selection = ChatThirdPageSelection::BottomTab;
+                                                self.cache.tab1_data.popup_cursor = 0;
+                                            },
+                                            _ => ()
+                                        }
+                                    }
+                                    Some(ch) => {
+                                        let chat_len = ch.chat.len();
+                                        match key.code {
+                                            KeyCode::Up => {
+                                                if self.cache.tab1_data.popup_cursor + 1 < chat_len {
+                                                    self.cache.tab1_data.popup_cursor+=1;
+                                                }
+                                            }
+                                            KeyCode::Down => {
+                                                if self.cache.tab1_data.popup_cursor > 0 {
+                                                    self.cache.tab1_data.popup_cursor-=1;
+                                                }else{
+                                                    self.cache.tab1_data.chat_third_page_selection = ChatThirdPageSelection::BottomTab;
+                                                    self.cache.tab1_data.popup_cursor = 0;
+                                                }
+                                            }
+                                            KeyCode::Enter => {
+                                                // In base al messaggio che ho selezionato devo scegliere cosa fare
+                                                // todo!()
+                                            }
+                                            _ => ()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ChatThirdPageSelection::BottomTab => {
+                        match key.code {
+                            KeyCode::Right => {
+                                match self.cache.tab1_data.popup_cursor{
+                                    0 => {
+                                        self.cache.tab1_data.popup_cursor += 1;
+                                    }
+                                    _ => (),
+                                }
+                                },
+                            KeyCode::Left => {
+                                match self.cache.tab1_data.popup_cursor{
+                                    0 => {
+                                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                    }
+                                    1 => {
+                                        self.cache.tab1_data.popup_cursor -= 1;
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            KeyCode::Up => {
+                                self.cache.tab1_data.chat_third_page_selection = ChatThirdPageSelection::ScrollingMessages;
+                                self.cache.tab1_data.popup_cursor = 0;
+                            }
+                            KeyCode::Enter => {
+                                match self.cache.tab1_data.popup_cursor{
+                                    0 => {
+                                        self.app_mode = AppMode::Input;
+                                    }
+                                    1 => {
+                                        // Attach a file, il restituito andrà direttamente inviato
+                                        self.cache.tab1_data.file_exploring_data.set_fields(id, chat_data.selected_contact, chat_data.selected_server);
+                                        self.app_mode = AppMode::FileExploring;
+                                    }
+                                    _ => ()
+                                }
+                            },
+                            _ => (),
+                        }
+                    }
+                }
             }
         }
     }

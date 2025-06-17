@@ -121,7 +121,10 @@ impl App<'_>{
                             self.handle_event_inputmode(event);
                         },
                         AppMode::Scrolling => {
-                          self.handle_event_scrollingmode(key);
+                            self.handle_event_scrollingmode(key);
+                        },
+                        AppMode::FileExploring => {
+                            self.handle_event_file_exploringmode(event)
                         },
                         _ => {
                             self.handle_event_normalmode(key);

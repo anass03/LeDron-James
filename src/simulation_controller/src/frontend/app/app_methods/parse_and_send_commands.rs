@@ -1,6 +1,6 @@
 use std::f32;
 use std::str::FromStr;
-use host::{FileId, MediaId, ServerId};
+use host::{ClientId, FileId, MediaId, ServerId};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::LogType;
 use crate::frontend::app::App;
@@ -51,7 +51,7 @@ impl App<'_>{
 
     /// Client
 
-    pub(super) fn parse_and_send_message(&mut self, id:NodeId){
+    pub(super) fn parse_and_send_message_old(&mut self, id:NodeId){
         match self.parse_3input(){
             Ok((n,s_id, str)) => {
                 match self.simulation_controller_data.message_for(id, n as u8, s_id as u8, str){
@@ -62,6 +62,32 @@ impl App<'_>{
             Err(_) => {}
         }
     }
+    pub(super) fn parse_and_send_message(&mut self, client_sender:ClientId, client_receiver:ClientId, server_receiver:ServerId ){
+        let chat_lines = self
+            .cache
+            .text_buffer
+            .chat_text_area
+            .clone()
+            .into_lines();
+        if chat_lines.is_empty(){
+            // I can set an error here, like red highlighting the box
+            self.simulation_controller_data.logs.push_log(LogType::ERROR, "Empty buffer, can't send message!");
+        }else{
+            // join them into a single String separated by '\n'
+            let second_string = chat_lines.join("\n");
+            // clear the text areas after successful parsing
+            self.clean_topology_inputs_buffer();
+            match self.simulation_controller_data.message_for(client_sender, client_receiver, server_receiver, second_string){
+                Ok(_) => {
+                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent message".to_string())
+                },
+                Err(str) => {
+                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)
+                }
+            }
+        }
+    }
+
 
     pub(super) fn request_media(&mut self, id: NodeId){ // 1 Input
         // We parse the 1 input insered

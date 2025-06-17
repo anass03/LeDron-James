@@ -7,6 +7,7 @@ use std::str::FromStr;
 pub(in crate::frontend::app) struct TextBuffer<'a>{
     pub text_buffer: Vec<String>,
     pub toml_text_area: TextArea<'a>,
+    pub chat_text_area: TextArea<'a>,
     pub inputfirst_text_area: TextArea<'a>,
     pub inputsecond_text_area: TextArea<'a>,
     pub inputthird_text_area: TextArea<'a>
@@ -145,6 +146,7 @@ impl<'a> TextBuffer<'_>{
         Self{
             text_buffer: Vec::new(),
             toml_text_area: Default::default(),
+            chat_text_area: Default::default(),
             inputfirst_text_area: Default::default(),
             inputsecond_text_area: Default::default(),
             inputthird_text_area: Default::default()

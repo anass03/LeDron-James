@@ -1,6 +1,6 @@
 use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem};
 use ratatui::prelude::{Color, Line, Modifier, Span, StatefulWidget, Style, Widget};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
 use ratatui::buffer::Buffer;
 use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine};
 use crate::backend::simulation_controller::NetNode;

@@ -74,7 +74,7 @@ impl App<'_>{
             Event::Key(key) => {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
-                        KeyCode::Esc | KeyCode::Enter => {
+                        KeyCode::Esc  => {
                             // Salvo input
                             self.app_mode = AppMode::Normal;
                         },
@@ -87,23 +87,13 @@ impl App<'_>{
                             let input = Input::from(event.clone());
                             match Self::map_italian_brackets(&event){
                                 Some(c) => {
-                                    match self.cache.tab1_data.popup_cursor {
-                                        1 => self.cache.text_buffer.inputfirst_text_area.insert_char(c),
-                                        2 => self.cache.text_buffer.inputsecond_text_area.insert_char(c),
-                                        3 => self.cache.text_buffer.inputthird_text_area.insert_char(c),
-                                        _ => ()
-                                    };
+                                    self.cache.text_buffer.chat_text_area.insert_char(c);
                                 },
                                 None => {
                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
                                         self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
                                     };
-                                    match self.cache.tab1_data.popup_cursor {
-                                        1 => {self.cache.text_buffer.inputfirst_text_area.input(input);},
-                                        2 => {self.cache.text_buffer.inputsecond_text_area.input(input);},
-                                        3 => {self.cache.text_buffer.inputthird_text_area.input(input);},
-                                        _ => ()
-                                    }
+                                    self.cache.text_buffer.chat_text_area.input(input);
                                 }
                             }
                         }

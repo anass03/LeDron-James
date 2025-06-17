@@ -5,4 +5,5 @@ mod event_normalmode;
 mod event_scrollingmode;
 mod parse_and_send_commands;
 mod temp_tab_event_handling;
+mod event_file_exploringmode;
 

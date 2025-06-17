@@ -1,7 +1,9 @@
 use wg_2024::network::NodeId;
 use std::collections::HashMap;
+use host::{ClientId, ServerId};
 use toml::value::{Datetime, Time};
 use rand::distr::weighted::Weight;
+use wg_2024::config::Server;
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
@@ -65,12 +67,12 @@ impl Statistics{
 pub struct ChatCache{
     // Gets updated each time a chat-history gets modified via-server
     // Each server has its own ChatList saved
-    pub local_chats: HashMap<NodeId, ChatList>,
+    pub local_chats: HashMap<ServerId, ChatList>,
 
     // Gets updated each time we receive the relative data-packet
     // Each client has its own list in each server.
     // First Key is ClientID, Value is all the contacts it has associated with the relative server.
-    pub known_contacts: HashMap<NodeId, HashMap<NodeId, Vec<NodeId>>>,
+    pub known_contacts: HashMap<ClientId, HashMap<ServerId, Vec<ClientId>>>,
 
     // Simply all the chat server the Client knows.
     pub known_chat_servers: HashMap<NodeId, Vec<NodeId>>,
@@ -110,11 +112,21 @@ impl ChatCache{
 
 pub(crate) struct ChatList{
     // We keep a copy of the users chats even in the vec for easier finding.
-    pub chats_stored: Vec<((NodeId,NodeId),Chat)>,
+
+    // CONVERTI IN HASHMAP E SISTEMA IN TAB1 RENDERING
+    // FINISCI EVENT HANDLING CHAT
+    // IMPORTA CRATE EXTERNAL FILE EXPLORER
+    // DATA PAGE
+    pub chats_stored: HashMap<(ClientId, ClientId), Chat>
 }
 
 impl ChatList{
-    fn default() -> Self {
+    fn default() -> Self{
+        Self{
+            chats_stored: HashMap::new(),
+        }
+    }
+    fn default_dummy() -> Self {
         // Build a dummy chat history of 20 alternating messages
         let users_pair = (2, 1);
         let mut history = Vec::with_capacity(20);
@@ -141,11 +153,12 @@ impl ChatList{
             users: ChatUsers { user1: 2, user2: 1 },
         };
         ChatList {
-            chats_stored: vec![(users_pair, chat)],
+            chats_stored: {
+                let mut hash_map = HashMap::default();
+                hash_map.insert(users_pair, chat);
+                hash_map
+            },
         }
-    }
-    fn is_there(){
-
     }
     fn last_message(){
 
