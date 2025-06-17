@@ -1,6 +1,8 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
 use client::ClientCommand;
+
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -14,6 +16,37 @@ use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
+
+pub enum DroneType {
+    RollingDrone,
+    LockheedRustin,
+    BagelBomber,
+    FlyPath,
+    RustDrone,
+    RustasticDrone,
+    BoberDrone,
+    RustyDrone,
+    RustaceansDrone,
+    KrustyDrone
+}
+
+impl Display for DroneType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            DroneType::RollingDrone => "RollingDrone",
+            DroneType::LockheedRustin => "LockheedRustin",
+            DroneType::BagelBomber => "BagelBomber",
+            DroneType::FlyPath => "FlyPath",
+            DroneType::RustDrone => "RustDrone",
+            DroneType::RustasticDrone => "RustasticDrone",
+            DroneType::BoberDrone => "BoberDrone",
+            DroneType::RustyDrone => "RustyDrone",
+            DroneType::RustaceansDrone => "RustaceansDrone",
+            DroneType::KrustyDrone => "KrustyDrone",
+        };
+        write!(f, "{}", name)
+    }
+}
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -30,6 +63,7 @@ pub struct SimulationControllerData {
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
+    pub drone_types: HashMap<NodeId, DroneType>,
     pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has! Has to be updated by Initializer / SC Backend
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
@@ -47,6 +81,7 @@ pub struct SimulationControllerData {
 impl SimulationControllerData {
     pub fn new(
         config: Config,
+        drone_types: HashMap<NodeId, DroneType>,
         drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,
         client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
         server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
@@ -93,6 +128,7 @@ impl SimulationControllerData {
             drones,
             clients,
             servers,
+            drone_types,
             drone_command_sender,
             client_command_sender,
             server_command_sender,

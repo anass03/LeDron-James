@@ -11,6 +11,7 @@ fn main() -> std::io::Result<()> {
         drones: vec![],
         clients: vec![],
         servers: vec![],
+        drone_types: Default::default(),
         running_network: HashMap::new(),
         drone_command_sender: Default::default(),
         client_command_sender: Default::default(),

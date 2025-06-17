@@ -636,27 +636,20 @@ impl SimulationControllerData {
     }
 
     pub fn request_client_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        match self.chat_cache.known_contacts.get(&client_id) {
-            Some(contact_map) => {
-                match contact_map.get(&server_id) {
-                    Some(contacts) => {
-                        if contacts.is_empty() {
-                            match self.request_registration_to_chat(client_id, server_id) {
-                                Ok(_) => {}
-                                Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
-                            }
-                        }
-                    }
-                    None => {}
-                }
+        //if client is not registered to chat it automatically sends a request to register
+        let should_register = match self.chat_cache.known_contacts.get(&client_id) {
+            Some(contact_map) => match contact_map.get(&server_id) {
+                Some(contacts) => contacts.is_empty(),
+                None => true,
             },
-            None => {
-                match self.request_registration_to_chat(client_id, server_id) {
-                    Ok(_) => {}
-                    Err(e) => self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e))
-                }
+            None => true,
+        };
+        if should_register {
+            if let Err(e) = self.request_registration_to_chat(client_id, server_id) {
+                self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e));
             }
         }
+
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Client List Request to Client {client_id} for Server {server_id}"));
         let command = Net(ClientList(server_id));
         self.send_client_command(client_id, command)
@@ -818,7 +811,8 @@ impl SimulationControllerData {
                         .insert(client_id, chat_servers.clone());
                 }
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
-            }
+            },
+            HostEvent::ChatUpdate => {}
         }
         Ok(())
     }

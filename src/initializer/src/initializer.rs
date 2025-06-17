@@ -19,7 +19,7 @@ use Krusty_Club::Krusty_C;
 use client::Client as LeClient;
 use server::{ContentServer as LeContentServer};
 use server::ChatServer as LeChatServer;
-use simulation_controller::backend::simulation_controller::SimulationControllerData;
+use simulation_controller::backend::simulation_controller::{DroneType, SimulationControllerData};
 use rand::{random_range, Rng};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,6 +27,8 @@ pub enum ServerType {
     Chat,
     Content,
 }
+
+
 
 pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeId, JoinHandle<()>>), String> {
     /// - Parsing the network configuration
@@ -87,6 +89,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     //simulation controller has a single receiver for all drone events, while the sender is cloned
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
+    let mut drone_types = HashMap::new();
 
     /// - Initializing the drones
     let (log_sender, log_receiver) = unbounded();
@@ -113,6 +116,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
         /// - spawning the thread of the drone and collecting the handle in a vector
         match i {
             0 => {
+                drone_types.insert(drone.id, DroneType::RollingDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = RollingDrone::new(
                         drone_clone.id,
@@ -127,6 +131,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             1 => {
+                drone_types.insert(drone.id, DroneType::LockheedRustin);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = LockheedRustin::new(
                         drone_clone.id,
@@ -141,6 +146,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             2 => {
+                drone_types.insert(drone.id, DroneType::FlyPath);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = FlyPath::new(
                         drone_clone.id,
@@ -155,6 +161,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             3 => {
+                drone_types.insert(drone.id, DroneType::RustDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = RustDrone::new(
                      drone_clone.id,
@@ -169,6 +176,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             4 => {
+                drone_types.insert(drone.id, DroneType::BoberDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = BoberDrone::new(
                        drone_clone.id,
@@ -183,6 +191,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             5 => {
+                drone_types.insert(drone.id, DroneType::BagelBomber);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = BagelBomber::new(
                        drone_clone.id,
@@ -197,6 +206,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             6 => {
+                drone_types.insert(drone.id, DroneType::RustyDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = RustyDrone::new(
                        drone_clone.id,
@@ -211,6 +221,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             7 => {
+                drone_types.insert(drone.id, DroneType::RustasticDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = RustasticDrone::new(
                         drone_clone.id,
@@ -225,6 +236,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             8 => {
+                drone_types.insert(drone.id, DroneType::RustaceansDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = RustaceansWitAttitudesDrone::new(
                         drone_clone.id,
@@ -239,6 +251,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             9 => {
+                drone_types.insert(drone.id, DroneType::KrustyDrone);
                 handles.insert(drone.id, thread::spawn(move || {
                     let mut drone = Krusty_C::new(
                         drone_clone.id,
@@ -366,6 +379,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     /// - Connecting the Simulation Controller to all the channels and nodes
     let controller = SimulationControllerData::new(
         config.clone(),
+        drone_types,
         drone_command_senders,
         client_command_senders,
         server_command_senders,
