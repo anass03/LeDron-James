@@ -812,7 +812,7 @@ impl SimulationControllerData {
                 }
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             },
-            HostEvent::ChatUpdate => {}
+            HostEvent::ChatUpdate(string) => {}
         }
         Ok(())
     }
