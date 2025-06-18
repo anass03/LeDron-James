@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use host::Image as LeImage;
 use std::time::Duration;
 use chrono::Utc;
+use toml::value::{Datetime};
 use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
@@ -238,9 +239,18 @@ impl ChatServer2 {
     /// Insert a message in the chat (creates the chat if it does not exist)
     fn insert_message(&mut self, source: NodeId, destination: NodeId, message: MessageSC) {
         let (min_user, max_user) = if source < destination { (source, destination) } else { (destination, source) };
-        let now = Utc::now().timestamp_millis() as u64;
+        let now = Utc::now();
 
-        let metadata = MessageMetaData { id: source, timestamp: now };
+        let timestamp: Datetime = match now.to_rfc3339().parse() {
+            Ok(dt) => dt,
+            Err(e) => {
+                eprintln!("Errore nel parse del Datetime: {}", e);
+                return; // oppure gestisci diversamente
+            }
+        }; // safe: contiene anche offset
+
+
+        let metadata = MessageMetaData { id: source, timestamp };
 
         match self.check_if_chat_exists(min_user, max_user) {
             Some(index) => {
@@ -293,7 +303,7 @@ pub struct ChatUsers {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct MessageMetaData {
     pub id: NodeId,
-    pub timestamp: u64,
+    pub timestamp: Datetime,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
