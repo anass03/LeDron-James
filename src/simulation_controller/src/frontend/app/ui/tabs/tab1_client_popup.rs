@@ -881,7 +881,7 @@ pub(super) mod net_rendering{
     use std::collections::HashMap;
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
-    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage};
+    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage, SelectedFileMedia};
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
     use ratatui::buffer::{Buffer, Cell};
 
@@ -892,10 +892,15 @@ pub(super) mod net_rendering{
     use ratatui::layout::Direction::Vertical;
     use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine};
     use std::ops::Add;
-    use host::{ClientId, MediaId, ServerId};
+    use std::sync::mpsc::Receiver;
+    use client::Client;
+    use host::{ClientId, FileId, MediaId, ServerId};
+    use ratatui::Frame;
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::{ToSpan, ToText};
-    use crate::backend::sc_models::{Chat, Message};
+    use ratatui_image::protocol::StatefulProtocol;
+    use ratatui_image::StatefulImage;
+    use crate::backend::sc_models::{Chat, FileRendererUpdate, Message, NetCacheMedia};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
@@ -1017,7 +1022,31 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                ListItem::from(id.to_text()).style(base_style)
+                                match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+                                    None => {
+                                        ListItem::from(format!("{:?}",id)).style(base_style)
+                                    }
+                                    Some(hash) => {
+                                        match hash.get(&id){
+                                            None => {
+                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                            }
+                                            Some(item) => {
+                                                let load_char = match item.1{
+                                                    NetCacheMedia::Downloading(_) => {
+                                                        match app.cache.counter % 4 {
+                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        ' '
+                                                    }
+                                                };
+                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                            }
+                                        }
+                                    }
+                                }
                             })
                             .collect()
                     }
@@ -1041,7 +1070,31 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                ListItem::from(id.to_text()).style(base_style)
+                                match app.simulation_controller_data.net_cache.downloaded_files.get(&ndpage_data.selected_server){
+                                    None => {
+                                        ListItem::from(format!("{:?}",id)).style(base_style)
+                                    }
+                                    Some(hash) => {
+                                        match hash.get(&id){
+                                            None => {
+                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                            }
+                                            Some(item) => {
+                                                let load_char = match item.1{
+                                                    NetCacheMedia::Downloading(_) => {
+                                                        match app.cache.counter % 4 {
+                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        ' '
+                                                    }
+                                                };
+                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                            }
+                                        }
+                                    }
+                                }
                             })
                             .collect()
                     }
@@ -1123,7 +1176,57 @@ pub(super) mod net_rendering{
             NO - Mostro la schermata "Select a file to view"
          */
 
+        match ndpage_data.selected_file {
+            SelectedFileMedia::None => {
 
+            }
+            SelectedFileMedia::File(_) => {
+
+            }
+            SelectedFileMedia::Media(_) => {
+
+            }
+        }
+
+
+    }
+    fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:FileId){
+        match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+            None => {
+
+            }
+            Some(hash) => {
+                match hash.get(&file_id){
+                    None => {
+
+                    }
+                    Some((_,file_status)) => {
+                        match file_status{
+                            NetCacheMedia::Downloading(download_status) => {
+
+                            }
+                            NetCacheMedia::Downloaded(_) => {
+
+                            }
+                            NetCacheMedia::Rendering(_) => {
+                            }
+                            NetCacheMedia::Rendered(image_protocol) => {
+                                ratatui::widgets::StatefulWidget::render(
+                                    StatefulImage::new(),
+                                    area,
+                                    buf,
+                                    image_protocol
+                                )
+
+                            }
+                            NetCacheMedia::FatalErrorRendering() => {
+
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 pub(super) mod settings_rendering{

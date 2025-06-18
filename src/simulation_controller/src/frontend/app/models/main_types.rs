@@ -1,5 +1,6 @@
 use std::sync::mpsc::{Receiver, Sender};
 use host::ServerId;
+use ratatui::Frame;
 use ratatui_explorer::{FileExplorer, Theme};
 use ratatui_image::thread::ResizeRequest;
 use crate::backend::sc_models::{FileRendererUpdate, LogType};
@@ -40,6 +41,7 @@ pub(crate) enum RendererResponse{
 }
 
 pub(in crate::frontend::app) struct Cache<'a> {
+    pub frame: Frame<'a>,
     pub cursor: u8, // Cursor to know which menu on-tab is selected.
     pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
     pub counter: u8, // Counting cycles, used to update colors in TUI
@@ -57,6 +59,9 @@ pub(in crate::frontend::app) struct Cache<'a> {
 impl<'a> Cache<'a> {
     pub(in crate::frontend::app) fn default() -> Cache<'a> {
         Cache {
+            frame: Frame{
+
+            },
             text_buffer:TextBuffer::default(),
             cursor:0,
             file_explorer: FileExplorer::new().unwrap(),
