@@ -1266,7 +1266,7 @@ pub enum HostEvent {
     ///Servers discovered, response at ServerType
     ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
     ///for real time chat
-    ChatUpdate(String)
+    ChatUpdate(ServerId, String)
 }
 
 #[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
