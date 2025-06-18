@@ -144,13 +144,13 @@ impl ChatServer2 {
                 }
             }
 
-            ClientNetCommand::FileFor(destination, receiver_id, file_id, extension, message) => {
+            ClientNetCommand::FileFor(destination, receiver_id, file_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
                         if self.check_if_in_client_list(destination) {
-                            self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id, extension.clone(), message.clone()), source.clone());
+                            self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
                             self.send_logging(format!("Sending file to {}", destination));
-                            self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, extension, message), destination);
+                            self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, message), destination);
                         } else {
                             self.send_logging(format!("Destination {} not registered", destination));
                             self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
@@ -163,13 +163,13 @@ impl ChatServer2 {
                 }
             }
 
-            ClientNetCommand::MediaFor(destination, receiver_id, media_id, extension, message) => {
+            ClientNetCommand::MediaFor(destination, receiver_id, media_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
                         if self.check_if_in_client_list(destination) {
-                            self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id, extension.clone(), message.clone()), source.clone());
+                            self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
                             self.send_logging(format!("Sending media to {}", destination));
-                            self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, extension, message), destination);
+                            self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, message), destination);
                         } else {
                             self.send_logging("Destination client not registered".to_string());
                         }
@@ -226,11 +226,11 @@ impl ChatServer2 {
             ClientNetCommand::MessageFor(destination, _, msg) => {
                 self.insert_message(source, destination, MessageSC::Message(msg));
             }
-            ClientNetCommand::MediaFor(destination, _, media_id, extension, message) => {
-                self.insert_message(source, destination, MessageSC::Media(MediaSC::Image(media_id, extension, message)));
+            ClientNetCommand::MediaFor(destination, _, media_id, message) => {
+                self.insert_message(source, destination, MessageSC::Media(MediaSC::Image(media_id, message)));
             }
-            ClientNetCommand::FileFor(destination, _, file_id, extension, message) => {
-                self.insert_message(source, destination, MessageSC::Media(MediaSC::File(file_id, extension, message)));
+            ClientNetCommand::FileFor(destination, _, file_id, message) => {
+                self.insert_message(source, destination, MessageSC::Media(MediaSC::File(file_id, message)));
             }
             _ => self.send_logging("Unexpected ClientNetCommand type received in save_message.".to_string()),
         }
@@ -314,6 +314,6 @@ pub enum MessageSC {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub enum MediaSC {
-    Image(usize, String, LeImage),
-    File(usize, String, Vec<u8>),
+    Image(String, LeImage),
+    File(String, Vec<u8>),
 }

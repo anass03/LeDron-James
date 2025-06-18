@@ -139,12 +139,12 @@ impl ChatServer {
                 }
             }
 
-            ClientNetCommand::FileFor(destination, receiver_id, file_id, extension, message) => {
+            ClientNetCommand::FileFor(destination, receiver_id, file_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
                         if self.check_if_in_client_list(destination) {
                             self.send_logging(format!("Forwarding file to {}", destination));
-                            self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, extension, message), destination);
+                            self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, message), destination);
                         } else {
                             self.send_logging(format!("Destination {} not registered", destination));
                             self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
@@ -157,12 +157,12 @@ impl ChatServer {
                 }
             }
 
-            ClientNetCommand::MediaFor(destination, receiver_id, media_id, extension, message) => {
+            ClientNetCommand::MediaFor(destination, receiver_id, media_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
                         if self.check_if_in_client_list(destination) {
                             self.send_logging(format!("Forwarding media to {}", destination));
-                            self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, extension, message), destination);
+                            self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, message), destination);
                         } else {
                             self.send_logging("Destination not registered".to_string());
                         }

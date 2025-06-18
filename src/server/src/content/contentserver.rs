@@ -14,10 +14,10 @@ use delegate::delegate;
 /// and communicates with clients through source routing.
 pub struct ContentServer {
     info: GenServer,                 // Internal GenServer used for common server logic
-    files: Vec<usize>,               // List of file IDs (text files)
-    media: Vec<usize>,               // List of media IDs (images)
-    file_map: HashMap<usize, PathBuf>,  // Map file ID -> file path
-    media_map: HashMap<usize, PathBuf>, // Map media ID -> media path
+    files: Vec<String>,               // List of file IDs (text files)
+    media: Vec<String>,               // List of media IDs (images)
+    file_map: HashMap<String, PathBuf>,  // Map file ID -> file path
+    media_map: HashMap<String, PathBuf>, // Map media ID -> media path
 }
 
 /// Trait defining the ContentServer behavior, composed by both MediaServer and TextServer.
@@ -120,12 +120,10 @@ impl ContentServer {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
                 if path.is_file() {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        let digits: String = stem.chars().filter(|c| c.is_ascii_digit()).collect();
-                        if let Ok(id) = digits.parse::<usize>() {
-                            self.file_map.insert(id, path.clone());
-                            self.files.push(id);
-                        }
+                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                        let id = filename.to_string();
+                        self.file_map.insert(id.clone(), path.clone());
+                        self.files.push(id);
                     }
                 }
             }
@@ -136,21 +134,20 @@ impl ContentServer {
             for entry in entries.filter_map(Result::ok) {
                 let path = entry.path();
                 if path.is_file() {
-                    if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
-                        let digits: String = stem.chars().filter(|c| c.is_ascii_digit()).collect();
-                        if let Ok(id) = digits.parse::<usize>() {
-                            self.media_map.insert(id, path.clone());
-                            self.media.push(id);
-                        }
+                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                        let id = filename.to_string();
+                        self.media_map.insert(id.clone(), path.clone());
+                        self.media.push(id);
                     }
                 }
             }
         }
 
-        self.files.sort_unstable();
-        self.media.sort_unstable();
+        self.files.sort();
+        self.media.sort();
         self.send_logging(format!("Loaded {} text files and {} images.", self.files.len(), self.media.len()));
     }
+
 
     /// Handles high-level client commands after full message reassembly.
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
@@ -176,9 +173,9 @@ impl ContentServer {
                 if receiver_id == self.info.host.id {
                     if let Some(path) = self.file_map.get(&file_id) {
                         match Self::convert_file_path(path) {
-                            Ok((data, ext)) => {
+                            Ok(data) => {
                                 self.send_logging("Sending file".to_string());
-                                self.send_response(ServerToClient::File(self.info.host.id, file_id, ext, data), source);
+                                self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
                             }
                             Err(_) => {
                                 self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
@@ -198,15 +195,15 @@ impl ContentServer {
                     self.send_response(ServerToClient::MediaList(self.info.host.id, self.media.clone()), source);
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
+               }
             }
             ClientNetCommand::Media(receiver_id, file_id) => {
                 if receiver_id == self.info.host.id {
                     if let Some(path) = self.media_map.get(&file_id) {
                         match Self::process_image_path(path) {
-                            Ok((image, ext)) => {
+                            Ok(image) => {
                                 self.send_logging(format!("Image {} loaded: {}x{}", file_id, image.width, image.height));
-                                self.send_response(ServerToClient::Media(self.info.host.id, file_id, ext, image), source);
+                                self.send_response(ServerToClient::Media(self.info.host.id, file_id, image), source);
                             }
                             Err(_) => {
                                 self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
