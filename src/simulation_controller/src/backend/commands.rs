@@ -6,14 +6,15 @@ use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient, ServerTypes};
+use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::LogType;
+use crate::backend::sc_models::{LogType, ChatList};
 use host::ServerTypes::*;
+use server::chat2::Chat;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -812,7 +813,17 @@ impl SimulationControllerData {
                 }
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             },
-            HostEvent::ChatUpdate(string) => {}
+            HostEvent::ChatUpdate(server_id, string) => {
+                let chat: Chat = serde_json::from_str(&string)
+                    .map_err(|e| (LogType::ERROR, e.to_string()))?;
+
+                let key = (chat.users.user1, chat.users.user2);
+                let mut chats_stored = HashMap::new();
+                chats_stored.insert(key, chat);
+
+                let chat_list = ChatList { chats_stored };
+                self.chat_cache.local_chats.insert(server_id, chat_list);
+            }
         }
         Ok(())
     }

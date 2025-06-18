@@ -1,35 +1,18 @@
-use wg_2024::network::NodeId;
 use std::collections::HashMap;
 use host::{ClientId, FileId, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
-
-use ratatui::{
-    Frame, Terminal,
-    backend::CrosstermBackend,
-    crossterm::{
-        event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
-        execute,
-        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-    },
-    widgets::{Block, Borders, Paragraph},
-};
-use ratatui_image::{
-    StatefulImage,
-    errors::Errors,
-    picker::Picker,
-    thread::{ResizeRequest, ResizeResponse, ThreadProtocol},
-};
+use std::sync::mpsc::Receiver;          // <-- concrete type
+use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
+use ratatui_image::thread::{ResizeResponse, ThreadProtocol};
+use server::MessageSC::Message;
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
 pub enum LogType{
     WARN, ERROR, INFO, DEBUG, FATAL
 }
-
-
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
@@ -199,8 +182,8 @@ impl ChatList{
                 offset: None,
             };
             history.push((
-                Message::Message(text),
-                MessageMetadata { id_sender: sender, timestamp },
+                Message(text),
+                MessageMetaData { id: sender, timestamp },
             ));
         }
         let chat = Chat {
@@ -215,38 +198,10 @@ impl ChatList{
             },
         }
     }
-    fn last_message(){
-
-    }
-}
-
-pub(crate) struct Chat{
-    pub chat: Vec<(Message, MessageMetadata)>, // From older to newer message
-    users: ChatUsers, // Users that participate in the chat
-}
-
-impl Chat{
-    pub fn get_last_message(&self)->Option<&(Message,MessageMetadata)>{
-        self.chat.last()
-    }
-}
-
-pub(crate) struct ChatUsers{ // Order does NOT matter
-    user1: NodeId,
-    user2: NodeId,
-}
-
-pub(crate) struct MessageMetadata{
-    pub id_sender: NodeId,
-    pub timestamp: Datetime,
-}
-
-pub(crate) enum Message{
-    Message(String), Media(MediaSC)
 }
 
 pub(crate) enum MediaSC {
-    Image(/* An Recostructed Image File */), File(/* An Recostructed File */)
+    Image(/* A Reconstructed Image File */), File(/* A Reconstructed File */)
 }
 
 pub enum DroneType {

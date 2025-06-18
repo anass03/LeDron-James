@@ -303,7 +303,8 @@ pub(super) mod chat_rendering{
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::ToSpan;
     use ratatui::widgets;
-    use crate::backend::sc_models::{Chat, Message};
+    use server::chat2::Chat;
+    use server::MessageSC::{Media, Message};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
@@ -467,9 +468,9 @@ pub(super) mod chat_rendering{
                                     /*let [message_area, data_area] = Layout::default()
                                         .direction(Direction::Horizontal)
                                         .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
-                                    if messdata.id_sender==selected_cl {
+                                    if messdata.id==selected_cl {
                                         match mess{
-                                            Message::Message(str) => {
+                                            Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
                                                 let last_msg = Paragraph::new(Line::from(vec![initial_mess
@@ -479,7 +480,7 @@ pub(super) mod chat_rendering{
                                                     .wrap(Wrap { trim: true });
                                                 last_msg.render(info_msg, buf);
                                             }
-                                            Message::Media(med) => {
+                                            Media(med) => {
                                                 let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
                                                 let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
@@ -490,20 +491,20 @@ pub(super) mod chat_rendering{
                                         }
                                     }else {
                                         match mess{
-                                            Message::Message(str) => {
+                                            Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
-                                                                           messdata.id_sender);
+                                                                           messdata.id);
                                                 let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
                                                                                               str.to_span()]))
                                                     .alignment(Alignment::Left)
                                                     .wrap(Wrap { trim: true });
                                                 last_msg.render(info_msg, buf);
                                             }
-                                            Message::Media(med) => {
+                                            Media(med) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
-                                                                           ,messdata.id_sender);
+                                                                           ,messdata.id);
                                                 let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                                                     .alignment(Alignment::Left)
                                                     .wrap(Wrap { trim: true });
@@ -530,7 +531,7 @@ pub(super) mod chat_rendering{
                                     /*let [message_area, data_area] = Layout::default()
                                         .direction(Direction::Horizontal)
                                         .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
-                                    if messdata.id_sender==selected_cl {
+                                    if messdata.id==selected_cl {
                                         match mess{
                                             Message::Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
@@ -556,7 +557,7 @@ pub(super) mod chat_rendering{
                                             Message::Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
-                                                                           messdata.id_sender);
+                                                                           messdata.id);
                                                 let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
                                                                                               str.to_span()]))
                                                     .alignment(Alignment::Left)
@@ -566,7 +567,7 @@ pub(super) mod chat_rendering{
                                             Message::Media(med) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
-                                                                           ,messdata.id_sender);
+                                                                           ,messdata.id);
                                                 let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                                                     .alignment(Alignment::Left)
                                                     .wrap(Wrap { trim: true });
@@ -753,8 +754,8 @@ pub(super) mod chat_rendering{
         let mut row_heights = Vec::with_capacity(visible.len());
         for (msg, _) in visible.iter() {
             let content = match msg {
-                Message::Message(text) => text.clone(),
-                Message::Media(_) => "[MEDIA] 🖇️ Select this message to open the file!".to_string(),
+                Message(text) => text.clone(),
+                Media(_) => "[MEDIA] 🖇️ Select this message to open the file!".to_string(),
             };
             let wrapped = wrap(&content, msgs_col.width.saturating_sub(2) as usize);
             let lines = wrapped.len().max(1) as u16;
@@ -776,7 +777,7 @@ pub(super) mod chat_rendering{
             current_y += row_height;
 
             // Determine if sent or received and if selected
-            let is_sent = meta.id_sender == selected_cl;
+            let is_sent = meta.id == selected_cl;
             let is_selected_msg = i == sel_index;
 
             // Split left/right for bubble
@@ -814,8 +815,8 @@ pub(super) mod chat_rendering{
 
             // Wrap and render message text
             let content = match msg {
-                Message::Message(text) => text.clone(),
-                Message::Media(_) => "[media]".to_string(),
+                Message(text) => text.clone(),
+                Media(_) => "[media]".to_string(),
             };
             let wrapped_text = wrap(&content, bubble_area.width.saturating_sub(2) as usize).join("\n");
             let mut text_style = Style::default().add_modifier(Modifier::ITALIC);
@@ -887,17 +888,9 @@ pub(super) mod net_rendering{
 
     use ratatui::prelude::{Color, Line, Modifier, Style, Text, Widget};
     use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem, Paragraph, Wrap};
-    use toml::value::Time;
-    use textwrap::wrap;
-    use ratatui::layout::Direction::Vertical;
-    use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine};
-    use std::ops::Add;
     use host::{ClientId, MediaId, ServerId};
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::{ToSpan, ToText};
-    use crate::backend::sc_models::{Chat, Message};
-    use crate::frontend::app::models::main_types::AppMode;
-    use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
     use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
