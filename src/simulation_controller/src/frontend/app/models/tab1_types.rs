@@ -1,4 +1,4 @@
-use host::{ClientId, ServerId};
+use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::widgets::ListState;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
@@ -19,6 +19,7 @@ pub(in crate::frontend::app) struct Tab1{
 
     // Needed fast accessible data for Tab1-Third Page
     pub chat_third_page_selection: ChatThirdPageSelection,
+
 
     pub file_exploring_data: FileExploring,
 
@@ -139,9 +140,18 @@ pub(crate) struct NetFirstPage {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetSecondPage {
     pub selected_server: NodeId,
+
+    pub selected_file: SelectedFileMedia,
+
     // Depending on the selected client, we gotta view the available servers the client knows.
     pub scroll_offset:u8
 }
+#[derive(Debug, Clone, Default)]
+pub(crate) enum SelectedFileMedia{
+    #[default]
+    None, File(FileId), Media(MediaId)
+}
+
 #[derive(Debug, Clone)]
 pub(crate) enum ClientDataPopup{
     FirstPage(), // View some statistics

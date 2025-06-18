@@ -93,6 +93,7 @@ impl App<'_>{
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
+            self.cache.frame = terminal.get_frame();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
 
             self.handle_events()?;

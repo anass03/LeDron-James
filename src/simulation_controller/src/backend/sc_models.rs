@@ -71,7 +71,7 @@ pub struct NetCache{
     pub known_media_list: HashMap<ClientId, HashMap<ServerId, Vec<MediaId>>>,
 
     pub downloaded_medias: HashMap<ServerId, HashMap<FileId,(Option<Receiver<FileRendererUpdate>>, NetCacheMedia)>>,
-    //pub downloaded_files: HashMap<ServerId, HashMap<FileId, >>
+    pub downloaded_files: HashMap<ServerId, HashMap<FileId,((),NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //
 }
@@ -87,6 +87,7 @@ impl NetCache{
             known_file_list: Default::default(),
             known_media_list: Default::default(),
             downloaded_medias: Default::default(),
+            downloaded_files: Default::default(),
         }
     }
 }
