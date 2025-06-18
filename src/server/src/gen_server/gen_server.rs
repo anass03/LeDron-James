@@ -10,7 +10,7 @@ use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionDat
 use zstd::{decode_all, encode_all};
 
 /// GenServer represents a generic server (Chat or Content server),
-/// responsible for receiving fragmented packets, reassembling them
+/// responsible for receiving fragmented packets, reassembling them,
 /// and handling simulation commands from the Simulation Controller.
 pub struct GenServer {
     pub host: Host,                               // Internal host logic-shared between clients and servers

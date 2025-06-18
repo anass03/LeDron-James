@@ -268,9 +268,6 @@ impl ChatServer2 {
             }
         }
     }
-    /*pub fn get_last_message(&self)->Option<&(MessageSC,MessageMetadata)> {
-        self.chats.last()
-    }*/
 }
 
 // Chat data structures for message persistence
@@ -279,6 +276,11 @@ impl ChatServer2 {
 pub struct Chat {
     pub chat: Vec<(MessageSC, MessageMetaData)>,
     pub users: ChatUsers,
+}
+impl Chat{
+    pub fn get_last_message(&self)->Option<&(MessageSC,MessageMetaData)> {
+        self.chat.last()
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
