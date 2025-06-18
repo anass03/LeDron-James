@@ -1,13 +1,16 @@
 use host::{ClientId, ServerId};
+use ratatui::widgets::ListState;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
-use crate::frontend::app::models::general_types::{FnList, NodeList};
+use crate::frontend::app::models::general_types::{FnList, NetNodeList};
 
 
 /// Tab n.01 data
 pub(in crate::frontend::app) struct Tab1{
-    pub nodelist: NodeList,
+    pub netnode_list: NetNodeList,
 
+    pub media_list_render_utils: MediaListRenderUtils,
+    pub file_list_render_utils: FileListRenderUtils,
 
     // Popup cursor and selection works accordingly to each other.
     // Popup selection helps to understand which item cursor refers to
@@ -22,6 +25,30 @@ pub(in crate::frontend::app) struct Tab1{
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
+}
+pub(crate) struct MediaListRenderUtils{
+    pub selected: u8,
+    pub state: ListState,
+}
+impl MediaListRenderUtils{
+    fn default()->Self{
+        Self{
+            selected: 0,
+            state: Default::default(),
+        }
+    }
+}
+pub(crate) struct FileListRenderUtils{
+    pub selected: u8,
+    pub state: ListState,
+}
+impl FileListRenderUtils{
+    fn default()->Self{
+        Self{
+            selected: 0,
+            state: Default::default(),
+        }
+    }
 }
 pub(crate) struct FileExploring {
     last_selected_cl_sender: ClientId,
@@ -111,6 +138,7 @@ pub(crate) struct NetFirstPage {
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetSecondPage {
+    pub selected_server: NodeId,
     // Depending on the selected client, we gotta view the available servers the client knows.
     pub scroll_offset:u8
 }
@@ -141,7 +169,9 @@ pub(crate) enum DronePopup{
 impl Tab1{
     pub(crate) fn default() ->Self{
         Self{
-            nodelist: NodeList::default(),
+            netnode_list: NetNodeList::default(),
+            media_list_render_utils: MediaListRenderUtils::default(),
+            file_list_render_utils: FileListRenderUtils::default(),
             selected_fn: FnList::default(),
             popup_cursor: 0,
 

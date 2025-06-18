@@ -19,9 +19,9 @@ pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Percentage(6),
-            Constraint::Percentage(88),
-            Constraint::Percentage(6),
+            Constraint::Percentage(4),
+            Constraint::Percentage(92),
+            Constraint::Percentage(4),
         ])
         .split(area);
 
@@ -30,9 +30,9 @@ pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let horizontal = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(6),
-            Constraint::Percentage(88),
-            Constraint::Percentage(6),
+            Constraint::Percentage(5),
+            Constraint::Percentage(90),
+            Constraint::Percentage(5),
         ])
         .split(vertical_center);
 
@@ -159,17 +159,81 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
         })
 }
 
-pub(super) fn render_data_page(app:&App, area:Rect, buf: &mut Buffer) {
-    let [charts_area, terminal_area] = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
-        .areas(area);
-    let [first_ch, second_ch, third_ch] = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
-        .margin(1)
-        .areas(charts_area);
+pub(super) mod data_rendering{
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::{Direction, Layout, Rect, Constraint};
+    use ratatui::style::{Style, Stylize};
+    use ratatui::widgets::{Block, BorderType, Borders, Widget};
+    use crate::frontend::app::App;
+    use crate::frontend::app::ui::tabs::{process_log_paragraph, MAIN_BLOCK_BORDERS};
 
+    pub(crate) fn render_data_options(app:&App, area:Rect, buf: &mut Buffer){
+        let [stats_area, filtered_logging_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .spacing(1)
+            .areas(area);
+        let [data_1, data_2, data_3] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+            .spacing(1)
+            .areas(stats_area);
 
+        let data_1_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default() .fg(
+                if app.cache.tab1_data.popup_cursor == 0 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+        let inner_data_1_block = data_1_block.inner(data_1);
+        data_1_block.render(area, buf);
+
+        let data_2_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 1 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+        let inner_data_2_block = data_2_block.inner(data_2);
+        data_2_block.render(area, buf);
+
+        let data_3_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 2 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+        let inner_data_3_block = data_3_block.inner(data_3);
+        data_3_block.render(area, buf);
+
+        let logging_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 3 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+
+        let inner_logging_block = logging_block.inner(filtered_logging_area);
+        logging_block.render(filtered_logging_area, buf);
+
+        process_log_paragraph(app).render(inner_logging_block, buf);
+
+    }
 }
 

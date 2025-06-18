@@ -1,4 +1,8 @@
+use std::sync::mpsc::{Receiver, Sender};
+use host::ServerId;
 use ratatui_explorer::{FileExplorer, Theme};
+use ratatui_image::thread::ResizeRequest;
+use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
 use crate::frontend::app::models::general_types::TextBuffer;
 use crate::frontend::app::models::tab0_types::Tab0;
@@ -7,26 +11,6 @@ use crate::frontend::app::models::tab1_types::Tab1;
 pub(in crate::frontend::app) struct Settings{
     pub toml_path: String,
 }
-
-#[derive(PartialEq)]
-pub(in crate::frontend::app) enum AppMode{
-    // CONTINUA CON QUESTO
-    Normal, Input, Scrolling, FileExploring
-}
-
-pub(in crate::frontend::app) struct Cache<'a> {
-    pub cursor: u8, // Cursor to know which menu on-tab is selected.
-    pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
-    pub counter: u8, // Counting cycles, used to update colors in TUI
-
-    pub text_buffer: TextBuffer<'a>,
-    pub file_explorer: FileExplorer,
-
-    pub tab0_data: Tab0, // Data needed by tab0 encapsulated in a struct
-    pub tab1_data: Tab1,
-    pub tab2_data: Tab2
-}
-
 impl Settings{
     pub(in crate::frontend::app) fn load() ->Self{
         use std::path::Path;
@@ -42,6 +26,33 @@ impl Settings{
         }
     }
 }
+
+#[derive(PartialEq)]
+pub(in crate::frontend::app) enum AppMode{
+    Normal, Input, Scrolling, FileExploring
+}
+
+pub(crate) enum RendererCommand{
+    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode(Vec<u8>)
+}
+pub(crate) enum RendererResponse{
+    Outcome((LogType,String)), Encoded()
+}
+
+pub(in crate::frontend::app) struct Cache<'a> {
+    pub cursor: u8, // Cursor to know which menu on-tab is selected.
+    pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
+    pub counter: u8, // Counting cycles, used to update colors in TUI
+
+    pub text_buffer: TextBuffer<'a>,
+    pub file_explorer: FileExplorer,
+
+    pub tab0_data: Tab0, // Data needed by tab0 encapsulated in a struct
+    pub tab1_data: Tab1,
+    pub tab2_data: Tab2
+}
+
+
 
 impl<'a> Cache<'a> {
     pub(in crate::frontend::app) fn default() -> Cache<'a> {

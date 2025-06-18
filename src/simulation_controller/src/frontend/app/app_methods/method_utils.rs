@@ -26,12 +26,12 @@ fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
 impl App<'_> {
 
     pub(crate) fn check_lists_initialized(&mut self){
-        if !self.cache.tab1_data.nodelist.initialized{
+        if !self.cache.tab1_data.netnode_list.initialized{
             let dronec = self.simulation_controller_data.drones.clone();
             let serverc = self.simulation_controller_data.servers.clone();
             let clientc = self.simulation_controller_data.clients.clone();
 
-            self.cache.tab1_data.nodelist.initialize(dronec, serverc, clientc);
+            self.cache.tab1_data.netnode_list.initialize(dronec, serverc, clientc);
         }
     }
     pub(super) fn clean_topology_inputs_buffer(&mut self){

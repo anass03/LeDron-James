@@ -17,10 +17,11 @@ use rusty_drones::RustyDrone;
 use rustaceans_wit_attitudes::RustaceansWitAttitudesDrone;
 use Krusty_Club::Krusty_C;
 use client::Client as LeClient;
-use server::{ContentServer as LeContentServer};
+use server::ContentServer as LeContentServer;
 use server::ChatServer as LeChatServer;
-use simulation_controller::backend::simulation_controller::{DroneType, SimulationControllerData};
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
 use rand::{random_range, Rng};
+use simulation_controller::backend::sc_models::DroneType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerType {

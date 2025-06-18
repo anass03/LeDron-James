@@ -1,9 +1,27 @@
 use wg_2024::network::NodeId;
 use std::collections::HashMap;
-use host::{ClientId, ServerId};
+use host::{ClientId, FileId, MediaId, ServerId};
 use toml::value::{Datetime, Time};
-use rand::distr::weighted::Weight;
-use wg_2024::config::Server;
+use std::fmt::{Display, Formatter};
+use std::fs::File;
+use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
+
+use ratatui::{
+    Frame, Terminal,
+    backend::CrosstermBackend,
+    crossterm::{
+        event::{self, Event, KeyCode, KeyEvent, KeyEventKind},
+        execute,
+        terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
+    },
+    widgets::{Block, Borders, Paragraph},
+};
+use ratatui_image::{
+    StatefulImage,
+    errors::Errors,
+    picker::Picker,
+    thread::{ResizeRequest, ResizeResponse, ThreadProtocol},
+};
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
@@ -62,7 +80,60 @@ impl Statistics{
     }
 }
 
+pub struct NetCache{
+    // Simply all the chat server the Client knows.
+    pub known_content_servers: HashMap<ClientId, Vec<ServerId>>,
+    
+    pub known_file_list: HashMap<ClientId, HashMap<ServerId, Vec<FileId>>>,
+    pub known_media_list: HashMap<ClientId, HashMap<ServerId, Vec<MediaId>>>,
 
+    pub downloaded_medias: HashMap<ServerId, HashMap<FileId,(Option<Receiver<FileRendererUpdate>>, NetCacheMedia)>>,
+    //pub downloaded_files: HashMap<ServerId, HashMap<FileId, >>
+    // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
+    //
+}
+
+pub enum FileRendererUpdate {
+    Redraw(ResizeResponse), Error(String)
+}
+
+impl NetCache{
+    pub fn default() -> Self{
+        Self{
+            known_content_servers: Default::default(),
+            known_file_list: Default::default(),
+            known_media_list: Default::default(),
+            downloaded_medias: Default::default(),
+        }
+    }
+}
+
+pub enum NetCacheMedia {
+    Downloading(u8), // u8 € [0,100] representing client loading status.
+    Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
+    Rendering(u8), // u8 € [0,100] representing Sim. Controller loading status.
+    Rendered(ThreadProtocol), // Rendered file that has to be
+    // re-rendered each time Terminal changes its size.
+    FatalErrorRendering(), // Fatal error rendering, file has to be re-sent!
+}
+pub enum NetCacheFile{
+    Downloading(u8), // u8 € [0,100] representing client loading status.
+    Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
+    Rendering(u8),
+    Rendered(File)
+}
+
+
+/*
+Now, I want a single worker thread to render each of my files.
+First idea could be:
+
+A main crossbeam_channels / mspc channels for direct important communications from Simulation Controller.
+- Add file channels to render
+- Render
+
+Then each file will have it's own channels to identify them in a univocal way.
+ */
 
 pub struct ChatCache{
     // Gets updated each time a chat-history gets modified via-server
@@ -75,7 +146,7 @@ pub struct ChatCache{
     pub known_contacts: HashMap<ClientId, HashMap<ServerId, Vec<ClientId>>>,
 
     // Simply all the chat server the Client knows.
-    pub known_chat_servers: HashMap<NodeId, Vec<NodeId>>,
+    pub known_chat_servers: HashMap<ClientId, Vec<ServerId>>,
 
     // First menu data
     // Starts to 0 and ends at known_chat_servers -> Vec<NodeId>.len()
@@ -86,25 +157,9 @@ pub struct ChatCache{
 impl ChatCache{
     pub fn default() ->Self{
         Self{
-            local_chats: {
-                let mut map = HashMap::new();
-                map.insert(1, ChatList::default());
-                map
-            },
-
-            known_contacts: {
-                let mut map = HashMap::new();
-                let mut map2 = HashMap::new();
-                map2.insert(0, vec![1,2,3,4,5]);
-                map.insert(1, map2);
-                map
-            },
-            known_chat_servers: {
-                let mut map = HashMap::default();
-                map.insert(NodeId::ZERO, vec![1,2,3,4]);
-                map
-            },
-
+            local_chats: Default::default(),
+            known_contacts: Default::default(),
+            known_chat_servers: Default::default(),
             first_menu_scroll_offset: 0,
         }
     }
@@ -192,4 +247,37 @@ pub(crate) enum Message{
 
 pub(crate) enum MediaSC {
     Image(/* An Recostructed Image File */), File(/* An Recostructed File */)
+}
+
+pub enum DroneType {
+    RollingDrone,
+    LockheedRustin,
+    BagelBomber,
+    FlyPath,
+    RustDrone,
+    RustasticDrone,
+    BoberDrone,
+    RustyDrone,
+    RustaceansDrone,
+    KrustyDrone,
+    Unknown
+}
+
+impl Display for DroneType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            DroneType::RollingDrone => "RollingDrone",
+            DroneType::LockheedRustin => "LockheedRustin",
+            DroneType::BagelBomber => "BagelBomber",
+            DroneType::FlyPath => "FlyPath",
+            DroneType::RustDrone => "RustDrone",
+            DroneType::RustasticDrone => "RustasticDrone",
+            DroneType::BoberDrone => "BoberDrone",
+            DroneType::RustyDrone => "RustyDrone",
+            DroneType::RustaceansDrone => "RustaceansDrone",
+            DroneType::KrustyDrone => "KrustyDrone",
+            DroneType::Unknown => "Unknown"
+        };
+        write!(f, "{}", name)
+    }
 }

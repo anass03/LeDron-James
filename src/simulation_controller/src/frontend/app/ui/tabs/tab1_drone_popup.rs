@@ -11,6 +11,7 @@ use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine, Map};
 use std::ops::Add;
 use ratatui::style::{Styled, Stylize};
 use ratatui::text::ToSpan;
+use crate::backend::sc_models::DroneType;
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
@@ -27,7 +28,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
         .areas(inner_sim_popup_block_area);
 
     // Draw centered title in title_area
-    let title_para = Paragraph::new(format!("Drone {}", id))
+    let title_para = Paragraph::new(format!("Drone {} - {}", id, app.simulation_controller_data.drone_types.get(&id).unwrap_or(&DroneType::Unknown)))
         .alignment(Alignment::Center)
         .style(Style::default().add_modifier(Modifier::RAPID_BLINK));
     title_para.render(title_area, buf);
@@ -76,4 +77,7 @@ fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &Dro
 
         }
     }
+}
+fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer) {
+
 }

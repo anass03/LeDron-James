@@ -11,12 +11,12 @@ impl App<'_> {
             0 => {
                 match key {
                     KeyCode::Up => {
-                        self.cache.tab1_data.nodelist.select_prev();
+                        self.cache.tab1_data.netnode_list.select_prev();
                         self.cache.tab1_data.selected_fn.select_first();
                         self.cache.tab1_data.popup_cursor = 0;
                     }
                     KeyCode::Down => {
-                        self.cache.tab1_data.nodelist.select_next();
+                        self.cache.tab1_data.netnode_list.select_next();
                         self.cache.tab1_data.selected_fn.select_first();
                         self.cache.tab1_data.popup_cursor = 0;
                     }
@@ -29,8 +29,8 @@ impl App<'_> {
                 }
             }
             1 => {
-                let selected_n = self.cache.tab1_data.nodelist.selected;
-                match self.cache.tab1_data.nodelist.items.get(selected_n as usize) {
+                let selected_n = self.cache.tab1_data.netnode_list.selected;
+                match self.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
                     None => {
                         self.handle_unknown(key);
                     }
@@ -123,8 +123,8 @@ impl App<'_> {
                 // Each specific fn case cover different event handling
 
                 // Mi trovo in una tab a 1 o a 2 bottoni?
-                let selected_n = self.cache.tab1_data.nodelist.selected;
-                match self.cache.tab1_data.nodelist.items.get(selected_n as usize) {
+                let selected_n = self.cache.tab1_data.netnode_list.selected;
+                match self.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
                     None => {
                         // unreachable
                     }

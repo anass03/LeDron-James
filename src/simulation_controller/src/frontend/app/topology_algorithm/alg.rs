@@ -19,11 +19,11 @@ impl App<'_>{
             }
             TopologyStatus::Computing => {
                 // Keep going generating forces and iterating algorithm
+                self.simulation_controller_data.topology_algorithm_data.check_if_nan();
                 self.topology_status_computing();
             }
             TopologyStatus::Converged => {
                 // Do nothing
-
             }
         }
     }

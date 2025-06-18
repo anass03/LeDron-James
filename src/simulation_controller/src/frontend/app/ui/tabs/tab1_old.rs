@@ -9,8 +9,7 @@ use ratatui::widgets::{
 };
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::App;
-use crate::frontend::app::ui::tabs::{CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR};
-
+use crate::frontend::app::ui::tabs;
 /// Renders Topology tab-page
 pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
     // TAB 1 : Start a simulation to view the topology and modify it.
@@ -47,7 +46,7 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
     let list_items = app
         .cache
         .tab1_data
-        .nodelist
+        .netnode_list
         .items
         .iter()
         .map(|(n, b)| ListItem::from(n)) // Into<ListItem> because you impl From<&Node>
@@ -67,13 +66,13 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
         list,
         left_column,
         buf,
-        &mut app.cache.tab1_data.nodelist.state.clone(),
+        &mut app.cache.tab1_data.netnode_list.state.clone(),
     );
 
     render_selected_fns(app, available_fns, buf);
 
     // Log area will be rendered by the same function on Overview Page ( Tab0 )
-    let log_paragraph = super::tab0::process_log_paragraph(app);
+    let log_paragraph = tabs::process_log_paragraph(app);
     log_paragraph.render(log_area, buf);
 
     render_selected_out(app, result_fns, buf);
@@ -85,8 +84,8 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
 // Render functions depending on the item currently selected
 fn render_selected_fns(app: &App, area: Rect, buf: &mut Buffer) {
     use super::super::super::super::app::models;
-    let selected_n = app.cache.tab1_data.nodelist.selected;
-    match app.cache.tab1_data.nodelist.items.get(selected_n as usize) {
+    let selected_n = app.cache.tab1_data.netnode_list.selected;
+    match app.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
         Some((n, b)) => {
             // Function Process
             let mut vec_and_block = match n {
@@ -196,8 +195,8 @@ fn render_drone_opt<'a>(bl: &bool) -> (Vec<Line<'a>>, Block<'a>) {
 // Render output depending on the item currently selected
 // In case of a client showing: Chat
 fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
-    let selected_n = app.cache.tab1_data.nodelist.selected;
-    match app.cache.tab1_data.nodelist.items.get(selected_n as usize) {
+    let selected_n = app.cache.tab1_data.netnode_list.selected;
+    match app.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
         None => {
             let paragraph = Paragraph::new("finirà mai sto progetto di merda?")
                 .block(
