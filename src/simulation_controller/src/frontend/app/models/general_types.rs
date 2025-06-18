@@ -18,12 +18,13 @@ pub(in crate::frontend::app) struct FnList{
     pub(in crate::frontend::app) state: ListState,
 }
 
-pub(in crate::frontend::app) struct NodeList {
+pub(in crate::frontend::app) struct NetNodeList {
     pub(in crate::frontend::app) items: Vec<(Node, bool)>,
     pub(in crate::frontend::app) selected: u8,
     pub(in crate::frontend::app) state: ListState,
     pub(in crate::frontend::app) initialized: bool,
 }
+
 
 impl FnList{
     pub(crate) fn default() -> Self {
@@ -49,7 +50,7 @@ impl FnList{
     }
 }
 
-impl NodeList {
+impl NetNodeList {
     pub(crate) fn default() -> Self {
         Self {
             items: vec![],

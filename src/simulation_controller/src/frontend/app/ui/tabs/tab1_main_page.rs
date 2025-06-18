@@ -36,7 +36,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
     let items: Vec<ListItem> = app
         .cache
         .tab1_data
-        .nodelist
+        .netnode_list
         .items
         .iter()
         .enumerate()
@@ -70,7 +70,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
         nodes_list,
         list_area,
         buf,
-        &mut app.cache.tab1_data.nodelist.state.clone(),
+        &mut app.cache.tab1_data.netnode_list.state.clone(),
     );
 
 

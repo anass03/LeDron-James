@@ -7,7 +7,7 @@ use crate::backend::sc_models::{Chat, ChatList, LogType};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -23,10 +23,10 @@ impl App<'_> {
     fn handle_main(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up => {
-                self.cache.tab1_data.nodelist.select_prev();
+                self.cache.tab1_data.netnode_list.select_prev();
             }
             KeyCode::Down => {
-                self.cache.tab1_data.nodelist.select_next();
+                self.cache.tab1_data.netnode_list.select_next();
             }
             KeyCode::Right | KeyCode::Left=>{
                 // Depending on where we I handle the right key
@@ -47,8 +47,8 @@ impl App<'_> {
                     0 => {
                         // I am on List
                         // Which item I've selected?
-                        let selected_cursor_item = self.cache.tab1_data.nodelist.selected as usize;
-                        match self.cache.tab1_data.nodelist.items.get(selected_cursor_item){
+                        let selected_cursor_item = self.cache.tab1_data.netnode_list.selected as usize;
+                        match self.cache.tab1_data.netnode_list.items.get(selected_cursor_item){
                             None => {
 
                             }
@@ -472,13 +472,15 @@ impl App<'_> {
             }
         }
     }
+    fn handle_net_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){}
+    fn handle_data_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){}
+    fn handle_sett_page(&mut self, key:KeyEvent,id:NodeId){}
 
-    fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){
 
-    }
-    fn handle_drone_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: DronePopup){
 
-    }
+    fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){}
+    fn handle_drone_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: DronePopup){}
+
 }
 
 

@@ -1,6 +1,6 @@
 use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
 use client::ClientCommand;
 
 use wg_2024::config::Config;
@@ -9,44 +9,13 @@ use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Packet};
+use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{ChatCache, Logs, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
 pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
-
-pub enum DroneType {
-    RollingDrone,
-    LockheedRustin,
-    BagelBomber,
-    FlyPath,
-    RustDrone,
-    RustasticDrone,
-    BoberDrone,
-    RustyDrone,
-    RustaceansDrone,
-    KrustyDrone
-}
-
-impl Display for DroneType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let name = match self {
-            DroneType::RollingDrone => "RollingDrone",
-            DroneType::LockheedRustin => "LockheedRustin",
-            DroneType::BagelBomber => "BagelBomber",
-            DroneType::FlyPath => "FlyPath",
-            DroneType::RustDrone => "RustDrone",
-            DroneType::RustasticDrone => "RustasticDrone",
-            DroneType::BoberDrone => "BoberDrone",
-            DroneType::RustyDrone => "RustyDrone",
-            DroneType::RustaceansDrone => "RustaceansDrone",
-            DroneType::KrustyDrone => "KrustyDrone",
-        };
-        write!(f, "{}", name)
-    }
-}
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -76,6 +45,7 @@ pub struct SimulationControllerData {
     pub stats: Statistics,
 
     pub chat_cache: ChatCache,
+    pub net_cache: NetCache,
 }
 
 impl SimulationControllerData {
@@ -141,6 +111,7 @@ impl SimulationControllerData {
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
             chat_cache: ChatCache::default(),
+            net_cache: NetCache::default(),
         }
     }
 }

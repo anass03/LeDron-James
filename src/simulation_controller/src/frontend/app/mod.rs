@@ -15,15 +15,24 @@ use ratatui::{
     DefaultTerminal
 };
 
-use std::{io, time};
+use std::{io, thread, time};
+use std::collections::HashMap;
+use std::sync::mpsc;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread::JoinHandle;
 use std::time::Duration;
 use time::Instant;
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
+use ratatui_image::errors::Errors;
+use ratatui_image::thread::{ResizeRequest, ResizeResponse};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
+use crate::backend::sc_models::FileRendererUpdate;
+use crate::frontend::app::models::main_types::AppMode::FileExploring;
+use crate::frontend::app::models::main_types::{RendererCommand, RendererResponse};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -41,6 +50,11 @@ IDEE:
  essendo l'SC l'intermediario che eseguirà le operazioni on-network.
  */
 pub struct App<'a> {
+    renderer: JoinHandle<()>,
+    tx_to_renderer: Sender<RendererCommand>,
+    rx_from_renderer: Receiver<RendererResponse>,
+
+
     simulation_controller_data: SimulationControllerData,
     stay: bool,
     app_mode: AppMode,
@@ -52,7 +66,12 @@ pub struct App<'a> {
 }
 impl App<'_>{
     pub fn default(simulation_controller_data: SimulationControllerData) -> Self {
+        let ((tx_to_renderer, rx_from_renderer), renderer) = renderer_thread_gen();
         Self{
+            renderer,
+            tx_to_renderer,
+            rx_from_renderer,
+
             simulation_controller_data,
             stay:true,
             app_mode:AppMode::Normal,
@@ -68,23 +87,22 @@ impl App<'_>{
 
         while self.stay {
             // Listening to channels
-
             self.simulation_controller_data.handle_channels();
             self.check_topology_status();
-            /*self.simulation_controller_data.handle_drone_event().unwrap_or_else(|str| self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str()));
-            self.simulation_controller_data.handle_log_event();
 
-            match self.simulation_controller_data.handle_host_event(){
-                None => {}
-                Some(str) => {
-                    self.simulation_controller_data.logs.push_log(LogType::INFO, str.as_str());
-                }
-            }*/
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&*self, f.area()))?;
+
             self.handle_events()?;
+
+            // Check if it is time to refresh some data
+            if instant.elapsed() > self.tick_rate {
+                instant = Instant::now();
+                self.tick_refresh();
+            }
+
             if self.stay == false{
                 // QUITTING MODE: We should ask again to be sure if the user wants to quit
                 // To do: Design a Quitting page with loading bar
@@ -96,12 +114,6 @@ impl App<'_>{
                 // on the "Are you sure to quit the app" tab
                 // GOTTA MODIFY HANDLE_EVENTS to HANDLE QUITTING MODE
              }
-
-            // Check if it is time to refresh some data
-            if instant.elapsed() > self.tick_rate {
-                instant = Instant::now();
-                self.tick_refresh();
-            }
         }
         Ok(())
     }
@@ -176,7 +188,6 @@ impl App<'_>{
         //self.refresh_cache();
     }
 }
-
 impl Widget for &App<'_>{
     // Each tab render function returns to this fn
     fn render(mut self, area: Rect, buf: &mut Buffer)
@@ -197,4 +208,44 @@ impl Widget for &App<'_>{
         render_inner(self, inner_area, buf);
         render_footer(self, footer_area, buf);
     }
+}
+
+fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>), JoinHandle<()>){
+    let (tx_cmd, rx_cmd) = mpsc::channel::<RendererCommand>();
+    let (tx_rsp, rx_rsp) = mpsc::channel::<RendererResponse>();
+
+
+    ((tx_cmd,rx_rsp),thread::spawn(move || {
+        let mut channels: Vec<(Sender<FileRendererUpdate>, Receiver<ResizeRequest>)> = Vec::new();
+
+        loop {
+            // Ascolto il canale main
+            if let Ok(request) = rx_cmd.recv(){
+                match request {
+                    RendererCommand::Stop => {
+                        break
+                    }
+                    RendererCommand::AddChannel((tx,rx)) => {
+                        channels.push((tx, rx));
+                    },
+                    _ => (),
+                }
+            }
+
+            // Ascolto i canali dei file
+            for (tx,rx) in &channels{
+                if let Ok(request) = rx.recv() {
+                    let rendered_maybe = request.resize_encode();
+                    match rendered_maybe{
+                        Ok(rendered) => {
+                            tx.send(FileRendererUpdate::Redraw(rendered)).unwrap_or(());
+                        }
+                        Err(err_rendering) => {
+                            tx.send(FileRendererUpdate::Error(err_rendering.to_string())).unwrap_or(());
+                        }
+                    }
+                }
+            }
+        }
+    }))
 }

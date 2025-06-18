@@ -100,6 +100,16 @@ impl TopologyAlgorithm{
         self.counter_errors += num;
     }
 
+    pub fn check_if_nan(&mut self) {
+        for (_,data_on_node) in self.map.iter_mut(){
+            if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan(){
+                let current_links = self.map_links.clone();
+                self.initialize(current_links);
+                return ();
+            }
+        }
+    }
+
     pub fn get_all_links(&mut self){
 
     }

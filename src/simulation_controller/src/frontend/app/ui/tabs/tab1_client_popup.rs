@@ -2,17 +2,19 @@ use std::cmp::PartialEq;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::buffer::Buffer;
 use wg_2024::network::NodeId;
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
-use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine, Map};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Map};
 use std::ops::Add;
+use ratatui::layout::Direction::Vertical;
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
-use ratatui::text::ToSpan;
+use ratatui::text::{Line, Text, ToSpan};
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{ClientPopup, PopupSelection};
 use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
 use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_chat_options;
+use crate::frontend::app::ui::tabs::tab1::data_rendering::render_data_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
 
 pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId){
@@ -131,7 +133,7 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
             render_net_options(app, area, buf, net_page_data, selected_node);
         }
         ClientPopup::DataPage(data_page_data) => {
-
+            render_data_options(app,area,buf)
         }
         ClientPopup::SettingsPage(_) => {
 
@@ -139,6 +141,150 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
     }
 
 }
+
+
+// Render Servers / None Available is shared between chat_rendering and net_rendering
+fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers: &Vec<NodeId>, is_chat:bool){
+    let [_,first_second, last] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(1),Constraint::Percentage(100), Constraint::Min(1)])
+        /*.horizontal_margin(1)*/
+        .areas(area);
+    let [first,second] = Layout::default()
+        .direction(Vertical)
+        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+        .horizontal_margin(1)
+        .areas(first_second);
+
+    let mut first_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+    if app.cache.tab1_data.popup_cursor % 2 == 0{
+        first_block = first_block.border_style(Style::default().fg(app.animation_color()));
+    }
+
+    let [first_canvas_area, first_paragraph_area] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        /*.vertical_margin(1)*/
+        .areas(first_block.inner(first));
+    let first_canvas = draw_server_canvas();
+
+
+    let vec_len = known_servers.len();
+    // Now depending on how many server do we have we scroll the tabs.
+    if usize::from(app.cache.tab1_data.popup_cursor)>=vec_len{
+        // We're overflowing the Vec
+        // Should be unreachable as increasing / decreasing cursor is pretty firm.
+    }else{
+        let tab_num = app.cache.tab1_data.popup_cursor / 2;
+        let total_tabs_num = (known_servers.len()-1)/2;
+
+        let [left_last,right_last] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .areas(last);
+        let page = Line::from(format!("{}/{}", tab_num, total_tabs_num))
+            .style(Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC))
+            .alignment(Alignment::Right);
+        page.render(right_last, buf);
+
+        let info = Line::from(
+            if is_chat{
+                "Press 'r' to find new chat-servers in the network!"
+            }else{
+                "Press 'r' to find new content-servers in the network!"
+            }
+        )
+            .style(Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC))
+            .alignment(Alignment::Left);
+        info.render(left_last, buf);
+
+        let first_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2).unwrap_or(&255)))
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
+        first_block.render(first,buf);
+        first_canvas.render(first_canvas_area, buf);
+        first_server_info.render(first_paragraph_area, buf);
+
+
+        // Siamo in una lista di lunghezza dispari!
+        if (vec_len % 2 == 0 && app.cache.tab1_data.popup_cursor.add(1) as usize == vec_len) || app.cache.tab1_data.popup_cursor as usize +1<vec_len{
+            let mut second_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded);
+            if app.cache.tab1_data.popup_cursor % 2 == 1{
+                second_block = second_block.border_style(Style::default().fg(app.animation_color()));
+            }
+            let [second_canvas_area, second_paragraph_area] = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+                /*.vertical_margin(1)*/
+                .areas(second_block.inner(second));
+            let second_canvas = draw_server_canvas();
+
+
+            let second_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2 + 1 ).unwrap_or(&255)))
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            second_block.render(second,buf);
+            second_canvas.render(second_canvas_area, buf);
+            second_server_info.render(second_paragraph_area, buf);
+        }
+    }
+}
+
+fn render_no_servers_available(_app: &App, area: Rect, buf: &mut Buffer, is_chat:bool ) {
+    let text = Text::from(vec![
+        Line::from(
+            if is_chat{
+                "No Chat-Server FOUND"
+            }else{
+                "No Content-Server FOUND"
+            }
+        )
+            .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
+        Line::from("Press 'r' to send network request to find new content-servers")
+            .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
+    ]);
+
+    Paragraph::new(text)
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true })
+        .render(area, buf);
+}
+
+fn draw_server_canvas<'a>() -> Canvas<'a, fn(&mut Context)> {
+    Canvas::default()
+        .block(Block::default().borders(Borders::ALL).title("Chat Server"))
+        .x_bounds([0.0, 20.0])
+        .y_bounds([0.0, 20.0])
+        .paint(|ctx| {
+            // Front rectangle (base)
+            ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 15.0, y2: 5.0, color: Color::White, ..Default::default() }); // Bottom edge
+            ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0, y2: 15.0, color: Color::White, ..Default::default() }); // Right edge
+            ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 5.0, y2: 15.0, color: Color::White, ..Default::default() }); // Top edge
+            ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0, y2: 5.0, color: Color::White, ..Default::default() }); // Left edge
+
+            // Back rectangle offset
+            let dx = 3.0;
+            let dy = -3.0;
+
+            // Back rectangle (offset copy)
+            ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
+
+            // Connecting edges
+            ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
+            ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
+        })
+}
+
+
 pub(super) mod chat_rendering{
     use std::cmp::PartialEq;
     use wg_2024::network::NodeId;
@@ -156,10 +302,12 @@ pub(super) mod chat_rendering{
     use std::ops::Add;
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::ToSpan;
+    use ratatui::widgets;
     use crate::backend::sc_models::{Chat, Message};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
+    use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
 
     pub(super) fn render_chat_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientChatPopup, selected_node: &NodeId){
         match client_popup {
@@ -173,7 +321,9 @@ pub(super) mod chat_rendering{
             ClientChatPopup::ThirdPage(data) => {
                 render_chat_third_menu(app,area,buf,*selected_node,data);
                 if app.app_mode == AppMode::FileExploring{
-                    app.cache.file_explorer.widget().render(centered_popup_area(area), buf);
+                    let centered_popup_area = centered_popup_area(area);
+                    widgets::Clear.render(centered_popup_area, buf);
+                    app.cache.file_explorer.widget().render(centered_popup_area, buf);
                 }
             }
         }
@@ -181,143 +331,18 @@ pub(super) mod chat_rendering{
 
     // First Menù rendering ( Choose the server )
     fn render_chat_first_menu(app: &App, area: Rect, buf: &mut Buffer, selected_cl:NodeId) {
-
         match app.simulation_controller_data.chat_cache.known_chat_servers.get(&selected_cl){
             None => {
-                render_no_chatservers_available(app, area, buf);
+                render_no_servers_available(app, area, buf, true);
             }
             Some(known_servers) => {
-                render_chatservers_available(app,area,buf,known_servers);
-            }
-        }
-    }
-
-    fn render_chatservers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers: &Vec<NodeId>){
-        let [_,first_second, last] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(1),Constraint::Percentage(100), Constraint::Min(1)])
-            /*.horizontal_margin(1)*/
-            .areas(area);
-        let [first,second] = Layout::default()
-            .direction(Vertical)
-            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .horizontal_margin(1)
-            .areas(first_second);
-
-        let mut first_block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded);
-        if app.cache.tab1_data.popup_cursor % 2 == 0{
-            first_block = first_block.border_style(Style::default().fg(app.animation_color()));
-        }
-
-        let [first_canvas_area, first_paragraph_area] = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-            /*.vertical_margin(1)*/
-            .areas(first_block.inner(first));
-        let first_canvas = draw_server_canvas();
-
-
-        let vec_len = known_servers.len();
-        // Now depending on how many server do we have we scroll the tabs.
-        if usize::from(app.cache.tab1_data.popup_cursor)>=vec_len{
-            // We're overflowing the Vec
-            // Should be unreachable as increasing / decreasing cursor is pretty firm.
-        }else{
-            let tab_num = app.cache.tab1_data.popup_cursor / 2;
-            let total_tabs_num = (known_servers.len()-1)/2;
-
-            let [left_last,right_last] = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-                .areas(last);
-            let page = Line::from(format!("{}/{}", tab_num, total_tabs_num))
-                .style(Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC))
-                .alignment(Alignment::Right);
-            page.render(right_last, buf);
-
-            let info = Line::from("Press 'r' to find new server chats in the network!")
-                .style(Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC))
-                .alignment(Alignment::Left);
-            info.render(left_last, buf);
-
-            let first_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2).unwrap_or(&255)))
-                .alignment(Alignment::Center)
-                .wrap(Wrap { trim: true });
-            first_block.render(first,buf);
-            first_canvas.render(first_canvas_area, buf);
-            first_server_info.render(first_paragraph_area, buf);
-
-
-            // Siamo in una lista di lunghezza dispari!
-            if (vec_len % 2 == 0 && app.cache.tab1_data.popup_cursor.add(1) as usize == vec_len) || app.cache.tab1_data.popup_cursor as usize +1<vec_len{
-                let mut second_block = Block::default()
-                    .borders(Borders::ALL)
-                    .border_type(BorderType::Rounded);
-                if app.cache.tab1_data.popup_cursor % 2 == 1{
-                    second_block = second_block.border_style(Style::default().fg(app.animation_color()));
+                if known_servers.is_empty() {
+                    render_no_servers_available(app, area, buf, true);
+                }else{
+                    render_servers_available(app, area, buf, known_servers, true);
                 }
-                let [second_canvas_area, second_paragraph_area] = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
-                    /*.vertical_margin(1)*/
-                    .areas(second_block.inner(second));
-                let second_canvas = draw_server_canvas();
-
-
-                let second_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2 + 1 ).unwrap_or(&255)))
-                    .alignment(Alignment::Center)
-                    .wrap(Wrap { trim: true });
-                second_block.render(second,buf);
-                second_canvas.render(second_canvas_area, buf);
-                second_server_info.render(second_paragraph_area, buf);
             }
         }
-    }
-
-    fn render_no_chatservers_available(_app: &App, area: Rect, buf: &mut Buffer) {
-        let text = Text::from(vec![
-            Line::from("No Chat Server FOUND")
-                .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
-            Line::from("Press 'r' to send network request to find new chat-servers")
-                .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
-        ]);
-
-        Paragraph::new(text)
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: true })
-            .render(area, buf);
-    }
-
-    fn draw_server_canvas<'a>() -> Canvas<'a, fn(&mut Context)> {
-        Canvas::default()
-            .block(Block::default().borders(Borders::ALL).title("Chat Server"))
-            .x_bounds([0.0, 20.0])
-            .y_bounds([0.0, 20.0])
-            .paint(|ctx| {
-                // Front rectangle (base)
-                ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 15.0, y2: 5.0, color: Color::White, ..Default::default() }); // Bottom edge
-                ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0, y2: 15.0, color: Color::White, ..Default::default() }); // Right edge
-                ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 5.0, y2: 15.0, color: Color::White, ..Default::default() }); // Top edge
-                ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0, y2: 5.0, color: Color::White, ..Default::default() }); // Left edge
-
-                // Back rectangle offset
-                let dx = 3.0;
-                let dy = -3.0;
-
-                // Back rectangle (offset copy)
-                ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
-
-                // Connecting edges
-                ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
-                ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
-            })
     }
 
     // Second Menù rendering ( Choose contact menù )
@@ -852,22 +877,261 @@ pub(super) mod chat_rendering{
     }
 }
 pub(super) mod net_rendering{
-    use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
+    use std::cmp::PartialEq;
+    use std::collections::HashMap;
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
-    use crate::frontend::app::models::tab1_types::ClientNetPopup;
+    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage};
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
+    use ratatui::buffer::{Buffer, Cell};
+
+    use ratatui::prelude::{Color, Line, Modifier, Style, Text, Widget};
+    use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem, Paragraph, Wrap};
+    use toml::value::Time;
+    use textwrap::wrap;
+    use ratatui::layout::Direction::Vertical;
+    use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine};
+    use std::ops::Add;
+    use host::{ClientId, MediaId, ServerId};
+    use ratatui::style::{Styled, Stylize};
+    use ratatui::text::{ToSpan, ToText};
+    use crate::backend::sc_models::{Chat, Message};
+    use crate::frontend::app::models::main_types::AppMode;
+    use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
+    use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
+    use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
+    use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
 
     pub(super) fn render_net_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientNetPopup, selected_node: &NodeId){
         match client_popup {
             ClientNetPopup::FirstPage(st) => {
                 // Choose the Content Server
-
+                render_net_first_page(app,area,buf,st,selected_node);
             }
             ClientNetPopup::SecondPage(nd) => {
-                // See the file lists, renderize images and upload your file
-
+                render_net_second_page(app,area,buf,nd,selected_node);
             }
         }
+    }
+    fn render_net_first_page(app:&App, area:Rect, buf: &mut Buffer, stpage_data: &NetFirstPage, selected_node: &ClientId){
+        match app.simulation_controller_data.net_cache.known_content_servers.get(&selected_node) {
+            None => {
+                render_no_servers_available(app,area,buf,false)
+            }
+            Some(known_servers) => {
+                if known_servers.is_empty() {
+                    render_no_servers_available(app,area,buf,false)
+                }else{
+                    render_servers_available(app,area,buf,known_servers,false)
+                }
+            }
+        }
+    }
+    fn render_net_second_page(app:&App, area:Rect, buf: &mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId){
+        let [lists_area,file_visualizer_area] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .spacing(1)
+            .areas(area);
+
+        let [media_area, file_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .spacing(2)
+            .areas(lists_area);
+
+        let [media_list_area, attach_media_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(90), Constraint::Percentage(10)])
+            .spacing(1)
+            .areas(media_area);
+
+        let [file_list_area, attach_file_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(90), Constraint::Percentage(10)])
+            .spacing(1)
+            .areas(file_area);
+
+
+        let mut media_list_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 0 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                })
+            );
+
+        let attach_media_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 1 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                })
+            );
+        attach_media_block.render(attach_media_area, buf);
+
+
+        let mut file_list_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 2 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                })
+            );
+
+        let mut attach_file_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 3 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                })
+            );
+        attach_file_block.render(attach_file_area, buf);
+
+        let media_items = match app.simulation_controller_data.net_cache.known_media_list.get(&selected_node) {
+            None => vec![],
+            Some(hash) => {
+                match hash.get(&ndpage_data.selected_server){
+                    None => vec![],
+                    Some(vec_media) => {
+                        vec_media
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, id)| {
+                                let base_style = if idx % 2 == 0 {
+                                    // even rows – brighter foreground
+                                    Style::default().bg(BG_COLOR)
+                                } else {
+                                    // odd rows – dimmer foreground for contrast
+                                    Style::default().bg(ALTERNATE_LIST_COLOR)
+                                };
+                                ListItem::from(id.to_text()).style(base_style)
+                            })
+                            .collect()
+                    }
+                }
+            }
+        };
+        let file_items = match app.simulation_controller_data.net_cache.known_file_list.get(&selected_node) {
+            None => vec![],
+            Some(hash) => {
+                match hash.get(&ndpage_data.selected_server){
+                    None => vec![],
+                    Some(vec_file) => {
+                        vec_file
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, id)| {
+                                let base_style = if idx % 2 == 0 {
+                                    // even rows – brighter foreground
+                                    Style::default().bg(BG_COLOR)
+                                } else {
+                                    // odd rows – dimmer foreground for contrast
+                                    Style::default().bg(ALTERNATE_LIST_COLOR)
+                                };
+                                ListItem::from(id.to_text()).style(base_style)
+                            })
+                            .collect()
+                    }
+                }
+            }
+        };
+        let media_list = List::new(media_items)
+            .block(media_list_block)
+            // Keep a cohesive palette: selected rows use the global BG_COLOR with a bright accent
+            .highlight_style(
+                Style::default()
+                    .bg(SELECTED_LIST_COLOR)
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol(">")
+            .highlight_spacing(HighlightSpacing::Always);
+
+        let file_list = List::new(file_items)
+            .block(file_list_block)
+            // Keep a cohesive palette: selected rows use the global BG_COLOR with a bright accent
+            .highlight_style(
+                Style::default()
+                    .bg(SELECTED_LIST_COLOR)
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol(">")
+            .highlight_spacing(HighlightSpacing::Always);
+
+        // Render the list
+        ratatui::widgets::StatefulWidget::render(
+            media_list,
+            media_list_area,
+            buf,
+            &mut app.cache.tab1_data.media_list_render_utils.state.clone(),
+        );
+
+        ratatui::widgets::StatefulWidget::render(
+            file_list,
+            file_list_area,
+            buf,
+            &mut app.cache.tab1_data.media_list_render_utils.state.clone(),
+        );
+
+
+        // Da fare entro stasera:
+        /*
+            Block of file renderer
+            File rendering if it is txt
+            Loading Bar if receiving
+            File renderer
+
+        */
+
+        let file_visualizer_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 4 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                })
+            );
+
+        let inner_file_visualizer_block = file_visualizer_block.inner(file_visualizer_area);
+
+        /*
+        Ora qui il rendering dipende da:
+
+        Ho selezionato un file ?
+            SI - Processo lo status
+                1] Richiedo il file
+                2] Downloading(u8)
+                3] Downloaded(File)
+                    - Loading File(Renderizzando l'immagine / file) <- Bisogna trovare un modo per non renderlo bloccante
+                    - Loaded(StatufulProtocol / File)
+            NO - Mostro la schermata "Select a file to view"
+         */
+
+
+    }
+}
+pub(super) mod settings_rendering{
+    use ratatui::buffer::Buffer;
+    use ratatui::layout::Rect;
+    use crate::frontend::app::App;
+
+    pub(super) fn render_sett_options(app:&App, area:Rect, buf:&mut Buffer){
+
     }
 }

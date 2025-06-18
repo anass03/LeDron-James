@@ -12,7 +12,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Padding, Paragraph, Tabs, Widget, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use crate::frontend::app::App;
 use crate::frontend::app::models::main_types::AppMode;
 
@@ -185,4 +185,38 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
     packets.render(columns[0], buf);
     conns.render(columns[1], buf);
     net.render(columns[2], buf);
+}
+
+pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
+    let lines: Vec<Line> = app
+        .simulation_controller_data
+        .logs
+        .logs_memory
+        .iter()
+        .map(|(_,msg)| {
+
+            Line::from(Span::raw(msg)).style(Style::default().fg(Color::Gray))
+        }
+        )
+        .collect();
+    let mut log_block = Block::default()
+        .title("Logs")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded);
+
+    if app.cache.cursor == 1 && app.selected_tab==SelectedTab::Overview{
+        log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+    if app.cache.cursor == 4 && app.selected_tab==SelectedTab::Topology{
+        log_block = log_block.border_style(Style::default().fg(Color::White).add_modifier(Modifier::BOLD));
+    }
+
+
+    let a = Paragraph::new(lines)
+        .block(
+            log_block
+        )
+        .wrap(Wrap { trim: true })
+        .scroll((app.simulation_controller_data.logs.log_scroll_offset as u16, 0));
+    a
 }
