@@ -219,13 +219,13 @@ impl Client {
                         let label = format!("MessageFor({})", cid);
                         self.send_net_cmd(Chat, sid, ClientNetCommand::MessageFor(cid, sid, msg), &label);
                     }
-                    ClientNetCommand::FileFor(cid, sid, fid, ext, file) => {
+                    ClientNetCommand::FileFor(cid, sid, fid, file) => {
                         let label = format!("FileFor({})", cid);
-                        self.send_net_cmd(Chat, sid,ClientNetCommand::FileFor(cid, sid, fid, ext, file), &label, );
+                        self.send_net_cmd(Chat, sid,ClientNetCommand::FileFor(cid, sid, fid, file), &label, );
                     }
-                    ClientNetCommand::MediaFor(cid, sid, mid, ext, img) => {
+                    ClientNetCommand::MediaFor(cid, sid, mid, img) => {
                         let label = format!("MediaFor({})", cid);
-                        self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid, ext, img), &label, );
+                        self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid, img), &label, );
                     }
                 }
             }
@@ -337,29 +337,29 @@ impl Client {
                             self.host.send_logging(format!("Message from {}: {:?}", from, msg.clone()));
                             send_reconstructed(MessageFrom(server_id,from, msg))?;
                         }
-                        FileFrom(server_id,from,file_id, ext, data) => {
-                            self.host.send_logging(format!("Received {}.{} from client {}", file_id, ext,from));
-                            send_reconstructed(FileFrom(server_id,from,file_id, ext, data))?;
+                        FileFrom(server_id,from,file_id, data) => {
+                            self.host.send_logging(format!("Received {} from client {}", file_id, from));
+                            send_reconstructed(FileFrom(server_id,from,file_id, data))?;
                         }
-                        MediaFrom(server_id,from, media_id, ext, data) => {
-                            self.host.send_logging(format!("Received {}.{} from client {}", media_id, ext,from));
-                            send_reconstructed(MediaFrom(server_id, from, media_id, ext, data))?;
+                        MediaFrom(server_id,from, media_id, data) => {
+                            self.host.send_logging(format!("Received {} from client {}", media_id, from));
+                            send_reconstructed(MediaFrom(server_id, from, media_id, data))?;
                         }
                         FilesList(server_id, files) => {
                             self.host.send_logging(format!("Files available: {:?}", files));
                             send_reconstructed(FilesList(server_id, files))?;
                         }
-                        File(server_id,file_id,ext, data) => {
-                            self.host.send_logging(format!("Received {}.{} of {} bytes",file_id,ext, data.len()));
-                            send_reconstructed(File(server_id,file_id,ext, data))?;
+                        File(server_id,file_id, data) => {
+                            self.host.send_logging(format!("Received {} of {} bytes",file_id, data.len()));
+                            send_reconstructed(File(server_id,file_id, data))?;
                         }
                         MediaList(server_id,media_list) => {
                             self.host.send_logging(format!("Media available: {:?}", media_list));
                             send_reconstructed(MediaList(server_id,media_list))?;
                         }
-                        Media(server_id,media_id,ext, media) => {
-                            self.host.send_logging(format!("Received {}.{} of {} bytes",media_id,ext, media.data.len()));
-                            send_reconstructed(Media(server_id,media_id,ext, media))?;
+                        Media(server_id,media_id, media) => {
+                            self.host.send_logging(format!("Received {} of {} bytes",media_id, media.data.len()));
+                            send_reconstructed(Media(server_id,media_id, media))?;
                         }
                         ErrClientId(server_id) => {
                             self.host.send_logging("Server responded: ErrClientId".to_string());

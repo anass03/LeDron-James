@@ -12,11 +12,10 @@ use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use ordered_float::OrderedFloat;
 
-pub type FileId = usize;
-pub type MediaId = usize;
+pub type FileId = String;
+pub type MediaId = String;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
-pub type Extension = String;
 const ALPHA: f64 = 0.01; // fattore di smussamento (regolabile)
 
 
@@ -874,161 +873,6 @@ impl Functionality for Host {
         }
     }
 
-    // fn handle_nack(&mut self, nack: Nack, nack_generator: NodeId, session_id: u64) {
-    //     let host = self.id;
-    //     let frag_idx = nack.fragment_index;
-    //
-    //     // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
-    //     //    quindi droppo subito il lock.
-    //     let (fragment, current_route, destination) = {
-    //         let mut sent = self.sent_fragments.lock().unwrap();
-    //         if let Some(session) = sent.get_mut(&session_id) {
-    //             match session.buffer.get(frag_idx as usize) {
-    //                 Some(Some(f)) => {
-    //                     let frag_clone = f.clone();
-    //                     let route_clone = session.route.clone();
-    //                     let dest = session.destination;
-    //                     (frag_clone, route_clone, dest)
-    //                 }
-    //                 Some(None) => {
-    //                     // frammento già confermato o non esistente
-    //                     self.send_logging(format!(
-    //                         "NACK per frammento inesistente/già confermato host={} session={} fragment={}",
-    //                         host, session_id, frag_idx
-    //                     ));
-    //                     return;
-    //                 }
-    //                 None => {
-    //                     // indice fuori range
-    //                     self.send_logging(format!(
-    //                         "NACK index out of range host={} session={} fragment={}",
-    //                         host, session_id, frag_idx
-    //                     ));
-    //                     return;
-    //                 }
-    //             }
-    //         } else {
-    //             // sessione sconosciuta
-    //             self.send_logging(format!(
-    //                 "NACK per sessione sconosciuta host={} session={}",
-    //                 host, session_id
-    //             ));
-    //             return;
-    //         }
-    //     };
-    //     // Qui il MutexGuard su sent_fragments è già stato droppato.
-    //
-    //     match nack.nack_type {
-    //         NackType::Dropped => {
-    //             // 2) NACK “Dropped”: ritrasmetto subito il frammento
-    //             self.send_logging(format!(
-    //                 "Retransmitting dropped fragment host={} session={} fragment={}",
-    //                 host, session_id, frag_idx
-    //             ));
-    //             self.send_fragment(session_id, fragment.clone());
-    //             self.network.pdr_from_nack(nack_generator);
-    //         }
-    //
-    //         NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
-    //             self.send_logging(format!(
-    //                 "Routing error, attempting alternate route host={} session={} fragment={} bad_hop={}",
-    //                 host, session_id, frag_idx, bad
-    //             ));
-    //
-    //             // 3) Provo subito una rotta alternativa sulla route corrente
-    //             if let Some(new_route) = self.network.find_alternate_route(host, destination, &current_route) {
-    //                 self.send_logging(format!(
-    //                     "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
-    //                     host, session_id, frag_idx, new_route
-    //                 ));
-    //
-    //                 // 3.a) Apro il lock solo per aggiornare session.route
-    //                 {
-    //                     let mut sent = self.sent_fragments.lock().unwrap();
-    //                     if let Some(session) = sent.get_mut(&session_id) {
-    //                         session.route = new_route.clone();
-    //                         session.last_activity = Instant::now();
-    //                     } else {
-    //                         // La sessione è già stata rimossa nel frattempo: esco
-    //                         self.send_logging(format!(
-    //                             "Session {} già rimossa, non ritrasmetto",
-    //                             session_id
-    //                         ));
-    //                         return;
-    //                     }
-    //                 } // il lock viene droppato qui
-    //
-    //                 // 3.b) Invio il frammento sulla nuova rotta
-    //                 //current_route = new_route.clone();
-    //                 let header = SourceRoutingHeader::new(new_route, 1);
-    //                 let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-    //                 let res = self.send_packet(pkt, None);
-    //                 self.send_logging(format!(
-    //                     "Retransmission result host={} session={} fragment={} result={:?}",
-    //                     host, session_id, frag_idx, res
-    //                 ));
-    //             } else {
-    //                 let now = Instant::now();
-    //                 if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
-    //                     self.send_logging("NACK backoff scaduto: avvio flood".to_string());
-    //                     self.initiate_flood();
-    //                     if let Some(new_route) = self.network.find_best_route(host, destination) {
-    //                         self.send_logging(format!(
-    //                             "route found after flooding, updating and retransmitting host={} session={} fragment={} route={:?}",
-    //                             host, session_id, frag_idx, new_route
-    //                         ));
-    //
-    //                         // 3.a) Apro il lock solo per aggiornare session.route
-    //                         {
-    //                             let mut sent = self.sent_fragments.lock().unwrap();
-    //                             if let Some(session) = sent.get_mut(&session_id) {
-    //                                 session.route = new_route.clone();
-    //                                 session.last_activity = Instant::now();
-    //                             } else {
-    //                                 // La sessione è già stata rimossa nel frattempo: esco
-    //                                 self.send_logging(format!(
-    //                                     "Session {} già rimossa, non ritrasmetto",
-    //                                     session_id
-    //                                 ));
-    //                                 return;
-    //                             }
-    //                         } // il lock viene droppato qui
-    //
-    //                         // 3.b) Invio il frammento sulla nuova rotta
-    //                         //current_route = new_route.clone();
-    //                         let header = SourceRoutingHeader::new(new_route, 0);
-    //                         let pkt = Packet::new_fragment(header, session_id, fragment.clone());
-    //                         let res = self.send_packet(pkt, None);
-    //                         self.send_logging(format!(
-    //                             "Retransmission result host={} session={} fragment={} result={:?}",
-    //                             host, session_id, frag_idx, res
-    //                         ));
-    //                     }else {
-    //                         self.send_logging(format!(
-    //                             "❌ NET DISCONNECTED, session {} failed --> aborting flood!",
-    //                             session_id,
-    //
-    //                         ));
-    //                     }
-    //                     self.last_nack_flood = now;
-    //                 } else {
-    //                     self.send_logging(format!(
-    //                         "NACK ricevuto ma backoff non scaduto ({:.1}s rimanenti)",
-    //                         (self.nack_flood_backoff - now.duration_since(self.last_nack_flood)).as_secs_f32()
-    //                     ));
-    //                 }
-    //             }
-    //         }
-    //
-    //         NackType::DestinationIsDrone => {
-    //             self.send_logging(format!(
-    //                 "DestinationIsDrone NACK — dropping fragment host={} session={} fragment={}",
-    //                 host, session_id, frag_idx
-    //             ));
-    //         }
-    //     }
-    // }
-
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
         self.send_logging(format!(
             "Starting fragmentation host={} session={} dest={}",
@@ -1229,8 +1073,8 @@ pub enum ClientNetCommand {
     RegistrationToChat(ServerId),
     ClientList(ServerId),
     MessageFor(ClientId,ServerId, String),
-    FileFor(ClientId,ServerId, FileId, Extension, Vec<u8>),
-    MediaFor(ClientId,ServerId, MediaId, Extension, Image),
+    FileFor(ClientId,ServerId, FileId, Vec<u8>),
+    MediaFor(ClientId,ServerId, MediaId, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
@@ -1242,16 +1086,16 @@ pub enum ServerToClient{
 
     //content server
     FilesList(ServerId, Vec<FileId>),
-    File(ServerId, FileId, Extension, Vec<u8>),
+    File(ServerId, FileId, Vec<u8>),
 
     MediaList(ServerId, Vec<MediaId>),
-    Media(ServerId, MediaId, Extension, Image),
+    Media(ServerId, MediaId, Image),
 
     //chat server
     ClientList(ClientId, ServerId, Vec<ClientId>),
     MessageFrom(ServerId, ClientId, String),
-    FileFrom(ServerId, ClientId, FileId, Extension, Vec<u8>),
-    MediaFrom(ServerId, ClientId, MediaId, Extension, Image),
+    FileFrom(ServerId, ClientId, FileId, Vec<u8>),
+    MediaFrom(ServerId, ClientId, MediaId, Image),
 
     ErrNotFound(ServerId),
     ErrClientId(ServerId),
