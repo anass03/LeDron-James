@@ -245,9 +245,9 @@ impl ChatServer2 {
             Ok(dt) => dt,
             Err(e) => {
                 eprintln!("Errore nel parse del Datetime: {}", e);
-                return; // oppure gestisci diversamente
+                return;
             }
-        }; // safe: contiene anche offset
+        };
 
 
         let metadata = MessageMetaData { id: source, timestamp };
@@ -272,7 +272,7 @@ impl ChatServer2 {
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
-                let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat,/* self.info.host.id */)); 
+                let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(self.info.host.id, serialized_chat)); 
             }
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));
