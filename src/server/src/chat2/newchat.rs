@@ -222,20 +222,20 @@ impl ChatServer2 {
     fn save_message(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::MessageFor(destination, _, msg) => {
-                self.insert_message(source, destination, TextMessage::Message(msg));
+                self.insert_message(source, destination, MessageSC::Message(msg));
             }
             ClientNetCommand::MediaFor(destination, _, media_id, extension, message) => {
-                self.insert_message(source, destination, TextMessage::Media(MediaSC::Image(media_id, extension, message)));
+                self.insert_message(source, destination, MessageSC::Media(MediaSC::Image(media_id, extension, message)));
             }
             ClientNetCommand::FileFor(destination, _, file_id, extension, message) => {
-                self.insert_message(source, destination, TextMessage::Media(MediaSC::File(file_id, extension, message)));
+                self.insert_message(source, destination, MessageSC::Media(MediaSC::File(file_id, extension, message)));
             }
             _ => self.send_logging("Unexpected ClientNetCommand type received in save_message.".to_string()),
         }
     }
 
     /// Insert a message in the chat (creates the chat if it does not exist)
-    fn insert_message(&mut self, source: NodeId, destination: NodeId, message: TextMessage) {
+    fn insert_message(&mut self, source: NodeId, destination: NodeId, message: MessageSC) {
         let (min_user, max_user) = if source < destination { (source, destination) } else { (destination, source) };
         let now = chrono::Utc::now().timestamp_millis() as u64;
 
@@ -257,24 +257,27 @@ impl ChatServer2 {
         }
     }
 
-    /// (Optional) Send chat state to Simulation Controller (currently disabled)
+    /// Send chat state to Simulation Controller (currently disabled)
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
-                // Placeholder: controller communication not used yet
+                let _ = self.info.host.controller_send.send(HostEvent::ChatUpdate(serialized_chat,/* self.info.host.id */)); 
             }
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));
             }
         }
     }
+    /*pub fn get_last_message(&self)->Option<&(MessageSC,MessageMetadata)> {
+        self.chats.last()
+    }*/
 }
 
 // Chat data structures for message persistence
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Chat {
-    pub chat: Vec<(TextMessage, MessageMetaData)>,
+    pub chat: Vec<(MessageSC, MessageMetaData)>,
     pub users: ChatUsers,
 }
 
@@ -291,7 +294,7 @@ pub struct MessageMetaData {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub enum TextMessage {
+pub enum MessageSC {
     Message(String),
     Media(MediaSC),
 }
