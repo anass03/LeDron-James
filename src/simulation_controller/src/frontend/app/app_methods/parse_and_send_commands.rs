@@ -89,7 +89,7 @@ impl App<'_>{
     }
 
 
-    pub(super) fn request_media(&mut self, id: NodeId){ // 1 Input
+   /* pub(super) fn request_media(&mut self, id: NodeId){ // 1 Input
         // We parse the 1 input insered
         match self.parse_2input(true){
             Ok(n) => {
@@ -100,8 +100,8 @@ impl App<'_>{
             }
             Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
         }
-    }
-    pub(super) fn request_file(&mut self, id: NodeId){
+    }*/
+    /*pub(super) fn request_file(&mut self, id: NodeId){
         match self.parse_2input(true){
             Ok(n) => {
                 match self.simulation_controller_data.request_file(id, n.1 as ServerId, n.0 as FileId){
@@ -111,7 +111,7 @@ impl App<'_>{
             }
             Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
         }
-    }
+    }*/
     pub(super) fn request_file_list(&mut self, id:NodeId){
         match self.parse_1input(true){
             Ok(n) => {

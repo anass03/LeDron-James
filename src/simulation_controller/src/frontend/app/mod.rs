@@ -96,8 +96,6 @@ impl App<'_>{
                 RenderingImage::True(data) => {
                     terminal.draw(|f| Self::render_image(f, self, data))?;                }
             }
-            terminal.draw(|f| {
-            })?;
 
             self.handle_events()?;
 

@@ -1035,7 +1035,7 @@ pub(super) mod net_rendering{
                                         ListItem::from(format!("{:?}",id)).style(base_style)
                                     }
                                     Some(hash) => {
-                                        match hash.get(&id){
+                                        match hash.get(id.as_str()){
                                             None => {
                                                 ListItem::from(format!("{:?}",id)).style(base_style)
                                             }
@@ -1083,7 +1083,7 @@ pub(super) mod net_rendering{
                                         ListItem::from(format!("{:?}",id)).style(base_style)
                                     }
                                     Some(hash) => {
-                                        match hash.get(&id){
+                                        match hash.get(id.as_str()){
                                             None => {
                                                 ListItem::from(format!("{:?}",id)).style(base_style)
                                             }
@@ -1192,14 +1192,14 @@ pub(super) mod net_rendering{
 
             }
             SelectedFileMedia::Media(media_id) => {
-                app.render_media_visualizer(inner_file_visualizer_block, buf, ndpage_data, selected_node, media_id);
+                render_media_visualizer(app,inner_file_visualizer_block, buf, ndpage_data, selected_node, media_id);
                 // Rendering it externally
                 return Some(inner_file_visualizer_block)
             }
         }
         None
     }
-    fn render_media_visualizer(app:&mut App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
+    fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
         match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
             None => {
 
@@ -1222,7 +1222,7 @@ pub(super) mod net_rendering{
                             }
                             NetCacheMedia::Rendered(image_protocol) => {
                                 // I render it externally so no need to do it again here,
-                                // sopratutto perchè serve un riferimento mutabile a app per farlo :))
+                                // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
                             }
                             NetCacheMedia::FatalErrorRendering() => {
                                 //

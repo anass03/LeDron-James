@@ -6,7 +6,7 @@ use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
 
 impl App<'_> {
-    pub(crate) fn handle_event_old_tab1(&mut self, key: KeyCode) {
+    /*pub(crate) fn handle_event_old_tab1(&mut self, key: KeyCode) {
         match self.cache.cursor {
             0 => {
                 match key {
@@ -193,8 +193,8 @@ impl App<'_> {
             }
             _ => {}
         }
-    }
-    fn tab1_0input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn:SelectedNode) {
+    }*/
+    /*fn tab1_0input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn:SelectedNode) {
         match key {
             KeyCode::Left => {
                 self.cache.cursor -= 1;
@@ -387,8 +387,8 @@ impl App<'_> {
             }
             _ => (),
         }
-    }
-    fn tab1_2input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn: SelectedNode) {
+    }*/
+    /*fn tab1_2input_handle(&mut self, key: KeyCode, id_origin: NodeId, node_fn: SelectedNode) {
         match key {
             KeyCode::Left => {
                 self.cache.cursor -= 1;
@@ -489,7 +489,7 @@ impl App<'_> {
             }
             _ => (),
         }
-    }
+    }*/
     fn handle_unknown(&mut self, key: KeyCode) {
         match key {
             KeyCode::Left => {
