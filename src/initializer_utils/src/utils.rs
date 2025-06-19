@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use wg_2024::config::Config;
 use wg_2024::network::NodeId;
 use std::collections::HashSet;
-//add check client server connections as protocol
-//check if the net is entirely connected
+
 pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
+    //parsing config file
     let config;
     match std::fs::read_to_string(path) {
         Ok(file_str) => {
@@ -21,10 +21,11 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
     }
     // Passed all parsing
 
+    // Creating HashMaps containing NodeId -> Node
     let drone_map: HashMap<_, _> = config.drone.iter().map(|d| (d.id, d)).collect();
     let client_map: HashMap<_, _> = config.client.iter().map(|c| (c.id, c)).collect();
     let server_map: HashMap<_, _> = config.server.iter().map(|s| (s.id, s)).collect();
-
+    // Vector containing all errors encountered during checks
     let mut errors = Vec::new();
 
     // Unique ID check across all node types
@@ -47,6 +48,7 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
 
     // Existing check: drone -> node
     for drone in &config.drone {
+        // Checking 0.0 < pdr < 1.0
         if drone.pdr > 1.0 {
             errors.push(format!("Drone {} pdr is too high: {} | 0.0 < pdr < 1.0\n", drone.id,  drone.pdr));
         } else if drone.pdr < 0.0 {
@@ -73,6 +75,13 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
 
     // Existing check: client -> drone
     for client in &config.client {
+        // Checking a client has either 1 or 2 neighbors
+        let neighbors = client.connected_drone_ids.len();
+        if neighbors < 1 {
+            errors.push(format!("Client {} has no neighbors", client.id));
+        } else if neighbors > 2 {
+            errors.push(format!("Client {} as too many neighbors: {:?}", client.id, client.connected_drone_ids));
+        }
         for drone_id in &client.connected_drone_ids {
             if let Some(drone) = drone_map.get(drone_id) {
                 if !drone.connected_node_ids.contains(&client.id) {
@@ -93,7 +102,6 @@ pub fn parse_and_check_config(path: &String) -> Result<Config, String> {
                 server.connected_drone_ids.len()
             ));
         }
-
         for drone_id in &server.connected_drone_ids {
             if client_map.contains_key(drone_id) || server_map.contains_key(drone_id) {
                 errors.push(format!(

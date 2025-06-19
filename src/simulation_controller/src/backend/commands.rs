@@ -6,7 +6,7 @@ use std::process::Command;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, Extension, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
+use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
@@ -662,9 +662,9 @@ impl SimulationControllerData {
         self.send_client_command(sender_client_id, command)
     }
 
-    pub fn media_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, media_id: MediaId, extension: Extension, image: Image) -> Result<(), String> {
+    pub fn media_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, media_id: MediaId, image: Image) -> Result<(), String> {
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Media For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
-        let command = Net(MediaFor(receiver_client_id, server_id, media_id, extension, image));
+        let command = Net(MediaFor(receiver_client_id, server_id, media_id, image));
         self.send_client_command(sender_client_id, command)
 
     }
@@ -704,11 +704,10 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
                     ServerToClient::FilesList(server_id, file_list) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")),
-                    ServerToClient::File(server_id, file_id, extension, file) 
+                    ServerToClient::File(server_id, file_id, file)
                     => {
                         // Construct filename based on file ID and inferred extension
-                        let filename = format!("file_{}.{}", file_id, extension);
-                        let path = PathBuf::from("assets").join(&filename);
+                        let path = PathBuf::from("assets").join(&file_id);
 
                         fs::write(&path, &file).expect("file not downloaded");
 
@@ -744,9 +743,13 @@ impl SimulationControllerData {
                     },
                     ServerToClient::MediaList(server_id, media_list) 
                     => self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)),
-                    ServerToClient::Media(server_id, media_id, extension, image) 
+                    ServerToClient::Media(server_id, media_id, image)
                     => {
-                        let path = format!("assets/image_{}.{extension}", media_id);
+                        let extension = match get_extension(&media_id) {
+                            Some(extension) => extension,
+                            None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
+                        };
+                        let path = format!("assets/{}", media_id);
                         let path_ref = Path::new(&path);
 
                         if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
@@ -851,6 +854,11 @@ impl SimulationControllerData {
         }
         links.into_iter().collect()
     }
+}
+
+
+fn get_extension(media_id: &MediaId) -> Option<&str> {
+    media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
 }
 
     fn open_image(path: &str) {
