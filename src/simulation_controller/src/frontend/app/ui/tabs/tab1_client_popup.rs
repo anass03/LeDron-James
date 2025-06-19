@@ -17,11 +17,11 @@ use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_ch
 use crate::frontend::app::ui::tabs::tab1::data_rendering::render_data_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
 
-pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId){
-/*    let [area] = Layout::default()
-        .constraints([Constraint::Fill(1)])
-        .margin(3)
-        .areas(area);*/
+pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId)->Option<Rect>{
+    /*    let [area] = Layout::default()
+            .constraints([Constraint::Fill(1)])
+            .margin(3)
+            .areas(area);*/
     let sim_popup_block = Block::default()
         .borders(Borders::ALL);
     let inner_sim_popup_block_area = sim_popup_block.inner(area);
@@ -43,10 +43,10 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
         .margin(1)
         .areas(other_area);
 
-/*    let select_block = Block::default()
-        .borders(Borders::ALL);
-    let inner_select_block_area = select_block.inner(select_area);
-    select_block.render(select_area, buf);*/
+    /*    let select_block = Block::default()
+            .borders(Borders::ALL);
+        let inner_select_block_area = select_block.inner(select_area);
+        select_block.render(select_area, buf);*/
 
     let [chat_symb, server_symb, barchart_symb, settings_symb] = Layout::default()
         .direction(Direction::Vertical)
@@ -120,26 +120,26 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
     opt_block.render(opt_area, buf);
 
     // Now I render the selected option in opt_area
-    render_client_options(app, opt_inner, buf, client_popup,&id);
+    render_client_options(app, opt_inner, buf, client_popup,&id)
 }
 
-fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientPopup, selected_node: &NodeId) {
+fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientPopup, selected_node: &NodeId)->Option<Rect>{
     // Now here based on the information we have in the struct we draw the menu's
     match client_popup{
         ClientPopup::ChatPage(chat_page_data) => {
             render_chat_options(app,area, buf, chat_page_data, selected_node);
         }
         ClientPopup::InternetPage(net_page_data) => {
-            render_net_options(app, area, buf, net_page_data, selected_node);
+            return render_net_options(app, area, buf, net_page_data, selected_node);
         }
         ClientPopup::DataPage(data_page_data) => {
-            render_data_options(app,area,buf)
+            render_data_options(app,area,buf);
         }
         ClientPopup::SettingsPage(_) => {
 
         }
     }
-
+    None
 }
 
 
@@ -303,10 +303,11 @@ pub(super) mod chat_rendering{
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::ToSpan;
     use ratatui::widgets;
-    use server::chat2::Chat;
-    use server::MessageSC::{Media, Message};
+    use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
+    use server::MessageSC;
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
+    use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
     use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
 
@@ -324,6 +325,11 @@ pub(super) mod chat_rendering{
                 if app.app_mode == AppMode::FileExploring{
                     let centered_popup_area = centered_popup_area(area);
                     widgets::Clear.render(centered_popup_area, buf);
+                    let colored_bg_block = Block::default().style(Style::default().bg(POPUP_BG_COLOR));
+                    let colored_popup_area = colored_bg_block
+                        .inner(centered_popup_area);
+                    colored_bg_block.render(centered_popup_area, buf);
+
                     app.cache.file_explorer.widget().render(centered_popup_area, buf);
                 }
             }
@@ -531,7 +537,7 @@ pub(super) mod chat_rendering{
                                     /*let [message_area, data_area] = Layout::default()
                                         .direction(Direction::Horizontal)
                                         .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
-                                    if messdata.id==selected_cl {
+                                    if messdata.id_sender==selected_cl {
                                         match mess{
                                             Message::Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
@@ -557,7 +563,7 @@ pub(super) mod chat_rendering{
                                             Message::Message(str) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
-                                                                           messdata.id);
+                                                                           messdata.id_sender);
                                                 let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
                                                                                               str.to_span()]))
                                                     .alignment(Alignment::Left)
@@ -567,7 +573,7 @@ pub(super) mod chat_rendering{
                                             Message::Media(med) => {
                                                 let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                            messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
-                                                                           ,messdata.id);
+                                                                           ,messdata.id_sender);
                                                 let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                                                     .alignment(Alignment::Left)
                                                     .wrap(Wrap { trim: true });
@@ -667,20 +673,20 @@ pub(super) mod chat_rendering{
 
         // Draw attach-file option (paperclip icon + label)
         let attach_para = Paragraph::new("🖇️")
-                    .block(Block::default().borders(Borders::ALL)
-                        .border_type(BorderType::Rounded)
-                        .border_style(
-                            match app.cache.tab1_data.chat_third_page_selection{
-                                ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
-                                ChatThirdPageSelection::BottomTab => {
-                                    if app.cache.tab1_data.popup_cursor==1{
-                                        Style::default().fg(app.animation_color())
-                                    }else{
-                                        Style::default().fg(Color::Rgb(89, 72, 198))
-                                    }
-                                }
+            .block(Block::default().borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(
+                    match app.cache.tab1_data.chat_third_page_selection{
+                        ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
+                        ChatThirdPageSelection::BottomTab => {
+                            if app.cache.tab1_data.popup_cursor==1{
+                                Style::default().fg(app.animation_color())
+                            }else{
+                                Style::default().fg(Color::Rgb(89, 72, 198))
                             }
-                        ))
+                        }
+                    }
+                ))
             .alignment(Alignment::Center);
 
         attach_para.render(select_file_area, buf);
@@ -882,27 +888,41 @@ pub(super) mod net_rendering{
     use std::collections::HashMap;
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
-    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage};
+    use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage, SelectedFileMedia};
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
     use ratatui::buffer::{Buffer, Cell};
 
     use ratatui::prelude::{Color, Line, Modifier, Style, Text, Widget};
-    use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem, Paragraph, Wrap};
-    use host::{ClientId, MediaId, ServerId};
+    use ratatui::widgets::{Block, BorderType, Borders, Gauge, HighlightSpacing, List, ListItem, Padding, Paragraph, Wrap};
+    use toml::value::Time;
+    use textwrap::wrap;
+    use ratatui::layout::Direction::Vertical;
+    use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine};
+    use std::ops::Add;
+    use std::sync::mpsc::Receiver;
+    use client::Client;
+    use host::{ClientId, FileId, MediaId, ServerId};
+    use ratatui::Frame;
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::{ToSpan, ToText};
+    use ratatui_image::protocol::StatefulProtocol;
+    use ratatui_image::StatefulImage;
+    use crate::backend::sc_models::{NetCacheFile, NetCacheMedia};
+    use crate::frontend::app::models::main_types::AppMode;
+    use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
     use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
 
-    pub(super) fn render_net_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientNetPopup, selected_node: &NodeId){
+    pub(super) fn render_net_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientNetPopup, selected_node: &NodeId)->Option<Rect>{
         match client_popup {
             ClientNetPopup::FirstPage(st) => {
                 // Choose the Content Server
                 render_net_first_page(app,area,buf,st,selected_node);
+                None
             }
             ClientNetPopup::SecondPage(nd) => {
-                render_net_second_page(app,area,buf,nd,selected_node);
+                return render_net_second_page(app,area,buf,nd,selected_node);
             }
         }
     }
@@ -920,7 +940,7 @@ pub(super) mod net_rendering{
             }
         }
     }
-    fn render_net_second_page(app:&App, area:Rect, buf: &mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId){
+    fn render_net_second_page(app:&App, area:Rect, buf: &mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId)->Option<Rect>{
         let [lists_area,file_visualizer_area] = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
@@ -1010,7 +1030,31 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                ListItem::from(id.to_text()).style(base_style)
+                                match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+                                    None => {
+                                        ListItem::from(format!("{:?}",id)).style(base_style)
+                                    }
+                                    Some(hash) => {
+                                        match hash.get(&id){
+                                            None => {
+                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                            }
+                                            Some(item) => {
+                                                let load_char = match item.1{
+                                                    NetCacheMedia::Downloading(_) => {
+                                                        match app.cache.counter % 4 {
+                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        ' '
+                                                    }
+                                                };
+                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                            }
+                                        }
+                                    }
+                                }
                             })
                             .collect()
                     }
@@ -1034,7 +1078,31 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                ListItem::from(id.to_text()).style(base_style)
+                                match app.simulation_controller_data.net_cache.downloaded_files.get(&ndpage_data.selected_server){
+                                    None => {
+                                        ListItem::from(format!("{:?}",id)).style(base_style)
+                                    }
+                                    Some(hash) => {
+                                        match hash.get(&id){
+                                            None => {
+                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                            }
+                                            Some(item) => {
+                                                let load_char = match item.1{
+                                                    NetCacheFile::Downloading(_) => {
+                                                        match app.cache.counter % 4 {
+                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                        }
+                                                    }
+                                                    _ => {
+                                                        ' '
+                                                    }
+                                                };
+                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                            }
+                                        }
+                                    }
+                                }
                             })
                             .collect()
                     }
@@ -1116,7 +1184,81 @@ pub(super) mod net_rendering{
             NO - Mostro la schermata "Select a file to view"
          */
 
+        match ndpage_data.selected_file.clone() {
+            SelectedFileMedia::None => {
 
+            }
+            SelectedFileMedia::File(_) => {
+
+            }
+            SelectedFileMedia::Media(media_id) => {
+                app.render_media_visualizer(inner_file_visualizer_block, buf, ndpage_data, selected_node, media_id);
+                // Rendering it externally
+                return Some(inner_file_visualizer_block)
+            }
+        }
+        None
+    }
+    fn render_media_visualizer(app:&mut App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
+        match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+            None => {
+
+            }
+            Some(hash) => {
+                match hash.get(&file_id){
+                    None => {
+
+                    }
+                    Some((_,file_status)) => {
+                        match file_status{
+                            NetCacheMedia::Downloading(download_status) => {
+                                // Rendering Bar status widget
+                            }
+                            NetCacheMedia::Downloaded(_) => {
+                                //
+                            }
+                            NetCacheMedia::Rendering(loading_status) => {
+                                // Rendering Bar status widget
+                            }
+                            NetCacheMedia::Rendered(image_protocol) => {
+                                // I render it externally so no need to do it again here,
+                                // sopratutto perchè serve un riferimento mutabile a app per farlo :))
+                            }
+                            NetCacheMedia::FatalErrorRendering() => {
+                                //
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    fn render_loading_gauge(app:&mut App, area:Rect, buf:&mut Buffer, net_cache_media: NetCacheMedia, server_id: ServerId){
+        match net_cache_media{
+
+            NetCacheMedia::Downloading(status) => {
+                let title = Line::from(format!(" Downloading media from {:?} ",server_id)).centered();
+
+                let title_block = Block::new()
+                    .borders(Borders::NONE)
+                    .padding(Padding::vertical(1))
+                    .title(title);
+
+                let label = format!("{:.1}%", status);
+
+                Gauge::default()
+                    .block(title_block)
+                    .gauge_style(app.animation_color())
+                    .ratio(status as f64 / 100.0)
+                    .label(label)
+                    .use_unicode(true)
+                    .render(area, buf);
+            }
+            NetCacheMedia::Rendering(status) => {
+
+            }
+            _ => return (),
+        }
     }
 }
 pub(super) mod settings_rendering{

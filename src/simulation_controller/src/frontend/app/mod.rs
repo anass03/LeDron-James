@@ -6,33 +6,31 @@ mod models;
 use ui::tabs::{render_footer, render_inner, render_top};
 use models::main_types::{AppMode, Cache, Settings};
 
-use ratatui::{
-    buffer::Buffer,
-    layout::{
-        Layout, Rect
-    },
-    widgets::Widget,
-    DefaultTerminal
-};
+use ratatui::{buffer::Buffer, layout::{
+    Layout, Rect
+}, widgets::Widget, DefaultTerminal, Frame};
 
 use std::{io, thread, time};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread::JoinHandle;
+use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 use time::Instant;
+use host::{ClientId, FileId, MediaId, ServerId};
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
 use ratatui_image::errors::Errors;
-use ratatui_image::thread::{ResizeRequest, ResizeResponse};
+use ratatui_image::StatefulImage;
+use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
-use crate::backend::sc_models::FileRendererUpdate;
+use crate::backend::sc_models::{FileRendererUpdate, NetCacheMedia};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::main_types::{RendererCommand, RendererResponse};
+use crate::frontend::app::models::tab1_types::RenderingImage;
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -53,7 +51,6 @@ pub struct App<'a> {
     renderer: JoinHandle<()>,
     tx_to_renderer: Sender<RendererCommand>,
     rx_from_renderer: Receiver<RendererResponse>,
-
 
     simulation_controller_data: SimulationControllerData,
     stay: bool,
@@ -85,7 +82,7 @@ impl App<'_>{
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()>{
         let mut instant = Instant::now();
 
-        while self.stay {
+        while self.stay.clone() {
             // Listening to channels
             self.simulation_controller_data.handle_channels();
             self.check_topology_status();
@@ -93,8 +90,14 @@ impl App<'_>{
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
-            self.cache.frame = terminal.get_frame();
-            terminal.draw(|f| f.render_widget(&*self, f.area()))?;
+            terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
+            match self.cache.tab1_data.image_rendering_data.clone(){
+                RenderingImage::False => (),
+                RenderingImage::True(data) => {
+                    terminal.draw(|f| Self::render_image(f, self, data))?;                }
+            }
+            terminal.draw(|f| {
+            })?;
 
             self.handle_events()?;
 
@@ -117,6 +120,24 @@ impl App<'_>{
              }
         }
         Ok(())
+    }
+    fn render_image(f: &mut Frame<'_>, app: &mut App, data: (Rect,ClientId, ServerId, MediaId)){
+        match app.simulation_controller_data.net_cache.downloaded_medias.get_mut(&data.2){
+            None => (),
+            Some(hash) => {
+                match hash.get_mut(&data.3) {
+                    None => (),
+                    Some(media) => {
+                        match &mut media.1{
+                            NetCacheMedia::Rendered(protocol) => {
+                                f.render_stateful_widget(StatefulImage::new(), data.0, protocol)
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+            }
+        }
     }
     fn handle_events(&mut self) -> io::Result<()>{
         use std::time::Duration;
@@ -189,7 +210,7 @@ impl App<'_>{
         //self.refresh_cache();
     }
 }
-impl Widget for &App<'_>{
+impl Widget for &mut App<'_>{
     // Each tab render function returns to this fn
     fn render(mut self, area: Rect, buf: &mut Buffer)
     {
@@ -229,7 +250,9 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                     RendererCommand::AddChannel((tx,rx)) => {
                         channels.push((tx, rx));
                     },
-                    _ => (),
+                    RendererCommand::Encode(buffer_data)=> {
+
+                    },
                 }
             }
 

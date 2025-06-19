@@ -15,6 +15,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use crate::frontend::app::App;
 use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, SelectedFileMedia, ViewedTab1};
 
 pub const BG_COLOR: Color = Color::Rgb(13, 10, 28);
 pub(super) const POPUP_BG_COLOR: Color = Color::Rgb(24,19,54);
@@ -120,7 +121,7 @@ pub(crate) fn render_top(app:&App, area: Rect, buf : &mut Buffer){
     line.render(inner_main_block,buf)
 
 }
-pub(crate) fn render_inner(app:&App, area: Rect, buf : &mut Buffer){
+pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
     let mut main_block = Block::default()
         .border_style(Style::default().fg(Color::Yellow))
         .border_style(Style::default().add_modifier(Modifier::BOLD))
@@ -130,7 +131,39 @@ pub(crate) fn render_inner(app:&App, area: Rect, buf : &mut Buffer){
 
     match app.selected_tab{
         SelectedTab::Overview => tab0::render_tab0(app, inner_block, buf),
-        SelectedTab::Topology => tab1::render_tab1(app, inner_block, buf),
+        SelectedTab::Topology => {
+            match tab1::render_tab1(app, inner_block, buf){
+                None => {}
+                Some(file_vis_area) => {
+                    match app.cache.tab1_data.viewing.clone() {
+                        ViewedTab1::Popup((node_id,ndpop)) => {
+                            match ndpop {
+                                NodePopup::Client(clpop)=> {
+                                    match clpop {
+                                        ClientPopup::InternetPage(netpage) => {
+                                            match netpage {
+                                                ClientNetPopup::SecondPage(ndpage) => {
+                                                    match ndpage.selected_file{
+                                                        SelectedFileMedia::Media(id) => {
+                                                            app.cache.tab1_data.image_rendering_data = RenderingImage::True((file_vis_area,node_id,ndpage.selected_server,id ))
+                                                        }
+                                                        _ => (),
+                                                    }
+                                                }
+                                                _ => (),
+                                            }
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                                _ => (),
+                            }
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        },
         SelectedTab::TOMLEditor => tab2::render_tab2(app, inner_block, buf),
         SelectedTab::Settings => () //tab1::render_tab3(app, inner_block, buf),
     }

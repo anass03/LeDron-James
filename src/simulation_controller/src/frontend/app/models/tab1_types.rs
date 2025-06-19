@@ -1,4 +1,5 @@
 use host::{ClientId, FileId, MediaId, ServerId};
+use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
@@ -20,12 +21,16 @@ pub(in crate::frontend::app) struct Tab1{
     // Needed fast accessible data for Tab1-Third Page
     pub chat_third_page_selection: ChatThirdPageSelection,
 
-
+    pub image_rendering_data: RenderingImage,
     pub file_exploring_data: FileExploring,
 
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
+}
+#[derive(Clone)]
+pub(crate) enum RenderingImage{
+    False, True((Rect,ClientId, ServerId, MediaId)),
 }
 pub(crate) struct MediaListRenderUtils{
     pub selected: u8,
@@ -187,6 +192,7 @@ impl Tab1{
 
             popup_selection: PopupSelection::MenuArea,
             chat_third_page_selection: ChatThirdPageSelection::BottomTab,
+            image_rendering_data: RenderingImage::False,
             file_exploring_data: FileExploring::default(),
             viewing: ViewedTab1::Main
             /*ViewedTab1::Popup((1, NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(ClThirdPage{
