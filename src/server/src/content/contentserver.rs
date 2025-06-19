@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::{env, fs};
-use std::path::PathBuf;
+use std::fmt::format;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
@@ -215,7 +216,51 @@ impl ContentServer {
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
+            }/*
+            ClientNetCommand::NewMedia(receiver_id, file_id, data) => {
+                if receiver_id == self.info.host.id {
+                    let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
+                    let safe_file_id = Path::new(&file_id)
+                        .file_name()
+                        .unwrap_or_else(|| std::ffi::OsStr::new("invalid_media"));
+                    let path = base_dir.join(safe_file_id);
+
+                    match fs::write(&path, &data) {
+                        Ok(_) => {
+                            self.send_logging(format!("Media salvato in {}", path.display()));
+                            // self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
+                        },
+                        Err(e) => {
+                            self.send_logging(format!("Errore scrivendo media {}: {}", path.display(), e));
+                            //self.send_response(ServerToClient::Nack, source); // da capire se aggiungere una risposta
+                        }
+                    }
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                }
             }
+            ClientNetCommand::NewFile(receiver_id, file_id, data) => {
+                if receiver_id == self.info.host.id {
+                    let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/files");
+                    let safe_file_id = Path::new(&file_id)
+                        .file_name()
+                        .unwrap_or_else(|| std::ffi::OsStr::new("invalid_file"));
+                    let path = base_dir.join(safe_file_id);
+
+                    match fs::write(&path, &data) {
+                        Ok(_) => {
+                            self.send_logging(format!("File salvato in {}", path.display()));
+                            //self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
+                        },
+                        Err(e) => {
+                            self.send_logging(format!("Errore scrivendo file {}: {}", path.display(), e));
+                            //self.send_response(ServerToClient::Nack, source); // da capire se aggiungere una risposta
+                        }
+                    }
+                } else {
+                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+                }
+            }*/
             _ => {
                 self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
             }
