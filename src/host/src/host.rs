@@ -5,18 +5,18 @@ use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
+use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rand::Rng;
 use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
 use ordered_float::OrderedFloat;
 
-pub type FileId = usize;
-pub type MediaId = usize;
+pub type FileId = String;
+pub type MediaId = String;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
-pub type Extension = String;
-const ALPHA: f64 = 0.1; // fattore di smussamento (regolabile)
+const ALPHA: f64 = 0.01; // fattore di smussamento (regolabile)
 
 
 #[derive(Clone)]
@@ -32,13 +32,11 @@ pub struct Host{
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
     pub log_sender: Sender<String>,
 
-    // *** CAMPUS PER IL DEBOUNCE ***
-    pub flood_scheduled: bool,
-    pub flood_timer: Option<Receiver<Instant>>,
+    /// quanto vogliamo aspettare tra un flood e il successivo
+    nack_flood_backoff: Duration,
+    /// timestamp dell’ultimo flood scatenato da un NACK
+    last_nack_flood: Instant,
 
-    // *** CONTATORE DI FLOOD PER SESSIONE ***
-    max_flood_attempts: u8,
-    flood_attempts: HashMap<u64, u8>,  // session_id -> tentativi
 }
 impl Host{
     pub fn new(id:NodeId,
@@ -58,10 +56,8 @@ impl Host{
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
             log_sender,
-            flood_scheduled: false,
-            flood_timer: None,
-            max_flood_attempts: 5,
-            flood_attempts: HashMap::new(),
+            nack_flood_backoff: Duration::from_secs(5),
+            last_nack_flood: Instant::now() - Duration::from_secs(5),
         };
         host
     }
@@ -78,11 +74,12 @@ pub struct SentSessionData {
     pub destination: NodeId,        // Destinatario della sessione
     pub route: Vec<NodeId>,        // percorso pre-calcolato
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
+    banned_nodes: HashSet<NodeId>,
 }
 #[derive(Clone, Debug)]
 pub struct Edge {
     pub to:     NodeId,
-    weight: f64,
+    pub weight: f64,
 }
 #[derive(Clone)]
 pub struct Network {
@@ -167,8 +164,19 @@ impl Network {
             if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
-                    // Qui estraggo direttamente la stima EWMA di PDR per il drone `u`
-                    let reliability = 1.0 - edge.weight;
+                    // se v NON è né start né destination, allora deve essere un drone
+                    if v != start && v != destination {
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, pdr)) => {  }
+                            _ => continue,  // salta host o altri tipi intermedi
+                        }
+                    }
+                    // Estrai la PDR del drone di ARRIVO (v), non di u
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let reliability = 1.0 - pdr_v;
                     // Se la stima è zero o negativa, salto subito l'arco
                     if reliability <= 0.0 {
                         continue;
@@ -203,24 +211,12 @@ impl Network {
 
     /// Come `find_best_route`, ma esclude tutti gli archi consecutivi già
     /// presenti in `used_route`.
-    pub fn find_alternate_route(
+    pub fn find_best_route_excluding(
         &self,
         start: NodeId,
         destination: NodeId,
-        used_route: &[NodeId],
+        banned_nodes: &HashSet<NodeId>,
     ) -> Option<Vec<NodeId>> {
-        // clono la topologia e rimuovo gli archi usati
-        let mut temp = self.nodes.clone();
-        for window in used_route.windows(2) {
-            if let [u, v] = window {
-                if let Some((_, edges)) = temp.get_mut(u) {
-                    edges.retain(|e| e.to != *v);
-                }
-                if let Some((_, edges)) = temp.get_mut(v) {
-                    edges.retain(|e| e.to != *u);
-                }
-            }
-        }
 
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
@@ -236,12 +232,28 @@ impl Network {
             if u == destination {
                 break;
             }
-            if let Some((_, edges)) = temp.get(&u) {
+            if let Some((_, edges)) = self.nodes.get(&u) {
                 for edge in edges {
                     let v = edge.to;
 
-                    // idem: leggo la stima EWMA per `u`
-                    let reliability = 1.0 - edge.weight;
+                    // Se il nodo è bannato, lo skippiamo subito
+                    if banned_nodes.contains(&v) {
+                        continue;
+                    }
+
+                    // Se v NON è né start né destination, allora deve essere un drone
+                    if v != start && v != destination {
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, _)) => { /* ok */ }
+                            _ => continue,  // salta host o altri tipi intermedi
+                        }
+                    }
+
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
+                    let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
                     }
@@ -261,6 +273,7 @@ impl Network {
         if !dist.contains_key(&destination) {
             return None;
         }
+
         let mut path = Vec::new();
         let mut cur = destination;
         while cur != start {
@@ -271,10 +284,10 @@ impl Network {
         path.reverse();
         Some(path)
     }
+
 }
 pub trait Functionality{
     fn send_logging(&self, message: String);
-    fn schedule_flood(&mut self);
     fn initiate_flood(&mut self);
     fn process_flood_request(&mut self, flood_request: FloodRequest,packet: Packet);
     fn process_flood_response(&mut self, packet: Packet);
@@ -307,27 +320,18 @@ impl Functionality for Host {
         }
     }
     /// Al posto di chiamare initiate_flood() direttamente, uso questo
-    fn schedule_flood(&mut self) {
-        // Se ho già schedulato un flood, ignoro
-        if self.flood_scheduled {
-            return;
-        }
-        self.flood_scheduled = true;
-        // Il channel `after` manderà un messaggio dopo 100ms
-        self.flood_timer = Some(after(Duration::from_millis(100)));
-        self.send_logging("Flood scheduled (debounced)".to_string());
-    }
     fn initiate_flood(&mut self) {
         if !self.network.nodes.is_empty() {
             self.network.nodes.clear();
         }
+        if !self.network.drone_pdr.is_empty() {
+            self.network.drone_pdr.clear();
+        }
+        if !self.flood_cache.is_empty(){
+            self.flood_cache.clear();
+        }
         if self.packet_send.is_empty() {
             self.send_logging(format!("No neighbors to flood to host={}",  self.id));
-            // Siamo in errore di rete: MA siccome non ho inviato alcun FloodRequest,
-            // devo _azzerare_ flood_scheduled e il flood_timer, altrimenti
-            // il select li vede sempre pronti e richiama all’infinito questa funzione.
-            self.flood_scheduled = false;
-            self.flood_timer = None;
             return;
         }
         // Genero subito gli ID, così li posso loggare
@@ -502,37 +506,25 @@ impl Functionality for Host {
             self.send_logging(format!("FloodResponse senza path_trace – host={}", host_id));
             return;
         }
+        self.send_logging(format!("👌👌👌 path trace da controllare, {:?}", response.path_trace));
+        // 3) The last element in path_trace is the initiator
+        let (initiator, _) = response.path_trace.first().unwrap();
 
-        // 3) Estraggo l’iniziatore dall’ultimo elemento di path_trace
-        let (initiator, _) = response.path_trace.last().unwrap();
-
-        // 4) Se non sono l’iniziatore o non ho quel flood_id in cache, lo inoltro
-        let is_mio = *initiator == host_id
-            && self
-            .flood_cache
-            .get(&host_id)
-            .map_or(false, |ids| ids.contains(&flood_id));
-
-        if !is_mio {
-            // ◁ “Non è una risposta per me”: devo forwardare verso l’iniziatore
-            //    routing_header.hop_index punta ora all’indice del nodo corrente.
-            //    Per rimbalzare, incrementiamo hop_index e inviamo al prossimo hop.
+        // 4) If I'm not the initiator, forward the response back along the path
+        if *initiator != host_id {
             routing_header.hop_index += 1;
-            // ATTENZIONE: verifichiamo che non sfori
             if routing_header.hop_index < routing_header.hops.len() {
                 let next_hop = routing_header.hops[routing_header.hop_index];
                 self.send_logging(format!(
-                    "Forwarding FloodResponse host={} flood_id={} verso next_hop={}",
-                    host_id, flood_id, next_hop
+                    "Forwarding FloodResponse: host={} flood_id={} -> next_hop={}",
+                    host_id,
+                    response.flood_id,
+                    next_hop
                 ));
-                // Chiamo send_packet con None perché voglio che lui guardi routing_header per
-                // decidere il canale corretto
                 let _ = self.send_packet(pkt.clone(), None);
             } else {
-                // (teoricamente non dovrebbe mai succedere, perché hop_index == len-1
-                // implica che il pacchetto era già al suo destino, ma per sicurezza lo logghiamo)
                 self.send_logging(format!(
-                    "Hop_index oltre la lunghezza di hops: host={} hop_index={} len={}",
+                    "Invalid hop_index in FloodResponse: host={} hop_index={} len={}",
                     host_id,
                     routing_header.hop_index,
                     routing_header.hops.len()
@@ -611,122 +603,6 @@ impl Functionality for Host {
         // 7) (Opzionale) Ricalcolo subito i PDR
         self.network.recalc_pdr();
     }
-    // fn process_flood_response(&mut self, response: FloodResponse) {
-    //     let host_id = self.id;
-    //     let flood_id    = response.flood_id;
-    //     // (A) Verifico che path_trace non sia vuoto
-    //     if response.path_trace.is_empty() {
-    //         self.send_logging(format!(
-    //             "FloodResponse senza path_trace – host={}",
-    //             host_id
-    //         ));
-    //         return;
-    //     }
-    //
-    //     // (B) Estrae il primo elemento di path_trace: è l’initiator
-    //     let (initiator, _) = response.path_trace.last().unwrap();
-    //
-    //     // (C) Se l’initiator non sono io, o il flood_id non è nella mia entry della cache, ignoro
-    //     if *initiator != host_id
-    //         || !self
-    //         .flood_cache
-    //         .get(&host_id)
-    //         .map_or(false, |ids| ids.contains(&flood_id))
-    //     {
-    //         self.send_logging(format!(
-    //             "Ignoro FloodResponse non mio: host={} initiator={} flood_id={}",
-    //             host_id, initiator, flood_id
-    //         ));
-    //         return;
-    //     }
-    //     // 🔍 LOG: path completo in arrivo
-    //     let path_str = response
-    //         .path_trace
-    //         .iter()
-    //         .map(|(id, ty)| format!("{:?}({})", ty, id))
-    //         .collect::<Vec<_>>()
-    //         .join(" -> ");
-    //
-    //     self.send_logging(format!(
-    //         "Handling FloodResponse with path host={} flood_id={}, path_str={}",
-    //         host_id,
-    //         response.flood_id,
-    //         path_str,
-    //     ));
-    //     let path = &response.path_trace;
-    //     if path.len() < 2 {
-    //         self.send_logging(format!(
-    //             "FloodResponse path too short, skipping host={} len={}",
-    //             host_id,
-    //             path.len(),
-    //         ));
-    //         return;
-    //     }
-    //
-    //     // 1) Assicura che tutti i nodi nel percorso siano nella adjacency-list
-    //     for &(node_id, node_type) in path {
-    //         // entry nuovo nodo, se non esiste
-    //         self.network
-    //             .nodes
-    //             .entry(node_id)
-    //             .or_insert_with(|| (node_type, Vec::new()));
-    //
-    //         // per i droni, inizializza subito pdr
-    //         if node_type == NodeType::Drone {
-    //             self.network
-    //                 .drone_pdr
-    //                 .entry(node_id)
-    //                 .or_insert(0.0);
-    //         }
-    //         // per i server, inserisci nell’HashSet dei server
-    //         if node_type == NodeType::Server {
-    //             self.network
-    //                 .servers
-    //                 .insert(node_id);
-    //         }
-    //     }
-    //
-    //     // 2) Registra connessioni tra nodi adiacenti
-    //     for window in path.windows(2) {
-    //         let (curr_id, _) = window[0];
-    //         let (next_id, _) = window[1];
-    //
-    //         if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
-    //             // evita doppioni
-    //             if !edges.iter().any(|e| e.to == next_id) {
-    //                 edges.push(Edge { to: next_id, weight: 0.0 });
-    //                 self.send_logging(format!(
-    //                     "Recorded adjacency edge host={} from={} to={}",
-    //                     host_id,
-    //                     curr_id,
-    //                     next_id,
-    //                 ));
-    //             }
-    //             // ——— Aggiungi anche l'arco inverso ———
-    //             if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
-    //                 // evita doppioni
-    //                 if !inv_edges.iter().any(|e| e.to == curr_id) {
-    //                     inv_edges.push(Edge { to: curr_id, weight: 0.0 });
-    //                     self.send_logging(format!(
-    //                         "Recorded adjacency edge host={} from={} to={}",
-    //                         host_id,
-    //                         next_id,
-    //                         curr_id,
-    //                     ));
-    //                 }
-    //             }
-    //
-    //         } else {
-    //             self.send_logging(format!(
-    //                 "Current node missing from network.nodes host={} node={}",
-    //                 host_id, curr_id,
-    //             ));
-    //         }
-    //     }
-    //
-    //     // (Opzionale) se vuoi ricalcolare subito i PDR:
-    //     self.network.recalc_pdr();
-    // }
     fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes {
         self.send_logging(format!("Sending packet... host={}", self.id));
 
@@ -793,12 +669,28 @@ impl Functionality for Host {
             self.id,
             hops,
         ));
+
+        // 2) *RICALCOLO* la rotta per la sessione, dato che i PDR sono cambiati
+        {
+            let mut sent = self.sent_fragments.lock().unwrap();
+            if let Some(session) = sent.get_mut(&session_id) {
+                let dest = session.destination;
+                if let Some(new_route) = self.network.find_best_route(self.id, dest) {
+                    session.route = new_route;
+                    session.last_activity = Instant::now();
+                    self.send_logging(format!(
+                        "🔄 Route aggiornata host={} session={} route={:?}",
+                        self.id, session_id, session.route
+                    ));
+                }
+            }
+        }
         self.send_logging("--- ✅ Drone packet stats ✅ ---".to_string());
         for (&drone_id, &pdr) in &self.network.drone_pdr {
             // pdr è la stima di “reliability” (0.0–1.0). Il drop_rate corrisponde a 1.0 – pdr.
             let reliability = 1.0 - pdr.clamp(0.0, 1.0);
             self.send_logging(format!(
-                "Drone {}: pdr = {:.3}, reliability = {:.3}",
+                "Drone {}: expected pdr = {:.3}, reliability = {:.3}",
                 drone_id, pdr, reliability
             ));
         }
@@ -855,130 +747,128 @@ impl Functionality for Host {
         let host = self.id;
         let frag_idx = nack.fragment_index;
 
-        // 1) Apro il lock TANTO PER PRENDERE fragment, destination e route correnti,
-        //    quindi droppo subito il lock.
-        let (fragment, mut current_route, destination) = {
-            let mut sent = self.sent_fragments.lock().unwrap();
-            if let Some(session) = sent.get_mut(&session_id) {
+        // 1) Recupero i dati di sessione (fragment, route, banned)
+        let (fragment, current_route, destination, mut banned_nodes) = {
+            let sent = self.sent_fragments.lock().unwrap();
+            if let Some(session) = sent.get(&session_id) {
                 match session.buffer.get(frag_idx as usize) {
-                    Some(Some(f)) => {
-                        let frag_clone = f.clone();
-                        let route_clone = session.route.clone();
-                        let dest = session.destination;
-                        (frag_clone, route_clone, dest)
-                    }
-                    Some(None) => {
-                        // frammento già confermato o non esistente
-                        self.send_logging(format!(
-                            "NACK per frammento inesistente/già confermato host={} session={} fragment={}",
-                            host, session_id, frag_idx
-                        ));
-                        return;
-                    }
-                    None => {
-                        // indice fuori range
-                        self.send_logging(format!(
-                            "NACK index out of range host={} session={} fragment={}",
-                            host, session_id, frag_idx
-                        ));
+                    Some(Some(f)) => (f.clone(), session.route.clone(), session.destination, session.banned_nodes.clone()),
+                    Some(None) | None => {
+                        self.send_logging(format!("NACK su frammento già confermato o out-of-range: session={} frag={}", session_id, frag_idx));
                         return;
                     }
                 }
             } else {
-                // sessione sconosciuta
-                self.send_logging(format!(
-                    "NACK per sessione sconosciuta host={} session={}",
-                    host, session_id
-                ));
+                self.send_logging(format!("NACK su sessione sconosciuta: {}", session_id));
                 return;
             }
         };
-        // Qui il MutexGuard su sent_fragments è già stato droppato.
 
         match nack.nack_type {
             NackType::Dropped => {
-                // 2) NACK “Dropped”: ritrasmetto subito il frammento
-                self.send_logging(format!(
-                    "Retransmitting dropped fragment host={} session={} fragment={}",
-                    host, session_id, frag_idx
-                ));
+                self.send_logging(format!("Retransmitting dropped fragment session={} frag={}", session_id, frag_idx));
                 self.send_fragment(session_id, fragment.clone());
                 self.network.pdr_from_nack(nack_generator);
             }
 
             NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
-                self.send_logging(format!(
-                    "Routing error, attempting alternate route host={} session={} fragment={} bad_hop={}",
-                    host, session_id, frag_idx, bad
-                ));
+                self.send_logging(format!("Routing error on bad_hop={} for session={} frag={}", bad, session_id, frag_idx));
 
-                // 3) Provo subito una rotta alternativa sulla route corrente
-                if let Some(new_route) =
-                    self.network.find_alternate_route(host, destination, &current_route)
-                {
-                    self.send_logging(format!(
-                        "Alternate route found, updating and retransmitting host={} session={} fragment={} alt_route={:?}",
-                        host, session_id, frag_idx, new_route
-                    ));
+                // Se il bad node NON è già nella route corrente, allora la route corrente è già aggiornata
+                if !current_route.contains(&bad) {
+                    self.send_logging(format!("Bad node {} not in current route — keep current route.", bad));
+                    self.send_fragment(session_id, fragment.clone());
+                    return;
+                }
 
-                    // 3.a) Apro il lock solo per aggiornare session.route
+                // Aggiungo il nodo problematico nella blacklist
+                banned_nodes.insert(bad);
+
+                // Provo una route alternativa escludendo i banned_nodes
+                if let Some(new_route) = self.network.find_best_route_excluding(host, destination, &banned_nodes) {
+                    self.send_logging(format!("Found alternative route: {:?}", new_route));
+
                     {
                         let mut sent = self.sent_fragments.lock().unwrap();
                         if let Some(session) = sent.get_mut(&session_id) {
                             session.route = new_route.clone();
+                            session.banned_nodes = banned_nodes.clone();
                             session.last_activity = Instant::now();
-                        } else {
-                            // La sessione è già stata rimossa nel frattempo: esco
-                            self.send_logging(format!(
-                                "Session {} già rimossa, non ritrasmetto",
-                                session_id
-                            ));
-                            return;
-                        }
-                    } // il lock viene droppato qui
+                        } else { return; }
+                    }
 
-                    // 3.b) Invio il frammento sulla nuova rotta
-                    current_route = new_route.clone();
-                    let header = SourceRoutingHeader::new(new_route.clone(), 0);
+                    let header = SourceRoutingHeader::new(new_route, 1);
                     let pkt = Packet::new_fragment(header, session_id, fragment.clone());
                     let res = self.send_packet(pkt, None);
-                    self.send_logging(format!(
-                        "Retransmission result host={} session={} fragment={} result={:?}",
-                        host, session_id, frag_idx, res
-                    ));
-                } else {
-                    // 3.c) Non c'è rotta alternativa: incremento flood_attempts e valuto se abortire o floodare
-                    let cnt = {
-                        let entry = self.flood_attempts.entry(session_id).or_insert(0);
-                        *entry += 1;
-                        *entry
-                    };
+                    self.send_logging(format!("Retransmission result: {:?}", res));
 
-                    if cnt > self.max_flood_attempts {
-                        // 3.d) Superata la soglia: rete scollegata, rimuovo la sessione
-                        self.send_logging(format!(
-                            "❌ NET DISCONNECTED, session {} fallita dopo {} flood → aborting",
-                            session_id,
-                            cnt - 1 // cnt-1 perché cnt è già stato incrementato oltre la soglia
-                        ));
-                        let mut sent = self.sent_fragments.lock().unwrap();
-                        sent.remove(&session_id);
-                    } else {
-                        // 3.e) Pianifico un solo flood, poi esco
-                        self.send_logging(format!(
-                            "No alternate route per session {}, scheduling flood attempt {}/{}",
-                            session_id, cnt, self.max_flood_attempts
-                        ));
+                } else {
+                    self.send_logging("No alternative route found, flooding...".to_string());
+                    let now = Instant::now();
+
+                    if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
+                        self.last_nack_flood = now;
                         self.initiate_flood();
+                        let timeout = after(Duration::from_secs(4));
+                        loop {
+                            select! {
+                                recv(self.packet_recv) -> pkt => {
+                                    if let Ok(pkt) = pkt {
+                                        if let PacketType::FloodResponse(_) = pkt.pack_type {
+                                            self.process_flood_response(pkt);
+                                        }
+                                    }
+                                }
+                                recv(timeout) -> _ => break,
+                            }
+                        }
+                        self.send_logging(format!("NODES AFTER REFLODING: {:?}, drone_pdr: {:?}", self.network.nodes, self.network.drone_pdr));
+
+                        if let Some(new_route_after_flood) = self.network.find_best_route(host, destination) {
+                            self.send_logging(format!("Route found after flood: {:?}", new_route_after_flood));
+
+                            {
+                                let mut sent = self.sent_fragments.lock().unwrap();
+                                if let Some(session) = sent.get_mut(&session_id) {
+                                    // aggiorno route e banned
+                                    session.route = new_route_after_flood.clone();
+                                    session.banned_nodes = banned_nodes.clone();
+                                    session.last_activity = Instant::now();
+
+                                    // ** RI-TRASMETTO TUTTI I FRAMMENTI **
+                                    for (idx, opt_frag) in session.buffer.iter().enumerate() {
+                                        if let Some(frag) = opt_frag {
+                                            let header = SourceRoutingHeader::new(new_route_after_flood.clone(), 1);
+                                            let pkt = Packet::new_fragment(header, session_id, frag.clone());
+                                            let res = self.send_packet(pkt, None);
+                                            self.send_logging(format!(
+                                                "Retransmission fragment #{} result: {:?}",
+                                                idx, res
+                                            ));
+                                        }
+                                    }
+                                } else {
+                                    return;
+                                }
+                            }
+                        } else {
+                            self.send_logging(format!(
+                                "❌ No route available after flood. Aborting session {}",
+                                session_id
+                            ));
+
+                            let mut sent = self.sent_fragments.lock().unwrap();
+                            sent.remove(&session_id);
+                            // (opzionale) notificare il controller
+                        }
+                    } else {
+                        self.send_logging(format!("Flood backoff not expired"));
                     }
                 }
             }
 
             NackType::DestinationIsDrone => {
-                self.send_logging(format!(
-                    "DestinationIsDrone NACK — dropping fragment host={} session={} fragment={}",
-                    host, session_id, frag_idx
-                ));
+                self.send_logging(format!("Destination is drone, dropping fragment."));
             }
         }
     }
@@ -1024,6 +914,7 @@ impl Functionality for Host {
                     route: route.clone(),
                     destination,
                     pending: total,
+                    banned_nodes: HashSet::new()
                 }
             });
 
@@ -1182,29 +1073,29 @@ pub enum ClientNetCommand {
     RegistrationToChat(ServerId),
     ClientList(ServerId),
     MessageFor(ClientId,ServerId, String),
-    FileFor(ClientId,ServerId, FileId, Extension, Vec<u8>),
-    MediaFor(ClientId,ServerId, MediaId, Extension, Image),
+    FileFor(ClientId,ServerId, FileId, Vec<u8>),
+    MediaFor(ClientId,ServerId, MediaId, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
     RemoveSender(NodeId),
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerToClient{
     ServerType(ServerTypes),
 
     //content server
     FilesList(ServerId, Vec<FileId>),
-    File(ServerId, FileId, Extension, Vec<u8>),
+    File(ServerId, FileId, Vec<u8>),
 
     MediaList(ServerId, Vec<MediaId>),
-    Media(ServerId, MediaId, Extension, Image),
+    Media(ServerId, MediaId, Image),
 
     //chat server
-    ClientList(ServerId, Vec<ClientId>),
+    ClientList(ClientId, ServerId, Vec<ClientId>),
     MessageFrom(ServerId, ClientId, String),
-    FileFrom(ServerId, ClientId, FileId, Extension, Vec<u8>),
-    MediaFrom(ServerId, ClientId, MediaId, Extension, Image),
+    FileFrom(ServerId, ClientId, FileId, Vec<u8>),
+    MediaFrom(ServerId, ClientId, MediaId, Image),
 
     ErrNotFound(ServerId),
     ErrClientId(ServerId),
@@ -1217,7 +1108,9 @@ pub enum HostEvent {
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
     ///Servers discovered, response at ServerType
-    ServersDiscovered(HashMap<ServerTypes,Vec<ServerId>>)
+    ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
+    ///for real time chat
+    ChatUpdate(ServerId, String)
 }
 
 #[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
@@ -1231,7 +1124,7 @@ pub struct Message {
     pub session_id: u64,
     pub content: Vec<u8>,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Image{
     pub width: u32,
     pub height: u32,

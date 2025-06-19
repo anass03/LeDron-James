@@ -283,7 +283,7 @@ impl ChatServer2 {
 
 // Chat data structures for message persistence
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,PartialEq,Debug)]
 pub struct Chat {
     pub chat: Vec<(MessageSC, MessageMetaData)>,
     pub users: ChatUsers,
@@ -294,25 +294,25 @@ impl Chat{
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,PartialEq,Debug)]
 pub struct ChatUsers {
     pub user1: NodeId,
     pub user2: NodeId,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,PartialEq,Debug)]
 pub struct MessageMetaData {
     pub id: NodeId,
     pub timestamp: Datetime,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,PartialEq,Debug)]
 pub enum MessageSC {
     Message(String),
     Media(MediaSC),
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone,PartialEq,Debug)]
 pub enum MediaSC {
     Image(String, LeImage),
     File(String, Vec<u8>),
