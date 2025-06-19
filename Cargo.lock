@@ -455,7 +455,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#081d47165791a039e85fa3bef85b9222b2cb5b7f"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4d0e96675049686c837f4ff90525aefc38a3e5e1"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -1216,7 +1216,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#081d47165791a039e85fa3bef85b9222b2cb5b7f"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4d0e96675049686c837f4ff90525aefc38a3e5e1"
 dependencies = [
  "crossbeam-channel",
  "image",
@@ -1317,9 +1317,9 @@ dependencies = [
 
 [[package]]
 name = "image-webp"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14d75c7014ddab93c232bc6bb9f64790d3dfd1d605199acd4b40b6d69e691e9f"
+checksum = "f6970fe7a5300b4b42e62c52efa0187540a5bef546c60edaf554ef595d2e6f0b"
 dependencies = [
  "byteorder-lite",
  "quick-error",
@@ -2199,9 +2199,9 @@ dependencies = [
 
 [[package]]
 name = "ratatui-image"
-version = "5.0.0"
+version = "8.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9e2b311a4215ae53a10d57d541c80e103347294650b4d5501a6a3b41ecd8dff"
+checksum = "e8fe71c551c67f34e4fa49797227f614cd064b82855d7b72d424e40d08ec0542"
 dependencies = [
  "base64",
  "icy_sixel",
@@ -2556,7 +2556,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#0dd420080d74701af2e79f8a69e13acc532cc3b4"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#2dd1cf6300959fb9ee634380627f8e4956fbe238"
 dependencies = [
  "chrono",
  "crossbeam-channel",

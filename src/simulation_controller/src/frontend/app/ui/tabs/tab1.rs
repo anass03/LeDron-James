@@ -41,7 +41,7 @@ pub(crate) fn centered_popup_area(area: Rect) -> Rect {
 
 
 /// Renders Settings tab-page
-pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&App, area: Rect, buf : &mut Buffer){
+pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, buf : &mut Buffer)->Option<Rect>{
     match &app.cache.tab1_data.viewing{
         ViewedTab1::Main => {
             // Viewing Topology and shi
@@ -60,17 +60,18 @@ pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&App, area: Rect, buf 
             //popup.render(popup_area, buf);
             match ndpop{
                 NodePopup::Client(cl) => {
-                    tab1_client_popup::render_client_popup(app, colored_popup_area, buf, cl, *id)
+                    return tab1_client_popup::render_client_popup(app, colored_popup_area, buf, cl, *id);
                 }
                 NodePopup::Server(sr) => {
-                    tab1_server_popup::render_server_popup(app, colored_popup_area, buf, sr, *id)
+                    tab1_server_popup::render_server_popup(app, colored_popup_area, buf, sr, *id);
                 }
                 NodePopup::Drone(dr) => {
-                    tab1_drone_popup::render_drone_popup(app, colored_popup_area, buf, dr, *id)
+                    tab1_drone_popup::render_drone_popup(app, colored_popup_area, buf, dr, *id);
                 }
             }
         }
     }
+    None
 }
 
 // Utils needed by the single tabs

@@ -44,6 +44,8 @@ pub struct SimulationControllerData {
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
 
+
+
     pub chat_cache: ChatCache,
     pub net_cache: NetCache,
 }

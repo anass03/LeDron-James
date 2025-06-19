@@ -70,7 +70,7 @@ pub struct NetCache{
     pub known_file_list: HashMap<ClientId, HashMap<ServerId, Vec<FileId>>>,
     pub known_media_list: HashMap<ClientId, HashMap<ServerId, Vec<MediaId>>>,
 
-    pub downloaded_medias: HashMap<ServerId, HashMap<FileId,(Option<Receiver<FileRendererUpdate>>, NetCacheMedia)>>,
+    pub downloaded_medias: HashMap<ServerId, HashMap<MediaId,(Option<Receiver<FileRendererUpdate>>, NetCacheMedia)>>,
     pub downloaded_files: HashMap<ServerId, HashMap<FileId,((),NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //
@@ -93,17 +93,17 @@ impl NetCache{
 }
 
 pub enum NetCacheMedia {
-    Downloading(u8), // u8 € [0,100] representing client loading status.
+    Downloading(f32), // f32 € [0,100] representing client loading status.
     Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
-    Rendering(u8), // u8 € [0,100] representing Sim. Controller loading status.
+    Rendering(f32), // f32 € [0,100] representing Sim. Controller loading status.
     Rendered(ThreadProtocol), // Rendered file that has to be
     // re-rendered each time Terminal changes its size.
     FatalErrorRendering(), // Fatal error rendering, file has to be re-sent!
 }
 pub enum NetCacheFile{
-    Downloading(u8), // u8 € [0,100] representing client loading status.
+    Downloading(f32), // f32 € [0,100] representing client loading status.
     Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
-    Rendering(u8),
+    Rendering(f32),
     Rendered(File)
 }
 
