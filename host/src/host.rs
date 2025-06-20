@@ -809,7 +809,7 @@ impl Functionality for Host {
                     if now.duration_since(self.last_nack_flood) >= self.nack_flood_backoff {
                         self.last_nack_flood = now;
                         self.initiate_flood();
-                        let timeout = after(Duration::from_secs(4));
+                        let timeout = after(Duration::from_secs(2));
                         loop {
                             select! {
                                 recv(self.packet_recv) -> pkt => {
@@ -862,13 +862,13 @@ impl Functionality for Host {
                             // (opzionale) notificare il controller
                         }
                     } else {
-                        self.send_logging(format!("Flood backoff not expired"));
+                        self.send_logging("Flood backoff not expired".to_string());
                     }
                 }
             }
 
             NackType::DestinationIsDrone => {
-                self.send_logging(format!("Destination is drone, dropping fragment."));
+                self.send_logging("Destination is drone, dropping fragment.".to_string());
             }
         }
     }
@@ -889,11 +889,11 @@ impl Functionality for Host {
                 return Err(err);
             }
         };
-        self.send_logging(format!("✅💥💥 Route found for fragmentation: {:?}", route.clone()));
+        //self.send_logging(format!("✅💥💥 Route found for fragmentation: {:?}", route.clone()));
 
         // Calcola numero totale di frammenti
         let bytes = &message.content;
-        self.send_logging(format!("❤️❤️ vettore di byte: {:?}", bytes.clone()));
+        //self.send_logging(format!("❤️❤️ vettore di byte: {:?}", bytes.clone()));
         let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
 
         // Prepara o aggiorna SentSessionData
@@ -952,18 +952,18 @@ impl Functionality for Host {
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
 
-            self.send_logging(format!(
-                "Sending fragment host={} session={} fragment={}",
-                self.id,
-                message.session_id,
-                i,
-            ));
+            // self.send_logging(format!(
+            //     "Sending fragment host={} session={} fragment={}",
+            //     self.id,
+            //     message.session_id,
+            //     i,
+            // ));
             let result = self.send_packet(packet, None);
 
-            self.send_logging(format!(
-                "Send result host={} session={} fragment={} result={}",
-                self.id, message.session_id, i, result
-            ));
+            // self.send_logging(format!(
+            //     "Send result host={} session={} fragment={} result={}",
+            //     self.id, message.session_id, i, result
+            // ));
 
         }
 
