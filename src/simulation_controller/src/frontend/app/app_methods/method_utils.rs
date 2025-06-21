@@ -5,13 +5,14 @@ use std::fs::File;
 use std::{fs, io};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
+use std::sync::mpsc::Receiver;
 use std::thread::Thread;
 use ratatui::text::Text;
 use rodio::{Decoder, OutputStream, Sink};
 use tui_textarea::TextArea;
 use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::sc_models::LogType;
+use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia};
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
 use crate::frontend::app::topology_algorithm::vectors::Vector;
@@ -24,6 +25,45 @@ fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
 }
 impl App<'_> {
+    pub(crate) fn handle_downloaded_medias(&mut self){
+        for (server_id, values) in self.simulation_controller_data.net_cache.downloaded_medias{
+            for (id,(channel,media)) in values{
+                match media{
+                    NetCacheMedia::Downloading(status) => {
+
+                    }
+                    NetCacheMedia::Downloaded(vec) => {
+
+                    }
+                    NetCacheMedia::Rendering(status) => {
+
+                    }
+                    NetCacheMedia::Rendered(mut rendered) => {
+                        match channel{
+                            None => {
+                                // Should have a channel
+                            }
+                            Some(channel) => {
+                                while let Ok(event) = channel.try_recv() {
+                                    match event {
+                                        FileRendererUpdate::Redraw(redraw) => {
+                                            rendered.update_resized_protocol(redraw);
+                                        }
+                                        FileRendererUpdate::Error(err) => {
+                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    NetCacheMedia::FatalErrorRendering() => {
+
+                    }
+                }
+            }
+        }
+    }
 
     pub(crate) fn check_lists_initialized(&mut self){
         if !self.cache.tab1_data.netnode_list.initialized{

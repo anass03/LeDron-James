@@ -11,7 +11,7 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -45,9 +45,11 @@ pub struct SimulationControllerData {
     pub stats: Statistics,
 
 
-
     pub chat_cache: ChatCache,
     pub net_cache: NetCache,
+
+    pub tx_to_renderer: Option<Sender<RendererCommand>>,
+    pub rx_from_renderer: Option<Receiver<RendererResponse>>,
 }
 
 impl SimulationControllerData {
@@ -114,6 +116,9 @@ impl SimulationControllerData {
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
             chat_cache: ChatCache::default(),
             net_cache: NetCache::default(),
+
+            tx_to_renderer: None,
+            rx_from_renderer: None,
         }
     }
 }

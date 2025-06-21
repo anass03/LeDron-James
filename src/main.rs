@@ -25,6 +25,9 @@ fn main() -> std::io::Result<()> {
         topology_algorithm_data: TopologyAlgorithm::default(),
         chat_cache: ChatCache::default(),
         net_cache: NetCache::default(),
+
+        tx_to_renderer: None,
+        rx_from_renderer: None,
     };
     match initialize("init_file.toml") {
         Ok((simulation_controller, handles)) => {
