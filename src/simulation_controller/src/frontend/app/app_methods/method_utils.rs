@@ -26,8 +26,8 @@ fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
 }
 impl App<'_> {
     pub(crate) fn handle_downloaded_medias(&mut self){
-        for (server_id, values) in self.simulation_controller_data.net_cache.downloaded_medias{
-            for (id,(channel,media)) in values{
+        for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
+            for (id,(channels,media)) in values{
                 match media{
                     NetCacheMedia::Downloading(status) => {
 
@@ -38,8 +38,8 @@ impl App<'_> {
                     NetCacheMedia::Rendering(status) => {
 
                     }
-                    NetCacheMedia::Rendered(mut rendered) => {
-                        match channel{
+                    NetCacheMedia::Rendered(ref mut rendered) => {
+                        match &channels.1{
                             None => {
                                 // Should have a channel
                             }

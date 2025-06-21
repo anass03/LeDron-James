@@ -48,8 +48,8 @@ pub struct SimulationControllerData {
     pub chat_cache: ChatCache,
     pub net_cache: NetCache,
 
-    pub tx_to_renderer: Option<Sender<RendererCommand>>,
-    pub rx_from_renderer: Option<Receiver<RendererResponse>>,
+    pub tx_to_renderer: Option<std::sync::mpsc::Sender<RendererCommand>>,
+    pub rx_from_renderer: Option<std::sync::mpsc::Receiver<RendererResponse>>,
 }
 
 impl SimulationControllerData {

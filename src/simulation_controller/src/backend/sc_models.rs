@@ -64,10 +64,10 @@ impl Statistics{
     }
 }
 
-pub(crate) enum RendererCommand{
+pub enum RendererCommand{
     Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode(Vec<u8>)
 }
-pub(crate) enum RendererResponse{
+pub enum RendererResponse{
     Outcome((LogType,String)), Encoded()
 }
 
@@ -80,7 +80,7 @@ pub struct NetCache{
 
     pub downloaded_medias: HashMap<ServerId,
         HashMap<MediaId,
-            ((Option<Sender<ResizeRequest>>,Option<Receiver<FileRendererUpdate>>), NetCacheMedia)>>,
+            ((Option<std::sync::mpsc::Sender<ResizeRequest>>,Option<std::sync::mpsc::Receiver<FileRendererUpdate>>), NetCacheMedia)>>,
     pub downloaded_files: HashMap<ServerId, HashMap<FileId,((),NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //

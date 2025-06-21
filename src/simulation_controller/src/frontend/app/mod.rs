@@ -29,7 +29,6 @@ use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
 use crate::backend::sc_models::{FileRendererUpdate, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
-use crate::frontend::app::models::main_types::{RendererCommand, RendererResponse};
 use crate::frontend::app::models::tab1_types::RenderingImage;
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
