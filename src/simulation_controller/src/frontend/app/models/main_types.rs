@@ -35,13 +35,6 @@ pub(in crate::frontend::app) enum AppMode{
     Normal, Input, Scrolling, FileExploring
 }
 
-pub(crate) enum RendererCommand{
-    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode(Vec<u8>)
-}
-pub(crate) enum RendererResponse{
-    Outcome((LogType,String)), Encoded()
-}
-
 
 
 pub(in crate::frontend::app) struct Cache<'a> {

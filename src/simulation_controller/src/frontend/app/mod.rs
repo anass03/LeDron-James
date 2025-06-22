@@ -27,9 +27,8 @@ use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
-use crate::backend::sc_models::{FileRendererUpdate, NetCacheMedia};
+use crate::backend::sc_models::{FileRendererUpdate, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
-use crate::frontend::app::models::main_types::{RendererCommand, RendererResponse};
 use crate::frontend::app::models::tab1_types::RenderingImage;
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
@@ -49,8 +48,7 @@ IDEE:
  */
 pub struct App<'a> {
     renderer: JoinHandle<()>,
-    tx_to_renderer: Sender<RendererCommand>,
-    rx_from_renderer: Receiver<RendererResponse>,
+
 
     simulation_controller_data: SimulationControllerData,
     stay: bool,
@@ -62,14 +60,16 @@ pub struct App<'a> {
     pub selected_tab: SelectedTab,
 }
 impl App<'_>{
-    pub fn default(simulation_controller_data: SimulationControllerData) -> Self {
+    pub fn default(mut simulation_controller_data: SimulationControllerData) -> Self {
         let ((tx_to_renderer, rx_from_renderer), renderer) = renderer_thread_gen();
         Self{
             renderer,
-            tx_to_renderer,
-            rx_from_renderer,
 
-            simulation_controller_data,
+            simulation_controller_data: {
+                simulation_controller_data.tx_to_renderer = Some(tx_to_renderer);
+                simulation_controller_data.rx_from_renderer = Some(rx_from_renderer);
+                simulation_controller_data
+            },
             stay:true,
             app_mode:AppMode::Normal,
             tick_rate:Duration::from_millis(200),

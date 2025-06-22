@@ -3,10 +3,11 @@ use host::{ClientId, FileId, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
-use std::sync::mpsc::Receiver;          // <-- concrete type
+use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
 use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
-use ratatui_image::thread::{ResizeResponse, ThreadProtocol};
+use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
+use crate::backend::sc_models::FileRendererUpdate::Redraw;
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone)]
@@ -63,6 +64,13 @@ impl Statistics{
     }
 }
 
+pub enum RendererCommand{
+    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode(Vec<u8>)
+}
+pub enum RendererResponse{
+    Outcome((LogType,String)), Encoded()
+}
+
 pub struct NetCache{
     // Simply all the chat server the Client knows.
     pub known_content_servers: HashMap<ClientId, Vec<ServerId>>,
@@ -70,7 +78,9 @@ pub struct NetCache{
     pub known_file_list: HashMap<ClientId, HashMap<ServerId, Vec<FileId>>>,
     pub known_media_list: HashMap<ClientId, HashMap<ServerId, Vec<MediaId>>>,
 
-    pub downloaded_medias: HashMap<ServerId, HashMap<MediaId,(Option<Receiver<FileRendererUpdate>>, NetCacheMedia)>>,
+    pub downloaded_medias: HashMap<ServerId,
+        HashMap<MediaId,
+            ((Option<std::sync::mpsc::Sender<ResizeRequest>>,Option<std::sync::mpsc::Receiver<FileRendererUpdate>>), NetCacheMedia)>>,
     pub downloaded_files: HashMap<ServerId, HashMap<FileId,((),NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //
@@ -141,7 +151,11 @@ pub struct ChatCache{
 impl ChatCache{
     pub fn default() ->Self{
         Self{
-            local_chats: Default::default(),
+            local_chats: Default::default(), /*{
+                let mut ret_hash = HashMap::new();
+                ret_hash.insert(11, ChatList::default_dummy());
+                ret_hash
+            },*/
             known_contacts: Default::default(),
             known_chat_servers: Default::default(),
             first_menu_scroll_offset: 0,
@@ -149,6 +163,7 @@ impl ChatCache{
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct ChatList{
     // We keep a copy of the users chats even in the vec for easier finding.
 
@@ -167,7 +182,7 @@ impl ChatList{
     }
     fn default_dummy() -> Self {
         // Build a dummy chat history of 20 alternating messages
-        let users_pair = (2, 1);
+        let users_pair = (8, 9);
         let mut history = Vec::with_capacity(20);
         for i in 0..20 {
             // Alternate sender: even index -> Node 2, odd -> Node 1
@@ -189,7 +204,7 @@ impl ChatList{
         }
         let chat = Chat {
             chat: history,
-            users: ChatUsers { user1: 2, user2: 1 },
+            users: ChatUsers { user1: 8, user2: 9 },
         };
         ChatList {
             chats_stored: {

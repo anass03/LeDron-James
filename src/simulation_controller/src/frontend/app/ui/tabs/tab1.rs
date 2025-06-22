@@ -234,7 +234,6 @@ pub(super) mod data_rendering{
         logging_block.render(filtered_logging_area, buf);
 
         process_log_paragraph(app).render(inner_logging_block, buf);
-
     }
 }
 

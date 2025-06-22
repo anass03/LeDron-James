@@ -8,7 +8,7 @@ use crate::backend::sc_models::{ChatList, LogType};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, ClientPopup, DronePopup, NodePopup, PopupSelection, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, ClientPopup, DronePopup, NetFirstPage, NetSecondPage, NodePopup, PopupSelection, SelectedFileMedia, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -136,13 +136,15 @@ impl App<'_> {
                     ))
             }
             1 => {
-                /*self.cache.tab1_data.viewing =
+                self.cache.tab1_data.viewing =
                     ViewedTab1::Popup((
                         id,
                         NodePopup::Client(ClientPopup::InternetPage(
-
+                            ClientNetPopup::FirstPage(
+                                NetFirstPage::default()
+                            )
                         ))
-                    ))*/
+                    ))
             }
             2 => {
                 /*self.cache.tab1_data.viewing =
@@ -198,7 +200,7 @@ impl App<'_> {
                         self.handle_chat_page(key,id,ch_page)
                     }
                     ClientPopup::InternetPage(net_page) => {
-
+                        self.handle_net_page(key,id,net_page)
                     }
                     ClientPopup::DataPage(data_page) => {
 
@@ -219,6 +221,7 @@ impl App<'_> {
                         // Send request
                         match self.simulation_controller_data.request_server_type(id){
                             Ok(_) => {
+                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO,"Trying to find new servers in the network!".to_string());
                             }
                             Err(str) => {
                                 self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
@@ -227,6 +230,7 @@ impl App<'_> {
                     },
                     _ => (),
                 }
+
                 match &self.simulation_controller_data.chat_cache.known_chat_servers.get(&id){
                     None => {
                         match key.code {
@@ -294,9 +298,6 @@ impl App<'_> {
                             }
                         }
                     },
-                    "i" => {
-                        self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?}\n{:?}", self.simulation_controller_data.chat_cache.known_contacts, self.simulation_controller_data.chat_cache.known_chat_servers))
-                    }
                     _ => (),
                 }
                 // Devo capire dove mi trovo
@@ -473,7 +474,87 @@ impl App<'_> {
             }
         }
     }
-    fn handle_net_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){}
+    fn handle_net_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){
+        match net_page {
+            ClientNetPopup::FirstPage(stpage) => {
+                // I am outside because this is shared by the two known_chat_servers cases
+                match key.code.to_string().to_lowercase().as_str(){
+                    "r" => {
+                        // Send request
+                        match self.simulation_controller_data.request_server_type(id){
+                            Ok(_) => {
+                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO,"Sent request server-type".to_string());
+                            }
+                            Err(str) => {
+                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                            }
+                        }
+                    },
+                    _ => (),
+                }
+                match &self.simulation_controller_data.net_cache.known_content_servers.get(&id){
+                    None => {
+                        match key.code {
+                            KeyCode::Left => {
+                                self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                            }
+                            _ => ()
+                        }
+                    },
+                    Some(known_content_servers) => {
+                        let chat_servers_len = known_content_servers.len();
+                        match key.code {
+                            KeyCode::Up => {
+                                if self.cache.tab1_data.popup_cursor>0{
+                                    self.cache.tab1_data.popup_cursor-=1;
+                                }
+                            }
+                            KeyCode::Down => {
+                                if self.cache.tab1_data.popup_cursor + 1 < chat_servers_len  {
+                                    self.cache.tab1_data.popup_cursor+=1;
+                                }
+                            }
+                            KeyCode::Left => {
+                                // Return on Menu
+                                self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                            }
+                            KeyCode::Enter => {
+                                // I get the selected item and pass it to the second page struct
+                                match known_content_servers.get((self.cache.tab1_data.popup_cursor as usize)){
+                                    None => {
+                                        // Should be impossible
+                                        // THROW FATAL
+                                    }
+                                    Some(selected_server_id) => {
+                                        self.cache.tab1_data.popup_cursor = 0;
+                                        self.cache.tab1_data.viewing =
+                                            ViewedTab1::Popup((
+                                                id,
+                                                NodePopup::Client(ClientPopup::InternetPage(
+                                                    ClientNetPopup::SecondPage(
+                                                        NetSecondPage{
+                                                            selected_server: selected_server_id.clone(),
+                                                            selected_file: SelectedFileMedia::None,
+                                                            scroll_offset: 0,
+                                                        }
+                                                    )
+                                                ))
+                                            ))
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                }
+            }
+            ClientNetPopup::SecondPage(ndpage) => {
+
+            }
+        }
+    }
     fn handle_data_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){}
     fn handle_sett_page(&mut self, key:KeyEvent,id:NodeId){}
 

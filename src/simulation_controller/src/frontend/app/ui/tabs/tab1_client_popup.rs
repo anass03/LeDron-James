@@ -1235,7 +1235,6 @@ pub(super) mod net_rendering{
     }
     fn render_loading_gauge(app:&mut App, area:Rect, buf:&mut Buffer, net_cache_media: NetCacheMedia, server_id: ServerId){
         match net_cache_media{
-
             NetCacheMedia::Downloading(status) => {
                 let title = Line::from(format!(" Downloading media from {:?} ",server_id)).centered();
 

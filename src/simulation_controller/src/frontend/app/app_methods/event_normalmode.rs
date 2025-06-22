@@ -16,6 +16,9 @@ impl App<'_>{
                     self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Links: {:?}\n{:?}", self.simulation_controller_data.topology_algorithm_data.map_links, self.simulation_controller_data.topology_algorithm_data.map))
                 }
                 "q" => self.stay = false,
+                "i" => {
+                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?}", self.simulation_controller_data.chat_cache.local_chats ));
+                }
                 _ => {
                     match self.selected_tab {
                         ui::tabs::SelectedTab::Overview => (self.handle_event_tab0(key.code)),
