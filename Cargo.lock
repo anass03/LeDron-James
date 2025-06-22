@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "Krusty_Club"
 version = "0.1.0"
-source = "git+https://github.com/Ossyk/Krusty_Club.git#fd42ea290774d51f3c923cb05053a29cf3fbae0e"
+source = "git+https://github.com/Ossyk/Krusty_Club.git#d8b3b890af2a58b1f514cbc174ad829785e3ae36"
 dependencies = [
  "crossbeam-channel",
  "rand 0.9.1",
@@ -455,7 +455,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4d0e96675049686c837f4ff90525aefc38a3e5e1"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#24b8f0ea8b266a9f27579fb2eda7dad5a26f02ca"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -972,12 +972,12 @@ checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
 name = "errno"
-version = "0.3.12"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea14ef9355e3beab063703aa9dab15afd25f0667c341310c1e5274bb1d0da18"
+checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1216,7 +1216,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#4d0e96675049686c837f4ff90525aefc38a3e5e1"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#24b8f0ea8b266a9f27579fb2eda7dad5a26f02ca"
 dependencies = [
  "crossbeam-channel",
  "image",
@@ -2269,9 +2269,9 @@ dependencies = [
 
 [[package]]
 name = "ravif"
-version = "0.11.12"
+version = "0.11.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6a5f31fcf7500f9401fea858ea4ab5525c99f2322cfcee732c0e6c74208c0c6"
+checksum = "5825c26fddd16ab9f515930d49028a630efec172e903483c94796cfe31893e6b"
 dependencies = [
  "avif-serialize",
  "imgref",
@@ -2408,7 +2408,7 @@ dependencies = [
 [[package]]
 name = "rustaceans_wit_attitudes"
 version = "0.0.0"
-source = "git+https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git#0307dd65e5fa953bbf911449dcf794294645dbc7"
+source = "git+https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git#ce6426af2b2a2ca366b4ed34391d420cf23e7957"
 dependencies = [
  "crossbeam-channel",
  "rand 0.8.5",
@@ -2556,7 +2556,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#2dd1cf6300959fb9ee634380627f8e4956fbe238"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#ba4a7227945c3155819501237dd741f5956892c3"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -2790,9 +2790,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.103"
+version = "2.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4307e30089d6fd6aff212f2da3a1f9e32f3223b1f010fb09b7c95f90f3ca1e8"
+checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3520,6 +3520,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.60.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
+dependencies = [
+ "windows-targets 0.53.2",
 ]
 
 [[package]]

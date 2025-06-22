@@ -703,7 +703,13 @@ impl SimulationControllerData {
                     => {
                         self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
                     ServerToClient::FilesList(server_id, file_list) 
-                    => self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")),
+                    => {
+                        self.net_cache
+                            .known_file_list
+                            .entry(client_id)
+                            .or_default()
+                            .insert(server_id, file_list.clone());
+                        self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
                     ServerToClient::File(server_id, file_id, file)
                     => {
                         // Construct filename based on file ID and inferred extension
@@ -742,7 +748,13 @@ impl SimulationControllerData {
 
                     },
                     ServerToClient::MediaList(server_id, media_list) 
-                    => self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)),
+                    => {
+                        self.net_cache
+                            .known_media_list
+                            .entry(client_id)
+                            .or_default()
+                            .insert(server_id, media_list.clone());
+                        self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
                     ServerToClient::Media(server_id, media_id, image)
                     => {
                         let extension = match get_extension(&media_id) {
@@ -813,6 +825,11 @@ impl SimulationControllerData {
                     self.chat_cache
                         .known_chat_servers
                         .insert(client_id, chat_servers.clone());
+                }
+                if let Some(content_servers) = servers.get(&Content) {
+                    self.net_cache
+                        .known_content_servers
+                        .insert(client_id, content_servers.clone());
                 }
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             },
