@@ -702,7 +702,7 @@ impl SimulationControllerData {
                     ServerToClient::ServerType(server_type)
                     => {
                         self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
-                    ServerToClient::FilesList(server_id, file_list) 
+                    ServerToClient::FilesList(client_id, server_id, file_list)
                     => {
                         self.net_cache
                             .known_file_list
@@ -747,7 +747,7 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
 
                     },
-                    ServerToClient::MediaList(server_id, media_list) 
+                    ServerToClient::MediaList(client_id, server_id, media_list)
                     => {
                         self.net_cache
                             .known_media_list
@@ -834,6 +834,7 @@ impl SimulationControllerData {
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             },
             HostEvent::ChatUpdate(server_id, string) => {
+                self.logs.push_sc_log(LogType::DEBUG, format!("💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥d"));
                 let chat: Chat = serde_json::from_str(&string)
                     .map_err(|e| (LogType::ERROR, e.to_string()))?;
 
@@ -843,6 +844,7 @@ impl SimulationControllerData {
 
                 let chat_list = ChatList { chats_stored };
                 self.chat_cache.local_chats.insert(server_id, chat_list);
+                self.logs.push_sc_log(LogType::DEBUG, format!("Local chat list: {:?}", self.chat_cache.local_chats));
             }
         }
         Ok(())

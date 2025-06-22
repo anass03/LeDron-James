@@ -18,7 +18,7 @@ use rustaceans_wit_attitudes::RustaceansWitAttitudesDrone;
 use Krusty_Club::Krusty_C;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
-use server::ChatServer as LeChatServer;
+use server::ChatServer2 as LeChatServer;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
 use rand::{random_range, Rng};
 use simulation_controller::backend::sc_models::DroneType;
