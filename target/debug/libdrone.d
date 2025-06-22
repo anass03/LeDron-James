@@ -1,1 +1,0 @@
-C:\Users\leooo\RustroverProjects\LeDron-James\target\debug\libdrone.rlib: C:\Users\leooo\RustroverProjects\LeDron-James\src\drone\src\drone.rs C:\Users\leooo\RustroverProjects\LeDron-James\src\drone\src\lib.rs

@@ -244,7 +244,7 @@ impl ChatServer2 {
         let timestamp: Datetime = match now.to_rfc3339().parse() {
             Ok(dt) => dt,
             Err(e) => {
-                eprintln!("Errore nel parse del Datetime: {}", e);
+                self.send_logging(format!("Errore nel parse del Datetime: {}", e));
                 return;
             }
         };

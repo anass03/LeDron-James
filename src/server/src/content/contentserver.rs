@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 use std::{env, fs};
-use std::fmt::format;
 use std::path::{Path, PathBuf};
+use image::{ColorType, ImageResult, save_buffer};
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{GenServerBehavior, MediaServer, TextServer, GenServer};
-use host::{ServerToClient, ServerTypes, Functionality, HostEvent, HostCommand, ClientNetCommand};
+use host::{ServerToClient, ServerTypes, Functionality, HostEvent, HostCommand, ClientNetCommand, Image};
 use delegate::delegate;
 
 /// ContentServer implements both TextServer and MediaServer functionality.
@@ -165,7 +165,7 @@ impl ContentServer {
                 if receiver_id == self.info.host.id {
                     self.count_files();
                     self.send_logging("Checking files ids".to_string());
-                    self.send_response(ServerToClient::FilesList(self.info.host.id, self.files.clone()), source);
+                    self.send_response(ServerToClient::FilesList(source,self.info.host.id, self.files.clone()), source); 
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
@@ -193,7 +193,7 @@ impl ContentServer {
                 if receiver_id == self.info.host.id {
                     self.count_files();
                     self.send_logging("Checking Medias ids".to_string());
-                    self.send_response(ServerToClient::MediaList(self.info.host.id, self.media.clone()), source);
+                    self.send_response(ServerToClient::MediaList(source,self.info.host.id, self.media.clone()), source);
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                }
@@ -216,7 +216,7 @@ impl ContentServer {
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
-            }/*
+            }
             ClientNetCommand::NewMedia(receiver_id, file_id, data) => {
                 if receiver_id == self.info.host.id {
                     let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
@@ -225,7 +225,7 @@ impl ContentServer {
                         .unwrap_or_else(|| std::ffi::OsStr::new("invalid_media"));
                     let path = base_dir.join(safe_file_id);
 
-                    match fs::write(&path, &data) {
+                    match Self::save_image(&path, &data) {
                         Ok(_) => {
                             self.send_logging(format!("Media salvato in {}", path.display()));
                             // self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
@@ -260,11 +260,20 @@ impl ContentServer {
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
-            }*/
+            }
             _ => {
                 self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
             }
         }
+    }
+    fn save_image(path: &PathBuf, image: &Image) -> ImageResult<()> {
+        save_buffer(
+            path,
+            &image.data,
+            image.width,
+            image.height,
+            ColorType::Rgba8, // o Rgba8 se hai canale alfa
+        )
     }
 
     /// Handles any protocol packet received by the server.
