@@ -200,6 +200,10 @@ impl Client {
                         let label = format!("File({})", id);
                         self.send_net_cmd(Content, sid, ClientNetCommand::File(sid, id), &label);
                     }
+                    ClientNetCommand::NewFile(sid, id, data) => {
+                        let label = format!("Adding new file({}) for server {}", id, sid);
+                        self.send_net_cmd(Content, sid, ClientNetCommand::NewFile(sid, id, data), &label);
+                    }
                     ClientNetCommand::MediaList(sid) => {
                         self.send_net_cmd(Content, sid, ClientNetCommand::MediaList(sid), "MediaList");
                     }
@@ -207,7 +211,10 @@ impl Client {
                         let label = format!("Media({})", id);
                         self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id), &label);
                     }
-
+                    ClientNetCommand::NewMedia(sid, id, data) => {
+                        let label = format!("Adding new media({}) for server {}", id, sid);
+                        self.send_net_cmd(Content, sid, ClientNetCommand::NewMedia(sid, id, data), &label);
+                    }
                     // Chat-server
                     ClientNetCommand::RegistrationToChat(sid) => {
                         self.send_net_cmd(Chat, sid, ClientNetCommand::RegistrationToChat(sid), "RegistrationToChat");
@@ -345,17 +352,17 @@ impl Client {
                             self.host.send_logging(format!("Received {} from client {}", media_id, from));
                             send_reconstructed(MediaFrom(server_id, from, media_id, data))?;
                         }
-                        FilesList(server_id, files) => {
+                        FilesList(client_id, server_id, files) => {
                             self.host.send_logging(format!("Files available: {:?}", files));
-                            send_reconstructed(FilesList(server_id, files))?;
+                            send_reconstructed(FilesList(client_id,server_id, files))?;
                         }
                         File(server_id,file_id, data) => {
                             self.host.send_logging(format!("Received {} of {} bytes",file_id, data.len()));
                             send_reconstructed(File(server_id,file_id, data))?;
                         }
-                        MediaList(server_id,media_list) => {
+                        MediaList(client_id, server_id,media_list) => {
                             self.host.send_logging(format!("Media available: {:?}", media_list));
-                            send_reconstructed(MediaList(server_id,media_list))?;
+                            send_reconstructed(MediaList(client_id,server_id,media_list))?;
                         }
                         Media(server_id,media_id, media) => {
                             self.host.send_logging(format!("Received {} of {} bytes",media_id, media.data.len()));

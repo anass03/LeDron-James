@@ -1065,9 +1065,11 @@ pub enum ClientNetCommand {
     //content-server
     FilesList(ServerId),
     File(ServerId, FileId),
+    NewFile(ServerId, FileId, Vec<u8>),
 
     MediaList(ServerId),
     Media(ServerId,MediaId),
+    NewMedia(ServerId, MediaId, Image),
 
     //chat-server
     RegistrationToChat(ServerId),
@@ -1085,10 +1087,10 @@ pub enum ServerToClient{
     ServerType(ServerTypes),
 
     //content server
-    FilesList(ServerId, Vec<FileId>),
+    FilesList(ClientId, ServerId, Vec<FileId>),
     File(ServerId, FileId, Vec<u8>),
 
-    MediaList(ServerId, Vec<MediaId>),
+    MediaList(ClientId, ServerId, Vec<MediaId>),
     Media(ServerId, MediaId, Image),
 
     //chat server
