@@ -8,7 +8,7 @@ use crate::backend::sc_models::{ChatList, LogType};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, ClientPopup, DronePopup, NetFirstPage, NetSecondPage, NodePopup, PopupSelection, SelectedFileMedia, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DronePopup, NetFirstPage, NetSecondPage, NodePopup, PopupSelection, SelectedFileMedia, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -122,7 +122,7 @@ impl App<'_> {
     }
 
     // We load cursor and the selected client to fn for easier tasking.
-    fn coordinate_popup_cursor_with_opt_menu(&mut self,id:NodeId, current_cursor: usize){
+    fn coordinate_client_popup_cursor_with_opt_menu(&mut self, id:NodeId, current_cursor: usize){
         match current_cursor{
             0 => {
                 self.cache.tab1_data.viewing =
@@ -147,22 +147,22 @@ impl App<'_> {
                     ))
             }
             2 => {
-                /*self.cache.tab1_data.viewing =
+                self.cache.tab1_data.viewing =
                     ViewedTab1::Popup((
                         id,
                         NodePopup::Client(ClientPopup::DataPage(
-
+                            ClientDataPopup::FirstPage()
                         ))
-                    ))*/
+                    ))
             }
             3 => {
-                /*self.cache.tab1_data.viewing =
+                self.cache.tab1_data.viewing =
                     ViewedTab1::Popup((
                         id,
                         NodePopup::Client(ClientPopup::SettingsPage(
-
+                            ClientSettingsPopup::FirstPage()
                         ))
-                    ))*/
+                    ))
             }
             _ => (),
         }
@@ -177,7 +177,7 @@ impl App<'_> {
                         }else{
                             self.cache.tab1_data.popup_cursor = 3;
                         }
-                        self.coordinate_popup_cursor_with_opt_menu(id,self.cache.tab1_data.popup_cursor);
+                        self.coordinate_client_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
                     }
                     KeyCode::Down => {
                         if self.cache.tab1_data.popup_cursor < 3{
@@ -185,11 +185,12 @@ impl App<'_> {
                         }else{
                             self.cache.tab1_data.popup_cursor = 0;
                         }
-                        self.coordinate_popup_cursor_with_opt_menu(id,self.cache.tab1_data.popup_cursor);
+                        self.coordinate_client_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
                     }
                     KeyCode::Right | KeyCode::Enter => {
                         self.cache.tab1_data.popup_selection = PopupSelection::OptArea;
-                        self.coordinate_popup_cursor_with_opt_menu(id,self.cache.tab1_data.popup_cursor);
+                        self.coordinate_client_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                        self.cache.tab1_data.popup_cursor = 0;
                     }
                     _ => (),
                 }
@@ -492,12 +493,12 @@ impl App<'_> {
                     },
                     _ => (),
                 }
-                match &self.simulation_controller_data.net_cache.known_content_servers.get(&id){
+                match self.simulation_controller_data.net_cache.known_content_servers.clone().get(&id){
                     None => {
                         match key.code {
                             KeyCode::Left => {
                                 self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
-                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                                self.cache.tab1_data.popup_cursor = 1; // Re-selecting Net Menu
                             }
                             _ => ()
                         }
@@ -518,7 +519,7 @@ impl App<'_> {
                             KeyCode::Left => {
                                 // Return on Menu
                                 self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
-                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                                self.cache.tab1_data.popup_cursor = 1; // Re-selecting Net Menu
                             }
                             KeyCode::Enter => {
                                 // I get the selected item and pass it to the second page struct
@@ -528,6 +529,23 @@ impl App<'_> {
                                         // THROW FATAL
                                     }
                                     Some(selected_server_id) => {
+                                        let server_id = *selected_server_id;
+                                        match self.simulation_controller_data.request_files_list(id, server_id){
+                                            Ok(_) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request files list".to_string());
+                                            }
+                                            Err(str) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                            }
+                                        }
+                                        match self.simulation_controller_data.request_media_list(id, server_id){
+                                            Ok(_) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request media list".to_string());
+                                            }
+                                            Err(str) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                            }
+                                        }
                                         self.cache.tab1_data.popup_cursor = 0;
                                         self.cache.tab1_data.viewing =
                                             ViewedTab1::Popup((
@@ -535,7 +553,7 @@ impl App<'_> {
                                                 NodePopup::Client(ClientPopup::InternetPage(
                                                     ClientNetPopup::SecondPage(
                                                         NetSecondPage{
-                                                            selected_server: selected_server_id.clone(),
+                                                            selected_server: *selected_server_id,
                                                             selected_file: SelectedFileMedia::None,
                                                             scroll_offset: 0,
                                                         }

@@ -17,7 +17,7 @@ impl App<'_>{
                 }
                 "q" => self.stay = false,
                 "i" => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?}", self.simulation_controller_data.chat_cache.local_chats ));
+                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?} \n {:?}", self.cache.tab1_data.viewing, self.cache.tab1_data.popup_selection ));
                 }
                 _ => {
                     match self.selected_tab {

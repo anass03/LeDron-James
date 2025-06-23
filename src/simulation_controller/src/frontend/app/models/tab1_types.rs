@@ -87,7 +87,7 @@ pub(crate) enum ChatThirdPageSelection{
 }
 
 
-#[derive(PartialEq,Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub(crate) enum PopupSelection{
     MenuArea, OptArea
 }

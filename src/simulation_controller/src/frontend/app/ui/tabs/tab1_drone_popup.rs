@@ -15,6 +15,7 @@ use crate::backend::sc_models::DroneType;
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
+use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
 
 pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rect, buf : &mut Buffer, drone_popup: &DronePopup, id:NodeId) {
 
@@ -71,7 +72,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
 fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &DronePopup, selected_node: &NodeId){
     match drone_popup{
         DronePopup::DataPage() => {
-
+            render_cl_sr_data_options(app, area, buf)
         }
         DronePopup::SettingsPage() => {
 
@@ -79,5 +80,6 @@ fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &Dro
     }
 }
 fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer) {
+
 
 }
