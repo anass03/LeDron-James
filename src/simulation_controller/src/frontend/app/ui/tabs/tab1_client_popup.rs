@@ -5,7 +5,6 @@ use wg_2024::network::NodeId;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Map};
 use std::ops::Add;
-use ratatui::layout::Direction::Vertical;
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
 use ratatui::text::{Line, Text, ToSpan};
 use crate::backend::simulation_controller::NetNode;
@@ -14,10 +13,11 @@ use crate::frontend::app::models::tab1_types::{ClientPopup, PopupSelection};
 use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
 use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_chat_options;
-use crate::frontend::app::ui::tabs::tab1::data_rendering::render_data_options;
+use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
+use crate::frontend::app::ui::tabs::tab1_client_popup::settings_rendering::render_sett_options;
 
-pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId)->Option<Rect>{
+pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId) ->Option<Rect>{
     /*    let [area] = Layout::default()
             .constraints([Constraint::Fill(1)])
             .margin(3)
@@ -110,6 +110,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
     let mut opt_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
+
     match app.cache.tab1_data.popup_selection{
         PopupSelection::MenuArea => (),
         PopupSelection::OptArea => {
@@ -130,13 +131,13 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
             render_chat_options(app,area, buf, chat_page_data, selected_node);
         }
         ClientPopup::InternetPage(net_page_data) => {
-            return render_net_options(app, area, buf, net_page_data, selected_node);
+            return render_net_options(app, area, buf, net_page_data, selected_node)
         }
         ClientPopup::DataPage(data_page_data) => {
-            render_data_options(app,area,buf);
+            render_cl_sr_data_options(app, area, buf);
         }
         ClientPopup::SettingsPage(_) => {
-
+            render_sett_options(app,area,buf)
         }
     }
     None
@@ -151,7 +152,7 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
         /*.horizontal_margin(1)*/
         .areas(area);
     let [first,second] = Layout::default()
-        .direction(Vertical)
+        .direction(Direction::Vertical)
         .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
         .horizontal_margin(1)
         .areas(first_second);
@@ -168,12 +169,14 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
         .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
         /*.vertical_margin(1)*/
         .areas(first_block.inner(first));
-    let first_canvas = draw_server_canvas();
+    let first_canvas = draw_server_canvas(app.cache.counter as u64);
 
 
     let vec_len = known_servers.len();
     // Now depending on how many server do we have we scroll the tabs.
     if usize::from(app.cache.tab1_data.popup_cursor)>=vec_len{
+        // Very buggy.
+        // Idea: Add a different cursor for Opt area
         // We're overflowing the Vec
         // Should be unreachable as increasing / decreasing cursor is pretty firm.
     }else{
@@ -200,7 +203,13 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
             .alignment(Alignment::Left);
         info.render(left_last, buf);
 
-        let first_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2).unwrap_or(&255)))
+        let first_server_info = Paragraph::new(
+            if is_chat {
+                format!("Chat Server {:?}", known_servers.get(tab_num*2).unwrap_or(&255))
+            }else{
+                format!("Content Server {:?}", known_servers.get(tab_num*2).unwrap_or(&255))
+            }
+        )
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
         first_block.render(first,buf);
@@ -221,70 +230,153 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
                 .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
                 /*.vertical_margin(1)*/
                 .areas(second_block.inner(second));
-            let second_canvas = draw_server_canvas();
+            let second_canvas = draw_server_canvas(app.cache.counter as u64);
 
 
-            let second_server_info = Paragraph::new(format!("Server {:?}", known_servers.get(tab_num*2 + 1 ).unwrap_or(&255)))
+            let second_server_info = Paragraph::new(
+                if is_chat {
+                    format!("Chat Server {:?}", known_servers.get(tab_num*2 + 1).unwrap_or(&255))
+                }else{
+                    format!("Content Server {:?}", known_servers.get(tab_num*2 + 1).unwrap_or(&255))
+                }
+            )
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
+
             second_block.render(second,buf);
             second_canvas.render(second_canvas_area, buf);
             second_server_info.render(second_paragraph_area, buf);
         }
     }
 }
+fn draw_server(ctx: &mut Context) {
+    use std::time::{SystemTime, UNIX_EPOCH};
 
-fn render_no_servers_available(_app: &App, area: Rect, buf: &mut Buffer, is_chat:bool ) {
-    let text = Text::from(vec![
+    // Derive a time value from the clock instead of an external `counter`
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let time = millis as f64 * 0.00015;
+
+    let center_x = 20.0;
+    let center_y = 20.0;
+    let scale = 0.9 + (time * 0.5).sin() * 0.1;
+    let rotation = (time * 0.2).sin() * 0.2;
+
+    // Rainbow pulsing box (server body)
+    let points = [
+        (10.0, 10.0), (30.0, 10.0), (30.0, 30.0), (10.0, 30.0)
+    ];
+    for i in 0..4 {
+        let (x1, y1) = points[i];
+        let (x2, y2) = points[(i + 1) % 4];
+        let rot_x1 = center_x + (x1 - center_x) * scale * rotation.cos() - (y1 - center_y) * scale * rotation.sin();
+        let rot_y1 = center_y + (x1 - center_x) * scale * rotation.sin() + (y1 - center_y) * scale * rotation.cos();
+        let rot_x2 = center_x + (x2 - center_x) * scale * rotation.cos() - (y2 - center_y) * scale * rotation.sin();
+        let rot_y2 = center_y + (x2 - center_x) * scale * rotation.sin() + (y2 - center_y) * scale * rotation.cos();
+        let hue = (time * 40.0 + i as f64 * 90.0) % 360.0;
+        let (r, g, b) = hsv_to_rgb(hue, 0.8, 1.0);
+        ctx.draw(&CanvasLine {
+            x1: rot_x1, y1: rot_y1, x2: rot_x2, y2: rot_y2,
+            color: Color::Rgb(r, g, b),
+            ..Default::default()
+        });
+    }
+    // Animated server lights (disks)
+    for i in 0..3 {
+        let y = 15.0 + i as f64 * 6.0 + (time * 1.2 + i as f64).sin() * 0.7;
+        let hue = (time * 60.0 + i as f64 * 120.0) % 360.0;
+        let (r, g, b) = hsv_to_rgb(hue, 0.7, 1.0);
+        ctx.draw(&Circle {
+            x: 20.0, y, radius: 1.2 + (time * 0.7 + i as f64).sin() * 0.3,
+            color: Color::Rgb(r, g, b),
+            ..Default::default()
+        });
+    }
+    // Sparkles
+    for i in 0..8 {
+        let angle = time + i as f64 * 0.8;
+        let radius = 16.0 + (time * 0.5).sin() * 2.0;
+        let x = center_x + angle.cos() * radius;
+        let y = center_y + angle.sin() * radius;
+        let size = 0.3 + (time + i as f64).sin() * 0.2;
+        let hue = (time * 80.0 + i as f64 * 45.0) % 360.0;
+        let (r, g, b) = hsv_to_rgb(hue, 0.9, 1.0);
+        ctx.draw(&Circle {
+            x, y, radius: size,
+            color: Color::Rgb(r, g, b),
+            ..Default::default()
+        });
+    }
+    // Pulsing ring
+    let ring_radius = 18.0 + (time * 0.8).sin() * 2.0;
+    let (r, g, b) = hsv_to_rgb((time * 30.0) % 360.0, 0.5, 1.0);
+    ctx.draw(&Circle {
+        x: center_x, y: center_y, radius: ring_radius,
+        color: Color::Rgb(r, g, b),
+        ..Default::default()
+    });
+
+}
+fn draw_server_canvas<'a>(counter: u64) -> Canvas<'a, fn(&mut Context)> {
+    Canvas::default()
+        .background_color(POPUP_BG_COLOR)
+        .x_bounds([0.0, 40.0])
+        .y_bounds([0.0, 40.0])
+        .paint(draw_server)
+}
+
+// --- New fancy "no servers found" page ---
+fn render_no_servers_available(app: &App, area: Rect, buf: &mut Buffer, is_chat: bool) {
+    let [top, center, bottom] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(40),
+            Constraint::Percentage(35),
+            Constraint::Percentage(25),
+        ])
+        .areas(area);
+
+    // Top: Animated server icon
+    let icon_canvas = draw_server_canvas(app.cache.counter as u64);
+    icon_canvas.render(top, buf);
+
+    // Center: Main message
+    let main_text = Text::from(vec![
         Line::from(
-            if is_chat{
+            if is_chat {
                 "No Chat-Server FOUND"
-            }else{
+            } else {
                 "No Content-Server FOUND"
             }
         )
-            .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
-        Line::from("Press 'r' to send network request to find new content-servers")
-            .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC)),
+        .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+        Line::from("")
     ]);
-
-    Paragraph::new(text)
+    Paragraph::new(main_text)
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true })
-        .render(area, buf);
+        .render(center, buf);
+
+    // Bottom: Tip
+    let tip_text = Text::from(vec![
+        Line::from(
+            if is_chat {
+                "💡 Press 'r' to send a network request to find new chat-servers"
+            } else {
+                "💡 Press 'r' to send a network request to find new content-servers"
+            }
+        )
+        .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+    ]);
+    Paragraph::new(tip_text)
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true })
+        .render(bottom, buf);
 }
 
-fn draw_server_canvas<'a>() -> Canvas<'a, fn(&mut Context)> {
-    Canvas::default()
-        .block(Block::default().borders(Borders::ALL).title("Chat Server"))
-        .x_bounds([0.0, 20.0])
-        .y_bounds([0.0, 20.0])
-        .paint(|ctx| {
-            // Front rectangle (base)
-            ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 15.0, y2: 5.0, color: Color::White, ..Default::default() }); // Bottom edge
-            ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0, y2: 15.0, color: Color::White, ..Default::default() }); // Right edge
-            ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 5.0, y2: 15.0, color: Color::White, ..Default::default() }); // Top edge
-            ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0, y2: 5.0, color: Color::White, ..Default::default() }); // Left edge
-
-            // Back rectangle offset
-            let dx = 3.0;
-            let dy = -3.0;
-
-            // Back rectangle (offset copy)
-            ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 5.0 + dy, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 15.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::Gray, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 5.0 + dx, y1: 15.0 + dy, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::Gray, ..Default::default() });
-
-            // Connecting edges
-            ctx.draw(&CanvasLine { x1: 5.0, y1: 5.0, x2: 5.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 15.0, y1: 5.0, x2: 15.0 + dx, y2: 5.0 + dy, color: Color::White, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 15.0, y1: 15.0, x2: 15.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
-            ctx.draw(&CanvasLine { x1: 5.0, y1: 15.0, x2: 5.0 + dx, y2: 15.0 + dy, color: Color::White, ..Default::default() });
-        })
-}
-
-
+/// All the functions needed to render the chat opt page
 pub(super) mod chat_rendering{
     use std::cmp::PartialEq;
     use wg_2024::network::NodeId;
@@ -309,7 +401,71 @@ pub(super) mod chat_rendering{
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
-    use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
+    use crate::frontend::app::ui::tabs::tab1_client_popup::{hsv_to_rgb, render_no_servers_available, render_servers_available};
+
+    // Struct to hold precomputed avatar animation parameters
+    struct AvatarAnimParams {
+        rings: Vec<(f64, (u8, u8, u8))>, // (radius, color)
+        avatar_color: (u8, u8, u8),
+        avatar_radius: f64,
+        sparkles: Vec<(f64, f64, f64, (u8, u8, u8))>, // (x, y, radius, color)
+        dot: (f64, f64, f64, (u8, u8, u8)), // (x, y, radius, color)
+    }
+
+    fn avatar_painter(ctx: &mut Context) {
+        use std::cell::RefCell;
+        thread_local! {
+            static PARAMS: RefCell<Option<AvatarAnimParams>> = RefCell::new(None);
+        }
+        PARAMS.with(|cell| {
+            if let Some(params) = &*cell.borrow() {
+                // Draw rings
+                for (radius, (r, g, b)) in &params.rings {
+                    ctx.draw(&Circle {
+                        x: 10.0, y: 10.0, radius: *radius,
+                        color: Color::Rgb(*r, *g, *b),
+                        ..Default::default()
+                    });
+                }
+                // Draw avatar
+                let (r, g, b) = params.avatar_color;
+                ctx.draw(&Circle {
+                    x: 10.0, y: 10.0, radius: params.avatar_radius,
+                    color: Color::Rgb(r, g, b),
+                    ..Default::default()
+                });
+                // Draw sparkles
+                for (x, y, radius, (r, g, b)) in &params.sparkles {
+                    ctx.draw(&Circle {
+                        x: *x, y: *y, radius: *radius,
+                        color: Color::Rgb(*r, *g, *b),
+                        ..Default::default()
+                    });
+                }
+                // Draw online dot
+                let (x, y, radius, (r, g, b)) = &params.dot;
+                ctx.draw(&Circle {
+                    x: *x, y: *y, radius: *radius,
+                    color: Color::Rgb(*r, *g, *b),
+                    ..Default::default()
+                });
+            }
+        });
+    }
+
+    fn draw_animated_profile_photo_canvas(params: AvatarAnimParams) -> Canvas<'static, fn(&mut Context)> {
+        use std::cell::RefCell;
+        thread_local! {
+            static PARAMS: RefCell<Option<AvatarAnimParams>> = RefCell::new(None);
+        }
+        PARAMS.with(|cell| {
+            *cell.borrow_mut() = Some(params);
+        });
+        Canvas::default()
+            .x_bounds([0.0, 20.0])
+            .y_bounds([0.0, 20.0])
+            .paint(avatar_painter)
+    }
 
     pub(super) fn render_chat_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientChatPopup, selected_node: &NodeId){
         match client_popup {
@@ -364,7 +520,11 @@ pub(super) mod chat_rendering{
                         render_no_contacts_available(app,area,buf);
                     }
                     Some(contacts) => {
-                        render_contacts_available(app,area,buf,sec_page_data,selected_cl, contacts);
+                        if contacts.is_empty() {
+                            render_no_contacts_available(app,area,buf);
+                        }else{
+                            render_contacts_available(app,area,buf,sec_page_data,selected_cl, contacts);
+                        }
                     }
                 }
             }
@@ -375,7 +535,6 @@ pub(super) mod chat_rendering{
         let [others, last] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(100), Constraint::Min(1)])
-            /*.vertical_margin(1)*/
             .areas(area);
 
         let info = Line::from(" Press 'r' to find new server chats in the network! ")
@@ -385,9 +544,9 @@ pub(super) mod chat_rendering{
 
         let [first,second,third,fourth ] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(
-                [Constraint::Length(others.height / 4); 4]
-            )
+            .constraints([
+                Constraint::Length(others.height / 4); 4
+            ])
             .vertical_margin(1)
             .areas(others);
 
@@ -395,7 +554,7 @@ pub(super) mod chat_rendering{
         let offset = selected_index.saturating_sub(3);
         let visible_contacts = &contacts.iter().skip(offset).take(4).collect::<Vec<_>>();
 
-        'outer: for (i, contact_id) in visible_contacts.iter().enumerate() {
+        for (i, contact_id) in visible_contacts.iter().enumerate() {
             let is_selected = selected_index == offset + i;
             let block = match i {
                 0 => first,
@@ -405,10 +564,18 @@ pub(super) mod chat_rendering{
                 _ => continue,
             };
 
+            // Animated border color for selected
+            let border_style = if is_selected {
+                let time = app.cache.counter as f64 * 0.18 + i as f64 * 0.7;
+                let (r, g, b) = hsv_to_rgb((time * 60.0) % 360.0, 0.8, 1.0);
+                Style::default().fg(Color::Rgb(r, g, b))
+            } else {
+                Style::default()
+            };
             let contact_block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .border_style(if is_selected {Style::default().fg(app.animation_color())} else {Style::default()});
+                .border_style(border_style);
             let inner_contact_block = contact_block.inner(block);
             contact_block.render(block, buf);
 
@@ -422,7 +589,51 @@ pub(super) mod chat_rendering{
                 .constraints([Constraint::Min(1), Constraint::Length(2)])
                 .areas(info_area);
 
-            let canvas = draw_profile_photo();
+            // Precompute animation parameters for avatar
+            let time = app.cache.counter as f64 * 0.18 + i as f64 * 0.7;
+            let center_x = 10.0;
+            let center_y = 10.0;
+            let base_radius = 4.5 + (time * 0.2).sin() * 0.2;
+            let mut rings = vec![];
+            if is_selected {
+                for ring in 0..2 {
+                    let ring_radius = base_radius + 1.0 + ring as f64 * 1.2 + (time * 0.7 + ring as f64).sin() * 0.3;
+                    let hue = (time * 60.0 + ring as f64 * 60.0) % 360.0;
+                    let (r, g, b) = hsv_to_rgb(hue, 0.8, 1.0);
+                    rings.push((ring_radius, (r, g, b)));
+                }
+            }
+            let avatar_hue = (time * 40.0) % 360.0;
+            let avatar_color = if is_selected {
+                hsv_to_rgb(avatar_hue, 0.7, 1.0)
+            } else {
+                hsv_to_rgb(avatar_hue, 0.3, 0.7)
+            };
+            let mut sparkles = vec![];
+            if is_selected {
+                for s in 0..5 {
+                    let angle = time + s as f64 * 1.2;
+                    let radius = base_radius + 2.0 + (time * 0.5 + s as f64).sin() * 0.5;
+                    let x = center_x + angle.cos() * radius;
+                    let y = center_y + angle.sin() * radius;
+                    let sparkle_hue = (time * 80.0 + s as f64 * 60.0) % 360.0;
+                    let (r, g, b) = hsv_to_rgb(sparkle_hue, 0.9, 1.0);
+                    sparkles.push((x, y, 0.4 + (time * 0.7 + s as f64).sin() * 0.1, (r, g, b)));
+                }
+            }
+            let dot_y = center_y + base_radius - 1.0;
+            let dot_x = center_x + base_radius - 1.0;
+            let dot_brightness = 0.7 + 0.3 * (time * 2.0).sin();
+            let (r, g, b) = hsv_to_rgb(120.0, 0.7, dot_brightness); // greenish
+            let dot = (dot_x, dot_y, 0.7 + 0.2 * (time * 1.5).sin(), (r, g, b));
+            let avatar_params = AvatarAnimParams {
+                rings,
+                avatar_color,
+                avatar_radius: base_radius,
+                sparkles,
+                dot,
+            };
+            let canvas = draw_animated_profile_photo_canvas(avatar_params);
             canvas.render(canvas_area, buf);
 
             let id_text = Paragraph::new(format!("Client ID {}", contact_id))
@@ -432,7 +643,6 @@ pub(super) mod chat_rendering{
 
             match app.simulation_controller_data.chat_cache.local_chats.get(&sec_page_data.selected_server){
                 None => {
-                    // Server has no messages stored
                     let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                         .alignment(Alignment::Left)
                         .wrap(Wrap { trim: true });
@@ -455,7 +665,6 @@ pub(super) mod chat_rendering{
                     }
                     match found_chat{
                         None => {
-                            // No messages are sent
                             let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                                 .alignment(Alignment::Left)
                                 .wrap(Wrap { trim: true });
@@ -464,16 +673,12 @@ pub(super) mod chat_rendering{
                         Some(ch) => {
                             match ch.get_last_message(){
                                 None => {
-                                    // No messages are sent
                                     let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
                                         .alignment(Alignment::Left)
                                         .wrap(Wrap { trim: true });
                                     last_msg.render(info_msg, buf);
                                 }
                                 Some((mess,messdata)) => {
-                                    /*let [message_area, data_area] = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
                                     if messdata.id==selected_cl {
                                         match mess{
                                             Message(str) => {
@@ -522,70 +727,6 @@ pub(super) mod chat_rendering{
                             }
                         }
                     }
-
-                    /*'inner: for ((us1,us2),ch) in &chat_list.chats_stored_temp {
-                        if (*us1 == selected_cl && *us2 == **contact_id) || (*us1 == **contact_id && *us2 == selected_cl){
-                            match ch.get_last_message(){
-                                None => {
-                                    // No messages are sent
-                                    let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                        .alignment(Alignment::Left)
-                                        .wrap(Wrap { trim: true });
-                                    last_msg.render(info_msg, buf);
-                                }
-                                Some((mess,messdata)) => {
-                                    /*let [message_area, data_area] = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])*/
-                                    if messdata.id_sender==selected_cl {
-                                        match mess{
-                                            Message::Message(str) => {
-                                                let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
-                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess
-                                                                                                  .set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
-                                                                                              str.to_span()]))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                            Message::Media(med) => {
-                                                let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
-                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                        }
-                                    }else {
-                                        match mess{
-                                            Message::Message(str) => {
-                                                let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
-                                                                           messdata.id_sender);
-                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
-                                                                                              str.to_span()]))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                            Message::Media(med) => {
-                                                let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
-                                                                           ,messdata.id_sender);
-                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            break 'inner;
-                        }
-                    }*/
                 }
             }
         }
@@ -604,24 +745,6 @@ pub(super) mod chat_rendering{
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
             .render(area, buf);
-    }
-
-    // Util function for both second and third menù
-    fn draw_profile_photo<'a>() -> Canvas<'a, fn(&mut Context)>{
-        Canvas::default()
-            .block(Block::default().borders(Borders::LEFT))
-            .x_bounds([0.0, 20.0])
-            .y_bounds([0.0, 20.0])
-            .paint(|ctx| {
-                // Front rectangle (base)
-                ctx.draw(&Circle {
-                    x: 10.0,
-                    y: 10.0,
-                    radius: 4.5,
-                    color: Default::default(),
-                }); // Bottom edge
-
-            })
     }
 
     // Third Menù rendering ( Message with who you chose )
@@ -756,7 +879,7 @@ pub(super) mod chat_rendering{
         let scrollbar_col = cols[1];
 
         // Centered top-down layout for visible messages
-        // First compute each row’s height
+        // First compute each row's height
         let mut row_heights = Vec::with_capacity(visible.len());
         for (msg, _) in visible.iter() {
             let content = match msg {
@@ -883,6 +1006,8 @@ pub(super) mod chat_rendering{
 
     }
 }
+
+/// All the functions needed to render the internet opt page
 pub(super) mod net_rendering{
     use std::cmp::PartialEq;
     use std::collections::HashMap;
@@ -910,9 +1035,9 @@ pub(super) mod net_rendering{
     use crate::backend::sc_models::{NetCacheFile, NetCacheMedia};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
-    use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
+    use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, POPUP_BG_COLOR, SELECTED_LIST_COLOR};
     use crate::frontend::app::ui::tabs::tab1::centered_popup_area;
-    use crate::frontend::app::ui::tabs::tab1_client_popup::{render_no_servers_available, render_servers_available};
+    use crate::frontend::app::ui::tabs::tab1_client_popup::{hsv_to_rgb, render_no_servers_available, render_servers_available};
 
     pub(super) fn render_net_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientNetPopup, selected_node: &NodeId)->Option<Rect>{
         match client_popup {
@@ -922,7 +1047,7 @@ pub(super) mod net_rendering{
                 None
             }
             ClientNetPopup::SecondPage(nd) => {
-                return render_net_second_page(app,area,buf,nd,selected_node);
+                render_net_second_page(app,area,buf,nd,selected_node)
             }
         }
     }
@@ -950,23 +1075,21 @@ pub(super) mod net_rendering{
         let [media_area, file_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-            .spacing(2)
+            .spacing(1)
             .areas(lists_area);
 
         let [media_list_area, attach_media_area] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(90), Constraint::Percentage(10)])
-            .spacing(1)
+            .constraints([Constraint::Percentage(100), Constraint::Min(3)])
             .areas(media_area);
 
         let [file_list_area, attach_file_area] = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([Constraint::Percentage(90), Constraint::Percentage(10)])
-            .spacing(1)
+            .constraints([Constraint::Percentage(100), Constraint::Min(3)])
             .areas(file_area);
 
 
-        let mut media_list_block = Block::default()
+        let media_list_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -975,7 +1098,9 @@ pub(super) mod net_rendering{
                 }else{
                     MAIN_BLOCK_BORDERS
                 })
-            );
+            )
+            .title(" Media List ")
+            .title_alignment(Alignment::Center);
 
         let attach_media_block = Block::default()
             .borders(Borders::ALL)
@@ -987,10 +1112,19 @@ pub(super) mod net_rendering{
                     MAIN_BLOCK_BORDERS
                 })
             );
+        
+        // Render animated attach media button
+        let inner_attach_media = attach_media_block.inner(attach_media_area);
         attach_media_block.render(attach_media_area, buf);
 
+        let upload_media_text = Paragraph::new("Upload Media")
+            .style(Style::default().fg(MAIN_BLOCK_BORDERS))
+            .alignment(Alignment::Center);
+        
+        upload_media_text.render(inner_attach_media, buf);
 
-        let mut file_list_block = Block::default()
+
+        let file_list_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -999,7 +1133,9 @@ pub(super) mod net_rendering{
                 }else{
                     MAIN_BLOCK_BORDERS
                 })
-            );
+            )
+            .title(" File List ")
+            .title_alignment(Alignment::Center);
 
         let mut attach_file_block = Block::default()
             .borders(Borders::ALL)
@@ -1011,7 +1147,16 @@ pub(super) mod net_rendering{
                     MAIN_BLOCK_BORDERS
                 })
             );
+        
+        // Render animated attach file button
+        let inner_attach_file = attach_file_block.inner(attach_file_area);
         attach_file_block.render(attach_file_area, buf);
+        
+        let upload_file_text = Paragraph::new("Upload File")
+        .style(Style::default().fg(MAIN_BLOCK_BORDERS))
+        .alignment(Alignment::Center);
+        
+        upload_file_text.render(inner_attach_file, buf);
 
         let media_items = match app.simulation_controller_data.net_cache.known_media_list.get(&selected_node) {
             None => vec![],
@@ -1041,7 +1186,7 @@ pub(super) mod net_rendering{
                                             }
                                             Some(item) => {
                                                 let load_char = match item.1{
-                                                    NetCacheMedia::Downloading(_) => {
+                                                    NetCacheMedia::Downloading(_) | NetCacheMedia::Rendering(_) => {
                                                         match app.cache.counter % 4 {
                                                             0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
                                                         }
@@ -1089,7 +1234,7 @@ pub(super) mod net_rendering{
                                             }
                                             Some(item) => {
                                                 let load_char = match item.1{
-                                                    NetCacheFile::Downloading(_) => {
+                                                    NetCacheFile::Downloading(_) | NetCacheFile::Rendering(_) => {
                                                         match app.cache.counter % 4 {
                                                             0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
                                                         }
@@ -1186,7 +1331,308 @@ pub(super) mod net_rendering{
 
         match ndpage_data.selected_file.clone() {
             SelectedFileMedia::None => {
+                // Render cool None page with animated file icon and helpful text
+                let [top_area, center_area, bottom_area] = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([
+                        Constraint::Percentage(20),
+                        Constraint::Percentage(60),
+                        Constraint::Percentage(20)
+                    ])
+                    .areas(inner_file_visualizer_block);
 
+                // Top area: Animated file icon
+                let file_icon_canvas = Canvas::default()
+                    .background_color(POPUP_BG_COLOR)
+                    .x_bounds([0.0, 40.0])
+                    .y_bounds([0.0, 40.0])
+                    .paint(|ctx| {
+                        let time = app.cache.counter as f64 * 0.15;
+
+                        // DNA-like helix effect in background
+                        for i in 0..20 {
+                            let angle = time * 0.5 + (i as f64 * 0.314); // 18 degrees apart
+                            let radius = 12.0 + (time * 0.3).sin() * 2.0;
+                            let x = 20.0 + angle.cos() * radius;
+                            let y = 20.0 + angle.sin() * radius + (i as f64 * 0.5);
+                            let size = 0.2 + (time + i as f64 * 0.2).sin() * 0.1;
+
+                            let helix_color = if i % 2 == 0 {
+                                Color::Rgb(100, 200, 255)
+                            } else {
+                                Color::Rgb(255, 100, 200)
+                            };
+
+                            ctx.draw(&Circle {
+                                x, y, radius: size,
+                                color: helix_color,
+                                ..Default::default()
+                            });
+                        }
+
+                        // Magnetic field lines
+                        for line in 0..6 {
+                            let line_angle = time * 0.2 + line as f64 * 1.047; // 60 degrees apart
+                            let start_x = 20.0 + line_angle.cos() * 5.0;
+                            let start_y = 20.0 + line_angle.sin() * 5.0;
+                            let end_x = 20.0 + line_angle.cos() * 35.0;
+                            let end_y = 20.0 + line_angle.sin() * 35.0;
+
+                            let field_intensity = (100 + (time * 30.0 + line as f64 * 20.0).sin() as u8).min(200);
+                            ctx.draw(&CanvasLine {
+                                x1: start_x, y1: start_y, x2: end_x, y2: end_y,
+                                color: Color::Rgb(field_intensity, field_intensity, 255),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Floating particles background with rainbow effect
+                        for i in 0..8 {
+                            let angle = time + (i as f64 * 0.785); // 45 degrees apart
+                            let radius = 15.0 + (time * 0.5).sin() * 3.0;
+                            let x = 20.0 + angle.cos() * radius;
+                            let y = 20.0 + angle.sin() * radius;
+                            let size = 0.5 + (time + i as f64).sin() * 0.3;
+
+                            // Color cycling through rainbow
+                            let hue = (time * 20.0 + i as f64 * 45.0) % 360.0;
+                            let (r, g, b) = hsv_to_rgb(hue, 0.8, 1.0);
+
+                            ctx.draw(&Circle {
+                                x, y, radius: size,
+                                color: Color::Rgb(r, g, b),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Main file icon with rotation and scaling
+                        let rotation = time * 0.3;
+                        let scale = 0.8 + (time * 0.5).sin() * 0.2;
+                        let center_x = 20.0;
+                        let center_y = 20.0;
+
+                        // File body with rotation and rainbow gradient
+                        let points = [
+                            (8.0, 5.0), (32.0, 5.0), (32.0, 35.0), (8.0, 35.0)
+                        ];
+
+                        for i in 0..4 {
+                            let (x1, y1) = points[i];
+                            let (x2, y2) = points[(i + 1) % 4];
+
+                            // Apply rotation and scaling
+                            let rot_x1 = center_x + (x1 - center_x) * scale * rotation.cos() - (y1 - center_y) * scale * rotation.sin();
+                            let rot_y1 = center_y + (x1 - center_x) * scale * rotation.sin() + (y1 - center_y) * scale * rotation.cos();
+                            let rot_x2 = center_x + (x2 - center_x) * scale * rotation.cos() - (y2 - center_y) * scale * rotation.sin();
+                            let rot_y2 = center_y + (x2 - center_x) * scale * rotation.sin() + (y2 - center_y) * scale * rotation.cos();
+
+                            // Dynamic rainbow color
+                            let hue = (time * 30.0 + i as f64 * 90.0) % 360.0;
+                            let (r, g, b) = hsv_to_rgb(hue, 0.7, 1.0);
+
+                            ctx.draw(&CanvasLine {
+                                x1: rot_x1, y1: rot_y1, x2: rot_x2, y2: rot_y2,
+                                color: Color::Rgb(r, g, b),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Animated file tab with glow effect
+                        let tab_points = [(8.0, 5.0), (15.0, 2.0), (22.0, 5.0)];
+                        for i in 0..2 {
+                            let (x1, y1) = tab_points[i];
+                            let (x2, y2) = tab_points[i + 1];
+
+                            let rot_x1 = center_x + (x1 - center_x) * scale * rotation.cos() - (y1 - center_y) * scale * rotation.sin();
+                            let rot_y1 = center_y + (x1 - center_x) * scale * rotation.sin() + (y1 - center_y) * scale * rotation.cos();
+                            let rot_x2 = center_x + (x2 - center_x) * scale * rotation.cos() - (y2 - center_y) * scale * rotation.sin();
+                            let rot_y2 = center_y + (x2 - center_x) * scale * rotation.sin() + (y2 - center_y) * scale * rotation.cos();
+
+                            // Glow effect with multiple lines
+                            for glow in 0..3 {
+                                let glow_alpha = (255 - glow * 80) as u8;
+                                ctx.draw(&CanvasLine {
+                                    x1: rot_x1, y1: rot_y1, x2: rot_x2, y2: rot_y2,
+                                    color: Color::Rgb(glow_alpha, glow_alpha, 255),
+                                    ..Default::default()
+                                });
+                            }
+                        }
+
+                        // Animated text lines with wave effect and rainbow cycling
+                        for i in 0..4 {
+                            let base_y = 10.0 + (i as f64 * 5.0);
+                            let wave_offset = (time + i as f64 * 0.5).sin() * 2.0;
+                            let y_pos = base_y + wave_offset;
+
+                            let line_length = 16.0 + (time + i as f64).sin() * 4.0;
+                            let start_x = 12.0 - line_length * 0.5;
+                            let end_x = 12.0 + line_length * 0.5;
+
+                            // Apply rotation to text lines
+                            let rot_start_x = center_x + (start_x - center_x) * scale * rotation.cos() - (y_pos - center_y) * scale * rotation.sin();
+                            let rot_start_y = center_y + (start_x - center_x) * scale * rotation.sin() + (y_pos - center_y) * scale * rotation.cos();
+                            let rot_end_x = center_x + (end_x - center_x) * scale * rotation.cos() - (y_pos - center_y) * scale * rotation.sin();
+                            let rot_end_y = center_y + (end_x - center_x) * scale * rotation.sin() + (y_pos - center_y) * scale * rotation.cos();
+
+                            // Rainbow color cycling for text lines
+                            let hue = (time * 40.0 + i as f64 * 60.0) % 360.0;
+                            let (r, g, b) = hsv_to_rgb(hue, 0.8, 1.0);
+
+                            ctx.draw(&CanvasLine {
+                                x1: rot_start_x, y1: rot_start_y, x2: rot_end_x, y2: rot_end_y,
+                                color: Color::Rgb(r, g, b),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Animated cursor with energy field and rainbow trail
+                        let cursor_base_x = 12.0;
+                        let cursor_x = cursor_base_x + (time * 2.0).sin() * 8.0;
+                        let cursor_y = 12.0 + (time * 0.8).sin() * 2.0;
+
+                        // Energy field around cursor
+                        let energy_radius = 8.0 + (time * 0.6).sin() * 2.0;
+                        ctx.draw(&Circle {
+                            x: cursor_x, y: cursor_y, radius: energy_radius,
+                            color: Color::Rgb(100, 255, 100),
+                            ..Default::default()
+                        });
+
+                        // Cursor trail with rainbow effect
+                        for trail in 0..5 {
+                            let trail_x = cursor_x - trail as f64 * 0.8;
+                            let trail_y = cursor_y + (time * 0.8 + trail as f64 * 0.3).sin() * 1.5;
+                            let trail_alpha = (255 - trail * 50) as u8;
+
+                            let rot_trail_x = center_x + (trail_x - center_x) * scale * rotation.cos() - (trail_y - center_y) * scale * rotation.sin();
+                            let rot_trail_y = center_y + (trail_x - center_x) * scale * rotation.sin() + (trail_y - center_y) * scale * rotation.cos();
+
+                            let trail_hue = (time * 50.0 + trail as f64 * 30.0) % 360.0;
+                            let (r, g, b) = hsv_to_rgb(trail_hue, 0.9, trail_alpha as f64 / 255.0);
+
+                            ctx.draw(&CanvasLine {
+                                x1: rot_trail_x, y1: rot_trail_y, x2: rot_trail_x, y2: rot_trail_y + 4.0,
+                                color: Color::Rgb(r, g, b),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Pulsing selection ring with multiple layers
+                        for ring in 0..3 {
+                            let ring_radius = 25.0 + (time * 0.8).sin() * 3.0 + ring as f64 * 2.0;
+                            let ring_alpha = (100 + (time * 50.0).sin() as u8).min(200) - ring * 50;
+                            if ring_alpha > 0 {
+                                ctx.draw(&Circle {
+                                    x: center_x, y: center_y, radius: ring_radius,
+                                    color: Color::Rgb(ring_alpha, ring_alpha, 255),
+                                    ..Default::default()
+                                });
+                            }
+                        }
+
+                        // Sparkle effects with rainbow colors
+                        for sparkle in 0..8 {
+                            let sparkle_angle = time * 0.7 + sparkle as f64 * 0.785; // 45 degrees apart
+                            let sparkle_radius = 18.0 + (time * 0.3).sin() * 2.0;
+                            let sparkle_x = center_x + sparkle_angle.cos() * sparkle_radius;
+                            let sparkle_y = center_y + sparkle_angle.sin() * sparkle_radius;
+                            let sparkle_size = 0.3 + (time + sparkle as f64).sin() * 0.3;
+
+                            // Rainbow sparkles
+                            let sparkle_hue = (time * 60.0 + sparkle as f64 * 45.0) % 360.0;
+                            let (r, g, b) = hsv_to_rgb(sparkle_hue, 1.0, 1.0);
+
+                            ctx.draw(&Circle {
+                                x: sparkle_x, y: sparkle_y, radius: sparkle_size,
+                                color: Color::Rgb(r, g, b),
+                                ..Default::default()
+                            });
+                        }
+
+                        // Quantum particles (smaller, faster particles)
+                        for quantum in 0..12 {
+                            let quantum_angle = time * 2.0 + quantum as f64 * 0.523; // 30 degrees apart
+                            let quantum_radius = 8.0 + (time * 1.0).sin() * 4.0;
+                            let quantum_x = center_x + quantum_angle.cos() * quantum_radius;
+                            let quantum_y = center_y + quantum_angle.sin() * quantum_radius;
+                            let quantum_size = 0.1 + (time * 2.0 + quantum as f64).sin() * 0.1;
+
+                            ctx.draw(&Circle {
+                                x: quantum_x, y: quantum_y, radius: quantum_size,
+                                color: Color::White,
+                                ..Default::default()
+                            });
+                        }
+
+                        // Orbital rings
+                        for orbit in 0..3 {
+                            let orbit_radius = 10.0 + orbit as f64 * 3.0;
+                            let orbit_alpha = (50 + (time * 20.0 + orbit as f64 * 30.0).sin() as u8).min(150);
+                            ctx.draw(&Circle {
+                                x: center_x, y: center_y, radius: orbit_radius,
+                                color: Color::Rgb(orbit_alpha, orbit_alpha, orbit_alpha),
+                                ..Default::default()
+                            });
+                        }
+                    });
+
+                file_icon_canvas.render(top_area, buf);
+
+                // Center area: Main message
+                let main_message = Paragraph::new(vec![
+                    Line::from(""),
+                    Line::from("📁 No File Selected").style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+                    Line::from(""),
+                    Line::from("Select a file or media from the lists on the left").style(Style::default().fg(Color::Gray)),
+                    Line::from("to preview its contents here.").style(Style::default().fg(Color::Gray)),
+                    Line::from(""),
+                    Line::from("💡 1st Tip: Press Enter to select the list you want,").style(Style::default().fg(Color::Cyan)),
+                    Line::from("   use arrow keys to navigate and again").style(Style::default().fg(Color::Cyan)),
+                    Line::from("   Enter to select a file.").style(Style::default().fg(Color::Cyan)),
+                    Line::from(""),
+                    Line::from("💡 2nd Tip: Press Upload to share your medias / files").style(Style::default().fg(Color::Cyan)),
+                    Line::from("   with the network").style(Style::default().fg(Color::Cyan)),
+                ])
+                .alignment(Alignment::Center)
+                .block(Block::default().borders(Borders::NONE));
+                main_message.render(center_area, buf);
+
+                // Bottom area: Animated status indicators
+                let [status_left, status_right] = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+                    .areas(bottom_area);
+
+                // Right status: File count
+                let file_count_text = format!("📄 {} files available", 
+                    match app.simulation_controller_data.net_cache.known_file_list.get(selected_node) {
+                        Some(server_files) => match server_files.get(&ndpage_data.selected_server) {
+                            Some(files) => files.len(),
+                            None => 0
+                        },
+                        None => 0
+                    }
+                );
+                let file_count_para = Paragraph::new(file_count_text)
+                    .style(Style::default().fg(Color::Green))
+                    .alignment(Alignment::Center);
+                file_count_para.render(status_right, buf);
+
+                // Left status: Media count
+                let media_count_text = format!("🖼️ {} media files", 
+                    match app.simulation_controller_data.net_cache.known_media_list.get(selected_node) {
+                        Some(server_media) => match server_media.get(&ndpage_data.selected_server) {
+                            Some(media) => media.len(),
+                            None => 0
+                        },
+                        None => 0
+                    }
+                );
+                let media_count_para = Paragraph::new(media_count_text)
+                    .style(Style::default().fg(Color::Magenta))
+                    .alignment(Alignment::Center);
+                media_count_para.render(status_left, buf);
             }
             SelectedFileMedia::File(_) => {
 
@@ -1211,14 +1657,12 @@ pub(super) mod net_rendering{
                     }
                     Some((_,file_status)) => {
                         match file_status{
-                            NetCacheMedia::Downloading(download_status) => {
+                            NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
                                 // Rendering Bar status widget
+                                render_loading_gauge(app,area,buf,file_status, ndpage_data.selected_server)
                             }
-                            NetCacheMedia::Downloaded(_) => {
-                                //
-                            }
-                            NetCacheMedia::Rendering(loading_status) => {
-                                // Rendering Bar status widget
+                            NetCacheMedia::Downloaded(vec) => {
+                                // todo!()
                             }
                             NetCacheMedia::Rendered(image_protocol) => {
                                 // I render it externally so no need to do it again here,
@@ -1233,10 +1677,17 @@ pub(super) mod net_rendering{
             }
         }
     }
-    fn render_loading_gauge(app:&mut App, area:Rect, buf:&mut Buffer, net_cache_media: NetCacheMedia, server_id: ServerId){
+    fn render_loading_gauge(app:&App, area:Rect, buf:&mut Buffer, net_cache_media: &NetCacheMedia, server_id: ServerId){
         match net_cache_media{
             NetCacheMedia::Downloading(status) => {
-                let title = Line::from(format!(" Downloading media from {:?} ",server_id)).centered();
+                let title = Line::from(format!(" Downloading media from {:?}{:?} ",server_id,
+                                               match app.cache.counter%3{
+                                                   0  => ".",
+                                                   1 => "..",
+                                                   2 => "...",
+                                                   _ => ""
+                                               }
+                )).centered();
 
                 let title_block = Block::new()
                     .borders(Borders::NONE)
@@ -1248,15 +1699,37 @@ pub(super) mod net_rendering{
                 Gauge::default()
                     .block(title_block)
                     .gauge_style(app.animation_color())
-                    .ratio(status as f64 / 100.0)
+                    .ratio(*status as f64 / 100.0)
                     .label(label)
                     .use_unicode(true)
                     .render(area, buf);
             }
             NetCacheMedia::Rendering(status) => {
+                let title = Line::from(format!(" Rendering media, please wait{:?} ",
+                                               match app.cache.counter%3{
+                                                   0  => ".",
+                                                   1 => "..",
+                                                   2 => "...",
+                                                   _ => ""
+                                               }
+                )).centered();
 
+                let title_block = Block::new()
+                    .borders(Borders::NONE)
+                    .padding(Padding::vertical(1))
+                    .title(title);
+
+                let label = format!("{:.1}%", status);
+
+                Gauge::default()
+                    .block(title_block)
+                    .gauge_style(app.animation_color())
+                    .ratio(*status as f64 / 100.0)
+                    .label(label)
+                    .use_unicode(true)
+                    .render(area, buf);
             }
-            _ => return (),
+            _ => (),
         }
     }
 }
@@ -1266,6 +1739,28 @@ pub(super) mod settings_rendering{
     use crate::frontend::app::App;
 
     pub(super) fn render_sett_options(app:&App, area:Rect, buf:&mut Buffer){
-
     }
+}
+
+// Helper function to convert HSV to RGB, I'm tired of converting palettes manually to rgb manually.
+fn hsv_to_rgb(h: f64, s: f64, v: f64) -> (u8, u8, u8) {
+    let c = v * s;
+    let x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
+    let m = v - c;
+    
+    let (r, g, b) = if h < 60.0 {
+        (c, x, 0.0)
+    } else if h < 120.0 {
+        (x, c, 0.0)
+    } else if h < 180.0 {
+        (0.0, c, x)
+    } else if h < 240.0 {
+        (0.0, x, c)
+    } else if h < 300.0 {
+        (x, 0.0, c)
+    } else {
+        (c, 0.0, x)
+    };
+    
+    (((r + m) * 255.0) as u8, ((g + m) * 255.0) as u8, ((b + m) * 255.0) as u8)
 }

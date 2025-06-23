@@ -168,7 +168,8 @@ pub(super) mod data_rendering{
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::{process_log_paragraph, MAIN_BLOCK_BORDERS};
 
-    pub(crate) fn render_data_options(app:&App, area:Rect, buf: &mut Buffer){
+    // For Client & Server
+    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer){
         let [stats_area, filtered_logging_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -191,7 +192,8 @@ pub(super) mod data_rendering{
                 }
             ));
         let inner_data_1_block = data_1_block.inner(data_1);
-        data_1_block.render(area, buf);
+        data_1_block.render(data_1, buf);
+        // Download Speed
 
         let data_2_block = Block::default()
             .borders(Borders::ALL)
@@ -204,7 +206,8 @@ pub(super) mod data_rendering{
                 }
             ));
         let inner_data_2_block = data_2_block.inner(data_2);
-        data_2_block.render(area, buf);
+        data_2_block.render(data_2, buf);
+        // CPU Utilize
 
         let data_3_block = Block::default()
             .borders(Borders::ALL)
@@ -216,8 +219,13 @@ pub(super) mod data_rendering{
                     MAIN_BLOCK_BORDERS
                 }
             ));
+
         let inner_data_3_block = data_3_block.inner(data_3);
-        data_3_block.render(area, buf);
+        data_3_block.render(data_3, buf);
+        // Bar Chart, most received packets type
+
+
+
 
         let logging_block = Block::default()
             .borders(Borders::ALL)
@@ -235,5 +243,9 @@ pub(super) mod data_rendering{
 
         process_log_paragraph(app).render(inner_logging_block, buf);
     }
+    // Download / upload
+    // Cpu utilize [?]
+    // PDR Expected -> BarCHART
+    //
 }
 

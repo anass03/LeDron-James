@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use host::{ClientId, FileId, MediaId, ServerId};
+use host::{ClientId, FileId, Image, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Display, Formatter};
 use std::fs::File;
@@ -65,10 +65,10 @@ impl Statistics{
 }
 
 pub enum RendererCommand{
-    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode(Vec<u8>)
+    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((MediaId,Image))
 }
 pub enum RendererResponse{
-    Outcome((LogType,String)), Encoded()
+    Outcome((LogType,String)), Encoded(ThreadProtocol)
 }
 
 pub struct NetCache{
@@ -104,7 +104,7 @@ impl NetCache{
 
 pub enum NetCacheMedia {
     Downloading(f32), // f32 € [0,100] representing client loading status.
-    Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
+    Downloaded(Image), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32), // f32 € [0,100] representing Sim. Controller loading status.
     Rendered(ThreadProtocol), // Rendered file that has to be
     // re-rendered each time Terminal changes its size.
