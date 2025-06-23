@@ -17,7 +17,7 @@ pub trait MediaServer {
     /// * `Ok(Image)` se corretta.
     /// * `Err` in caso di errore I/O o decodifica.
     fn process_image_path(path: &PathBuf) -> Result<Image, Box<dyn std::error::Error>> {
-        let data_bytes = fs::read(path).map_err(|e| { eprintln!("Error reading image: {}", e);e })?;
+        let data_bytes = fs::read(path)?;
 
         let img = ImageReader::new(Cursor::new(&data_bytes))
             .with_guessed_format()?
