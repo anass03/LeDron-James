@@ -206,24 +206,38 @@ impl GenServerBehavior for GenServer {
     }
 
     fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        decode_all(Cursor::new(compressed)).map_err(|_| "Failed to decompress".into())
+        match decode_all(Cursor::new(compressed)){
+            Ok(decompressed) => Ok(decompressed),
+            Err(e) => Err(Box::new(e))
+        }
     }
 
     fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
-        encode_all(data, 0).map_err(|e| e.into())
+        match encode_all(data, 0){
+            Ok(compressed) => Ok(compressed),
+            Err(e) => Err(Box::new(e))
+        }
     }
     /// Serializes, compresses, and sends ServerToClient responses back to clients.
     fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         match serde_json::to_vec(&response) {
             Ok(data) => {
-                if let Ok(compressed_data) = self.compress_anything(data.as_slice()) {
-                    let msg = Message {
-                        session_id: generate_unique_session_id(),
-                        content: compressed_data,
-                    };
-                    if let Err(e) = self.build_msg_fragment(destination, msg) {
-                        self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                match self.compress_anything(data.as_slice()) {
+                    Ok(compressed_data) => {
+                        let msg = Message {
+                            session_id: generate_unique_session_id(),
+                            content: compressed_data,
+                        };
+                        match self.build_msg_fragment(destination, msg) {
+                            Ok(_) => {
+                                self.send_logging("Successfully build message".to_string());
+                            }
+                            Err(e) => {
+                                self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+                            }
+                        }
                     }
+                    Err(e) => self.send_logging(format!("Failed to compress data to {}: {}", destination, e)),
                 }
             }
             Err(e) => {

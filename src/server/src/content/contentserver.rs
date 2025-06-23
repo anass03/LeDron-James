@@ -88,13 +88,23 @@ impl ContentServer {
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
-                    if let Ok(command) = cmd {
-                        self.handle_sim_command(command);
+                    match cmd{
+                        Ok(command) => {
+                            self.handle_sim_command(command);
+                        }
+                        Err(e) => {
+                            self.send_logging(format!("Command not recognized: {}",e));
+                        }
                     }
                 }
                 recv(self.info.host.packet_recv) -> pkt => {
-                    if let Ok(packet) = pkt {
-                        self.handling_packets(packet)
+                    match pkt{
+                        Ok(packet) => {
+                            self.handling_packets(packet);
+                        }
+                        Err(e) => {
+                            self.send_logging(format!("Packet not recognized: {}",e));
+                        }
                     }
                 }
                 default(Duration::from_millis(3)) => {}
@@ -117,30 +127,40 @@ impl ContentServer {
         self.media.clear();
 
         // Scan text files
-        if let Ok(entries) = fs::read_dir(&files_dir) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                        let id = filename.to_string();
-                        self.file_map.insert(id.clone(), path.clone());
-                        self.files.push(id);
+        match fs::read_dir(&files_dir) {
+            Ok(entries) => {            
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                            let id = filename.to_string();
+                            self.file_map.insert(id.clone(), path.clone());
+                            self.files.push(id);
+                        }
+                    } 
+                }
+            }
+            Err(e) => {
+                self.send_logging(format!("Error reading files: {}", e));
+            }
+        }
+        
+        //scan media files
+        match fs::read_dir(&images_dir) {
+            Ok(entries) => {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                            let id = filename.to_string();
+                            self.media_map.insert(id.clone(), path.clone());
+                            self.media.push(id);
+                        }
                     }
                 }
             }
-        }
-
-        // Scan media files
-        if let Ok(entries) = fs::read_dir(&images_dir) {
-            for entry in entries.filter_map(Result::ok) {
-                let path = entry.path();
-                if path.is_file() {
-                    if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                        let id = filename.to_string();
-                        self.media_map.insert(id.clone(), path.clone());
-                        self.media.push(id);
-                    }
-                }
+            Err(e) => {
+                self.send_logging(format!("Error finding media: {}", e));
             }
         }
 
@@ -154,11 +174,14 @@ impl ContentServer {
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
-                if let Ok(server_type) = self.servertype() {
-                    self.send_logging("Sending server type".to_string());
-                    self.send_response(ServerToClient::ServerType(server_type), source);
-                } else {
-                    self.send_logging("Failed to send ServerToClient::ServerType".to_string());
+                match self.servertype(){
+                    Ok(server_type) => {
+                        self.send_logging("Sending server type".to_string());
+                        self.send_response(ServerToClient::ServerType(server_type), source);
+                    }
+                    Err(e) =>{
+                        self.send_logging(format!("Error in getting ServerType {}",e));
+                    }
                 }
             }
             ClientNetCommand::FilesList(receiver_id) => {
@@ -178,8 +201,9 @@ impl ContentServer {
                                 self.send_logging("Sending file".to_string());
                                 self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
                             }
-                            Err(_) => {
+                            Err(e) => {
                                 self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                                self.send_logging(format!("Error converting file: {}",e));
                             }
                         }
                     } else {
@@ -206,8 +230,9 @@ impl ContentServer {
                                 self.send_logging(format!("Image {} loaded: {}x{}", file_id, image.width, image.height));
                                 self.send_response(ServerToClient::Media(self.info.host.id, file_id, image), source);
                             }
-                            Err(_) => {
+                            Err(e) => {
                                 self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                                self.send_logging(format!("Error in processing image: {}", e));
                             }
                         }
                     } else {
@@ -272,7 +297,7 @@ impl ContentServer {
             &image.data,
             image.width,
             image.height,
-            ColorType::Rgba8, // o Rgba8 se hai canale alfa
+            ColorType::Rgba8,
         )
     }
 

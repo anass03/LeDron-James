@@ -78,13 +78,23 @@ impl ChatServer2 {
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => {
-                    if let Ok(command) = cmd {
-                       self.handle_sim_command(command);
+                    match cmd{
+                        Ok(command) => {
+                            self.handle_sim_command(command);
+                        }
+                        Err(e) => {
+                            self.send_logging(format!("Command not recognized: {}",e));
+                        }
                     }
                 }
                 recv(self.info.host.packet_recv) -> pkt => {
-                    if let Ok(packet) = pkt {
-                         self.handling_packets(packet)
+                    match pkt{
+                        Ok(packet) => {
+                            self.handling_packets(packet);
+                        }
+                        Err(e) => {
+                            self.send_logging(format!("Packet not recognized: {}",e));
+                        }
                     }
                 }
                 default(Duration::from_millis(3)) => {}
@@ -95,14 +105,16 @@ impl ChatServer2 {
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::ServerType => {
-                if let Ok(server_type) = self.servertype() {
-                    self.send_logging("Sending server type".to_string());
-                    self.send_response(ServerToClient::ServerType(server_type), source);
-                } else {
-                    self.send_logging("Failed to send ServerToClient::ServerType".to_string());
+                match self.servertype(){
+                    Ok(server_type) => {
+                        self.send_logging("Sending server type".to_string());
+                        self.send_response(ServerToClient::ServerType(server_type), source);
+                    }
+                    Err(e) =>{
+                        self.send_logging(format!("Error in getting ServerType {}",e));
+                    }
                 }
             }
-
             ClientNetCommand::RegistrationToChat(receiver_id) => {
                 if receiver_id == self.info.host.id {
                     if !self.client_list.contains(&source) {
@@ -115,7 +127,6 @@ impl ChatServer2 {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
-
             ClientNetCommand::ClientList(receiver_id) => {
                 if receiver_id == self.info.host.id {
                     self.send_response(ServerToClient::ClientList(source ,self.info.host.id, self.client_list.clone()), source);
@@ -124,7 +135,6 @@ impl ChatServer2 {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
-
             ClientNetCommand::MessageFor(destination, receiver_id, msg) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
@@ -143,7 +153,6 @@ impl ChatServer2 {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
-
             ClientNetCommand::FileFor(destination, receiver_id, file_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
@@ -162,7 +171,6 @@ impl ChatServer2 {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
-
             ClientNetCommand::MediaFor(destination, receiver_id, media_id, message) => {
                 if receiver_id == self.info.host.id {
                     if self.check_if_in_client_list(source) {
@@ -181,13 +189,11 @@ impl ChatServer2 {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
-
             _ => {
                 self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
             }
         }
     }
-
     /// Check if the client is currently registered
     fn check_if_in_client_list(&mut self, id: NodeId) -> bool {
         self.client_list.contains(&id)
