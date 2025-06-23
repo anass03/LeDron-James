@@ -1337,12 +1337,19 @@ impl SimulationControllerData {
                     ServerToClient::Media(server_id, media_id, image)
                     => {
 
-                        /*let mut media_map = match self.net_cache.downloaded_medias.get(&server_id) {
-                            Some(media_map) => *media_map,
-                            None => HashMap::from((media_id, ((None, None), NetCacheMedia::Downloading(0.0))))
+                        match self.net_cache.downloaded_medias.get(&server_id) {
+                            Some(media_map) => {
+                                match media_map.get(&media_id) {
+                                    Some(media_data) =>
+                                }
+                            },
+                            None => {
+                                //error
+                            }
                         }
                         self.net_cache.downloaded_medias.insert(server_id, media_map);
-                            ()*/
+
+                        //----------------------------------------------------------------------
                         let extension = match get_extension(&media_id) {
                             Some(extension) => extension,
                             None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
