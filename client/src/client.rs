@@ -1,4 +1,4 @@
-use crossbeam_channel::{select_biased, tick, unbounded, Receiver, Sender};
+use crossbeam_channel::{select_biased, tick, Receiver, Sender};
 use wg_2024::network::{NodeId};
 use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
 use std::collections::{HashMap};
@@ -6,10 +6,10 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, FileId, MediaId, ClientId, ClientNetCommand, Edge};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, ClientNetCommand, Edge};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
-use std::io::{Cursor, Read};
+use std::io::{Cursor};
 use zstd::{decode_all, encode_all};
 
 pub struct Client {
@@ -18,7 +18,15 @@ pub struct Client {
     servers: HashMap<ServerTypes, Vec<NodeId>>,
     servers_discovered: usize,
     tx_bytes: Arc<AtomicUsize>,
-    rx_bytes: Arc<AtomicUsize>
+    rx_bytes: Arc<AtomicUsize>,
+    active_downloads: HashMap<String, TransferProgress>,
+    active_uploads: HashMap<String, TransferProgress>,
+}
+pub struct TransferProgress {
+    pub total_bytes: usize,
+    pub transferred_bytes: Arc<AtomicUsize>,
+    pub start_time: Instant,
+    pub transfer_id: String, // FileId or MediaId as string
 }
 impl Client {
     pub fn new(id:NodeId,
@@ -31,14 +39,21 @@ impl Client {
 
         let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
         Self{
-            host,controller_recv, servers: HashMap::new(),servers_discovered: 0, tx_bytes: Arc::new(AtomicUsize::new(0)), rx_bytes: Arc::new(AtomicUsize::new(0))
+            host,
+            controller_recv,
+            servers: HashMap::new(),
+            servers_discovered: 0,
+            tx_bytes: Arc::new(AtomicUsize::new(0)),
+            rx_bytes: Arc::new(AtomicUsize::new(0)),
+            active_downloads: HashMap::new(),
+            active_uploads: HashMap::new()
         }
     }
 
     pub fn run(&mut self) {
         let cleanup_tick = tick(Duration::from_secs(60));
 
-        let speed_tick = tick(Duration::from_secs(20));
+        let speed_tick = tick(Duration::from_millis(100));
         let mut prev_tx = 0;
         let mut prev_rx = 0;
 
@@ -59,30 +74,32 @@ impl Client {
                             self.host.send_logging(format!("Error processing packet: {}", e));
                         }
                     }
-
                 },
-                // recv(cleanup_tick) -> _ => {
-                //     let timeout = Duration::from_secs(300);
-                //     self.host.cleanup_expired_sessions(timeout);
-                // },
-                // recv(speed_tick) -> _ => {
-                //     let total_tx = self.tx_bytes.load(Ordering::Relaxed);
-                //     let total_rx = self.rx_bytes.load(Ordering::Relaxed);
-                //     let up_speed = total_tx - prev_tx;   // B/s
-                //     let down_speed = total_rx - prev_rx;
-                //     prev_tx = total_tx;
-                //     prev_rx = total_rx;
-                //
-                //     // conversione in KiB/s
-                //     let up_kb  = up_speed as f64 / 1024.0;
-                //     let down_kb = down_speed as f64 / 1024.0;
-                //
-                //     self.host.send_logging(format!(
-                //         "↗ Upload: {:.2} KiB/s, ↙ Download: {:.2} KiB/s",
-                //         up_kb,
-                //         down_kb
-                //     ));
-                // },
+                recv(cleanup_tick) -> _ => {
+                    let timeout = Duration::from_secs(300);
+                    self.host.cleanup_expired_sessions(timeout);
+                },
+                recv(speed_tick) -> _ => {
+                    match self.host.controller_send.send(HostEvent::ExpectedPDR(self.host.id, self.host.network.drone_pdr.clone())) {
+                        Ok(_) => {}
+                        Err(e) => {self.host.send_logging(format!("Error sending controller_send: {}", e));}
+                    }
+                    let total_tx = self.tx_bytes.load(Ordering::Relaxed);
+                    let total_rx = self.rx_bytes.load(Ordering::Relaxed);
+                    let up_speed = total_tx - prev_tx;   // B/s
+                    let down_speed = total_rx - prev_rx;
+                    prev_tx = total_tx;
+                    prev_rx = total_rx;
+
+                    // conversione in KiB/s
+                    let up_kb  = up_speed as f64 / 1024.0;
+                    let down_kb = down_speed as f64 / 1024.0;
+
+                    match self.host.controller_send.send(HostEvent::NetSpeed(self.host.id, up_kb, down_kb)) {
+                        Ok(_) => {}
+                        Err(e) => {self.host.send_logging(format!("Error sending controller_send: {}", e));}
+                    }
+                },
             }
         }
     }
@@ -517,9 +534,126 @@ impl Client {
         }
         None
     }
+    pub fn start_download_tracking(&mut self, transfer_id: String, total_bytes: usize) {
+        let progress = TransferProgress {
+            total_bytes,
+            transferred_bytes: Arc::new(AtomicUsize::new(0)),
+            start_time: Instant::now(),
+            transfer_id: transfer_id.clone(),
+        };
 
+        self.active_downloads.insert(transfer_id.clone(), progress);
+        self.host.send_logging(format!("Started tracking download: {} ({} bytes)", transfer_id, total_bytes));
+    }
+    pub fn start_upload_tracking(&mut self, transfer_id: String, total_bytes: usize) {
+        let progress = TransferProgress {
+            total_bytes,
+            transferred_bytes: Arc::new(AtomicUsize::new(0)),
+            start_time: Instant::now(),
+            transfer_id: transfer_id.clone(),
+        };
+
+        self.active_uploads.insert(transfer_id.clone(), progress);
+        self.host.send_logging(format!("Started tracking upload: {} ({} bytes)", transfer_id, total_bytes));
+    }
+
+    pub fn update_download_progress(&mut self, transfer_id: &str, bytes_received: usize) {
+        if let Some(progress) = self.active_downloads.get(transfer_id) {
+            let current = progress.transferred_bytes.fetch_add(bytes_received, Ordering::Relaxed) + bytes_received;
+            let percentage = (current as f64 / progress.total_bytes as f64) * 100.0;
+            let elapsed = progress.start_time.elapsed();
+            let speed = if elapsed.as_secs() > 0 {
+                current as f64 / elapsed.as_secs() as f64 / 1024.0 // KB/s
+            } else {
+                0.0
+            };
+
+            // Invia aggiornamento ogni 10% o quando completato
+            if current >= progress.total_bytes || (current * 10 / progress.total_bytes) > ((current - bytes_received) * 10 / progress.total_bytes) {
+                let info = format!("{}|{:.1}%|{:.1}KB/s|{}/{}bytes",
+                                   transfer_id, percentage, speed, current, progress.total_bytes);
+
+                match self.host.controller_send.send(HostEvent::DownloadingInfo(self.host.id, info, percentage)) {
+                    Ok(_) => {
+                        self.host.send_logging(format!("Download progress: {} - {:.1}%", transfer_id, percentage));
+                    }
+                    Err(e) => {
+                        self.host.send_logging(format!("Error sending download info: {}", e));
+                    }
+                }
+
+                // Rimuovi il tracking se completato
+                if current >= progress.total_bytes {
+                    self.active_downloads.remove(transfer_id);
+                    self.host.send_logging(format!("Download completed: {}", transfer_id));
+                }
+            }
+        }
+    }
+
+    pub fn update_upload_progress(&mut self, transfer_id: &str, bytes_sent: usize) {
+        if let Some(progress) = self.active_uploads.get(transfer_id) {
+            let current = progress.transferred_bytes.fetch_add(bytes_sent, Ordering::Relaxed) + bytes_sent;
+            let percentage = (current as f64 / progress.total_bytes as f64) * 100.0;
+            let elapsed = progress.start_time.elapsed();
+            let speed = if elapsed.as_secs() > 0 {
+                current as f64 / elapsed.as_secs() as f64 / 1024.0 // KB/s
+            } else {
+                0.0
+            };
+
+            // Invia aggiornamento ogni 10% o quando completato
+            if current >= progress.total_bytes || (current * 10 / progress.total_bytes) > ((current - bytes_sent) * 10 / progress.total_bytes) {
+                let info = format!("{}|{:.1}%|{:.1}KB/s|{}/{}bytes",
+                                   transfer_id, percentage, speed, current, progress.total_bytes);
+
+                match self.host.controller_send.send(HostEvent::UploadingInfo(self.host.id, info, percentage)) {
+                    Ok(_) => {
+                        self.host.send_logging(format!("Upload progress: {} - {:.1}%", transfer_id, percentage));
+                    }
+                    Err(e) => {
+                        self.host.send_logging(format!("Error sending upload info: {}", e));
+                    }
+                }
+
+                // Rimuovi il tracking se completato
+                if current >= progress.total_bytes {
+                    self.active_uploads.remove(transfer_id);
+                    self.host.send_logging(format!("Upload completed: {}", transfer_id));
+                }
+            }
+        }
+    }
+
+    pub fn cleanup_stale_transfers(&mut self) {
+        let timeout = Duration::from_secs(300); // 5 minuti di timeout
+        let now = Instant::now();
+
+        // Cleanup downloads
+        let stale_downloads: Vec<String> = self.active_downloads
+            .iter()
+            .filter(|(_, progress)| now.duration_since(progress.start_time) > timeout)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in stale_downloads {
+            self.active_downloads.remove(&id);
+            self.host.send_logging(format!("Removed stale download: {}", id));
+        }
+
+        // Cleanup uploads
+        let stale_uploads: Vec<String> = self.active_uploads
+            .iter()
+            .filter(|(_, progress)| now.duration_since(progress.start_time) > timeout)
+            .map(|(id, _)| id.clone())
+            .collect();
+
+        for id in stale_uploads {
+            self.active_uploads.remove(&id);
+            self.host.send_logging(format!("Removed stale upload: {}", id));
+        }
+    }
 }
-
 fn compress_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
     let compressed = encode_all(data, 3)?;
     Ok(compressed)

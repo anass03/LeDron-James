@@ -16,6 +16,9 @@ pub type FileId = String;
 pub type MediaId = String;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
+pub type Upload = f64;
+pub type Download = f64;
+pub type Usage = f64;
 const ALPHA: f64 = 0.01; // fattore di smussamento (regolabile)
 
 
@@ -1105,12 +1108,25 @@ pub enum ServerToClient{
 }
 /// Application events that comes to the SimulationController
 pub enum HostEvent {
-    /// Rebuilt entire high level message(es. from server to client)
-    PacketReconstructed(ServerToClient),
+    //both
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
+
+    //client
+    /// Rebuilt entire high level message(es. from server to client)
+    PacketReconstructed(ServerToClient),
     ///Servers discovered, response at ServerType
     ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
+    ///Expected pdr from client
+    ExpectedPDR(ClientId, HashMap<NodeId, f64>),
+    ///Network speed
+    NetSpeed(ClientId, Upload, Download),
+    ///Performance of network
+    UsageCPU(ClientId, Usage),
+    ///Info on downloading/uploading the entire data
+    DownloadingInfo(ClientId, String, f64),
+    UploadingInfo(ClientId, String, f64),
+    //server
     ///for real time chat
     ChatUpdate(ServerId, String)
 }
