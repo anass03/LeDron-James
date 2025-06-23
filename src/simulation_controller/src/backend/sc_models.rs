@@ -122,11 +122,11 @@ pub enum NetCacheFile{
 Now, I want a single worker thread to render each of my files.
 First idea could be:
 
-A main crossbeam_channels / mspc channels for direct important communications from Simulation Controller.
+A main crossbeam_channels / mpsc channels for direct important communications from Simulation Controller.
 - Add file channels to render
 - Render
 
-Then each file will have it's own channels to identify them in a univocal way.
+Then each file will have its own channels to identify them in a univocal way.
  */
 
 pub struct ChatCache{

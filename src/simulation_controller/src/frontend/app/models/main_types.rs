@@ -25,7 +25,7 @@ impl Settings{
             .parent()
             .unwrap();
         Self{
-            toml_path: format!("{}/init_file.toml", workspace_root.display())
+            toml_path: format!("{}/topologies/personalized_network.toml", workspace_root.display())
         }
     }
 }

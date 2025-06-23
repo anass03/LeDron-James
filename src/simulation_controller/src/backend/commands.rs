@@ -12,7 +12,7 @@ use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::{LogType, ChatList};
+use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia};
 use host::ServerTypes::*;
 use server::chat2::Chat;
 
@@ -23,8 +23,6 @@ enum NodeType {
     Client,
     Server,
 }
-
-type NodeMap = HashMap<NetNode, Vec<NodeId>>;
 impl Display for NodeType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -34,28 +32,6 @@ impl Display for NodeType {
         }
     }
 }
-
-impl NodeType {
-    fn from(sim: & SimulationControllerData, node_id: NodeId) -> NodeType {
-        for drone in sim.drones.iter() {
-            if drone.id == node_id {
-                return NodeType::Drone;
-            }
-        }
-        for client in sim.clients.iter() {
-            if client.id == node_id {
-                return NodeType::Client;
-            }
-        }
-        for server in sim.servers.iter() {
-            if server.id == node_id {
-                return NodeType::Server;
-            }
-        }
-        NodeType::default()
-    }
-}
-
 impl NetNode {
     pub fn id(&self) -> &NodeId {
         match self {
@@ -64,7 +40,35 @@ impl NetNode {
             NetNode::Server(id) => id,
         }
     }
+
+    fn from(sim: & SimulationControllerData, node_id: NodeId) -> Option<NetNode> {
+        for drone in sim.drones.iter() {
+            if drone.id == node_id {
+                return Some(NetNode::Drone(node_id));
+            }
+        }
+        for client in sim.clients.iter() {
+            if client.id == node_id {
+                return Some(NetNode::Client(node_id));
+            }
+        }
+        for server in sim.servers.iter() {
+            if server.id == node_id {
+                return Some(NetNode::Server(node_id));
+            }
+        }
+        None
+    }
+
+    fn node_type(&self) -> NodeType {
+        match self {
+            NetNode::Drone(_) => NodeType::Drone,
+            NetNode::Client(_) => NodeType::Client,
+            NetNode::Server(_) => NodeType::Server,
+        }
+    }
 }
+type NodeMap = HashMap<NetNode, Vec<NodeId>>;
 
 fn dfs(
     current: NodeId,
@@ -84,7 +88,7 @@ fn dfs(
     }
 }
 
-impl SimulationControllerData {
+/*
     //builds connections map
     fn build_network_map(&mut self) -> NodeMap {
         let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
@@ -178,40 +182,29 @@ impl SimulationControllerData {
         Ok(false)
     }
 
-    fn cannot_remove(&mut self, first_type: NodeType, first_node: NodeId, second_type: NodeType, second_node: NodeId) -> Result<bool, String> {
+    fn cannot_remove(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
         //net cannot be separated
         //hosts must be at the edges of the net
         //clients must have 1 or 2 neighbors
         //servers must have at least 2 neighbors
-
-        let first = match first_type {
-            NodeType::Drone => {NetNode::Drone(first_node)}
-            NodeType::Client => {NetNode::Client(first_node)}
-            NodeType::Server => {NetNode::Server(first_node)}
-        };
-        let second = match second_type {
-            NodeType::Drone => {NetNode::Drone(second_node)}
-            NodeType::Client => {NetNode::Client(second_node)}
-            NodeType::Server => {NetNode::Server(second_node)}
-        };
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate removing connection
         if let Some(first_neighbors) = modified_net_map.get_mut(&first) {
-            if !first_neighbors.contains(&second_node) {
-                return Err(format!("{first_type} {first_node} is not connected to {second_type} {second_node}!"));
+            if !first_neighbors.contains(&first.id()) {
+                return Err(format!("{} {} is not connected to {} {}!", first.node_type(), first.id(), second.node_type(), second.id()));
             }
-            first_neighbors.retain(|&id| id != second_node);
+            first_neighbors.retain(|&id| id != *second.id());
         } else {
-            return Err(format!("{first_type} {first_node} is not in the map!"));
+            return Err(format!("{} {} is not in the map!", first.node_type(), first.id()));
         }
         if let Some(second_neighbors) = modified_net_map.get_mut(&second) {
-            if !second_neighbors.contains(&first_node) {
-                return Err(format!("{first_type} {first_node} is not connected to {second_type} {second_node}!"));
+            if !second_neighbors.contains(&first.id()) {
+                return Err(format!("{} {} is not connected to {} {}!", first.node_type(), first.id(), second.node_type(), second.id()));
             }
-            second_neighbors.retain(|&id| id != first_node);
+            second_neighbors.retain(|&id| id != *first.id());
         } else {
-            return Err(format!("{second_type} {second_node} is not in the map!"));
+            return Err(format!("{} {} is not in the map!", second.node_type(), second.id()));
         }
 
         //check hosts constraints
@@ -257,41 +250,30 @@ impl SimulationControllerData {
 
         // Check if removing connection splits the network without considering hosts (they are at the edges)
         let mut visited = HashSet::new();
-        dfs(first_node, &drone_net, None, &mut visited);
+        dfs(*first.id(), &drone_net, None, &mut visited);
         if visited.len() != drone_net.len() {
             return Ok(true);
         }
         Ok(false)
     }
 
-    fn cannot_add(&mut self, first_type: NodeType, first_node: NodeId, second_type: NodeType, second_node: NodeId) -> Result<bool, String> {
+    fn cannot_add(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
         //clients must have 1 or 2 neighbors
         //hosts cannot connect directly with other hosts
-
-        let first = match first_type {
-            NodeType::Drone => {NetNode::Drone(first_node)}
-            NodeType::Client => {NetNode::Client(first_node)}
-            NodeType::Server => {NetNode::Server(first_node)}
-        };
-        let second = match second_type {
-            NodeType::Drone => {NetNode::Drone(second_node)}
-            NodeType::Client => {NetNode::Client(second_node)}
-            NodeType::Server => {NetNode::Server(second_node)}
-        };
         let net_map = self.build_network_map();
         let mut modified_net_map = net_map.clone();
         //simulate adding connection
         match modified_net_map.get_mut(&first) {
             Some(mut first_node_neighbors) => {
-                first_node_neighbors.push(second_node);
+                first_node_neighbors.push(*second.id());
             },
-            None => return Err(format!("{first_type} {first_node} is not in the map!"))
+            None => return Err(format!("{} {} is not in the map!", first.node_type(), first.id()))
         }
         match modified_net_map.get_mut(&second) {
             Some(mut second_node_neighbors) => {
-                second_node_neighbors.push(first_node);
+                second_node_neighbors.push(*first.id());
             },
-            None => return Err(format!("{second_type} {second_node} is not in the map!"))
+            None => return Err(format!("{} {} is not in the map!", second.node_type(), second.id()))
         }
 
         //check hosts constraints
@@ -337,11 +319,17 @@ impl SimulationControllerData {
                         if neighbors.is_empty() { return Err(format!("Drone {drone_id} does not exist")); }
 
                         for neighbor in neighbors.iter() {
-                            let forward_node_type = NodeType::from(&self, drone_id);
-                            let backwards_node_type = NodeType::from(&self, *neighbor);
+                            let forward_node = match NetNode::from(&self, drone_id) {
+                                Some(node) => node,
+                                None => return Err(format!("Node {drone_id} not found")),
+                            };
+                            let backwards_node = match NetNode::from(&self, *neighbor){
+                                Some(node) => node,
+                                None => return Err(format!("Node {neighbor} not found")),
+                            };
 
-                            self.mono_remove_sender(forward_node_type, drone_id, backwards_node_type, *neighbor)?;
-                            self.mono_remove_sender(backwards_node_type, *neighbor, forward_node_type, drone_id)?
+                            self.mono_remove_sender(forward_node, backwards_node)?;
+                            self.mono_remove_sender(backwards_node, forward_node)?
                         }
 
                     // ———> qui rimuovo COMPLETAMENTE il drone dallo stato
@@ -412,20 +400,20 @@ impl SimulationControllerData {
     }
 
     /// - Nodes Commands
-    fn mono_add_sender(&mut self, first_type: NodeType, first_id: NodeId, second_type: NodeType, second_id: NodeId) -> Result<(), String> {
+    fn mono_add_sender(&mut self, first_node: NetNode, second_node: NetNode) -> Result<(), String> {
         //checking if packet sender for forward node exists
-        match self.packet_sender.get(&second_id) {
+        match self.packet_sender.get(second_node.id()) {
             Some(forward_packet_sender) => {
                 //checking if packet sender for backwards node exists
-                match first_type {
-                    NodeType::Drone => {
-                        match self.drone_command_sender.get(&first_id) {
+                match first_node {
+                    NetNode::Drone(first_id) => {
+                        match self.drone_command_sender.get(first_node.id()) {
                             Some(forward_drone_command_sender) => {
-                                let forward_command = DroneCommand::AddSender(second_id, forward_packet_sender.clone());
+                                let forward_command = DroneCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
                                 //trying to send command forward
                                 match forward_drone_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} Sender to {first_type} {first_id}"));
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -434,18 +422,18 @@ impl SimulationControllerData {
                         }
                         for drone in self.drones.iter_mut() {
                             if drone.id == first_id {
-                                drone.connected_node_ids.push(second_id);
+                                drone.connected_node_ids.push(*second_node.id());
                             }
                         }
                     },
-                    NodeType::Client => {
+                    NetNode::Client(first_id) => {
                         match self.client_command_sender.get(&first_id) {
                             Some(forward_client_command_sender) => {
-                                let forward_command = Internal(HostCommand::AddSender(second_id, forward_packet_sender.clone()));
+                                let forward_command = Internal(HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone()));
                                 //trying to send command forward
                                 match forward_client_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} Sender to {first_type} {first_id}"));
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -454,18 +442,18 @@ impl SimulationControllerData {
                         }
                         for client in self.clients.iter_mut() {
                             if client.id == first_id {
-                                client.connected_drone_ids.push(second_id);
+                                client.connected_drone_ids.push(*second_node.id());
                             }
                         }
                     },
-                    NodeType::Server => {
+                    NetNode::Server(first_id) => {
                         match self.server_command_sender.get(&first_id) {
                             Some(forward_server_command_sender) => {
-                                let forward_command = HostCommand::AddSender(second_id, forward_packet_sender.clone());
+                                let forward_command = HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
                                 //trying to send command forward
                                 match forward_server_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {second_type} {second_id} Sender to {first_type} {first_id}"));
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -474,45 +462,51 @@ impl SimulationControllerData {
                         }
                         for server in self.servers.iter_mut() {
                             if server.id == first_id {
-                                server.connected_drone_ids.push(second_id);
+                                server.connected_drone_ids.push(*second_node.id());
                             }
                         }
                     }
                 }
             },
-            None => return Err(format!("{second_type} {second_id} packet sender not found")),
+            None => return Err(format!("{} {} packet sender not found", second_node.node_type(), second_node.id())),
         }
 
         Ok(())
     }
 
     pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
-        let forward_node_type = NodeType::from(&self, node_id);
-        let backwards_node_type = NodeType::from(&self, sender_id);
+        let forward_node = match NetNode::from(&self, node_id) {
+            Some(node) => node,
+            None => return Err(format!("Node {node_id} not found")),
+        };
+        let backwards_node = match NetNode::from(&self, sender_id){
+            Some(node) => node,
+            None => return Err(format!("Node {sender_id} not found")),
+        };
 
-        match self.cannot_add(forward_node_type, node_id, backwards_node_type, sender_id) {
+        match self.cannot_add(forward_node, backwards_node) {
             Ok(critical) => {
                 if critical {
-                    return Err(format!("Connection between {forward_node_type} {node_id} and {backwards_node_type} {sender_id} is not possible!"))
+                    return Err(format!("Connection between {} {node_id} and {} {sender_id} is not possible!", forward_node.node_type(), backwards_node.node_type()))
                 }
             }
             Err(e) => return Err(e),
         }
 
-        self.mono_add_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
-        self.mono_add_sender(backwards_node_type, sender_id, forward_node_type, node_id)
+        self.mono_add_sender(forward_node, backwards_node)?;
+        self.mono_add_sender(backwards_node, forward_node)
     }
 
-    fn mono_remove_sender(&mut self, first_type: NodeType, first_id: NodeId, second_type: NodeType, second_id: NodeId) -> Result<(), String> {
-        match first_type {
-            NodeType::Drone => {
+    fn mono_remove_sender(&mut self, first_node: NetNode, second_node: NetNode) -> Result<(), String> {
+        match first_node {
+            NetNode::Drone(first_id) => {
                 match self.drone_command_sender.get(&first_id) {
                     Some(forward_drone_command_sender) => {
-                        let forward_command = DroneCommand::RemoveSender(second_id);
+                        let forward_command = DroneCommand::RemoveSender(*second_node.id());
                         //trying to send command forward
                         match forward_drone_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} Sender from {first_type} {first_id}"));
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -521,18 +515,18 @@ impl SimulationControllerData {
                 }
                 for drone in self.drones.iter_mut() {
                     if drone.id == first_id {
-                        drone.connected_node_ids.retain(|&id| id != second_id);
+                        drone.connected_node_ids.retain(|&id| id != *second_node.id());
                     }
                 }
-            },
-            NodeType::Client => {
+            }
+            NetNode::Client(first_id) => {
                 match self.client_command_sender.get(&first_id) {
                     Some(forward_client_command_sender) => {
-                        let forward_command = Internal(HostCommand::RemoveSender(second_id));
+                        let forward_command = Internal(HostCommand::RemoveSender(*second_node.id()));
                         //trying to send command forward
                         match forward_client_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} Sender from {first_type} {first_id}"));
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -541,18 +535,18 @@ impl SimulationControllerData {
                 }
                 for client in self.clients.iter_mut() {
                     if client.id == first_id {
-                        client.connected_drone_ids.retain(|&id| id != second_id);
+                        client.connected_drone_ids.retain(|&id| id != *second_node.id());
                     }
                 }
-            },
-            NodeType::Server => {
+            }
+            NetNode::Server(first_id) => {
                 match self.server_command_sender.get(&first_id) {
                     Some(forward_server_command_sender) => {
-                        let forward_command = HostCommand::RemoveSender(second_id);
+                        let forward_command = HostCommand::RemoveSender(*second_node.id());
                         //trying to send command forward
                         match forward_server_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {second_type} {second_id} Sender from {first_type} {first_id}"));
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -561,7 +555,7 @@ impl SimulationControllerData {
                 }
                 for server in self.servers.iter_mut() {
                     if server.id == first_id {
-                        server.connected_drone_ids.retain(|&id| id != second_id);
+                        server.connected_drone_ids.retain(|&id| id != *second_node.id());
                     }
                 }
             }
@@ -570,22 +564,607 @@ impl SimulationControllerData {
     }
 
     pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
-        let forward_node_type = NodeType::from(&self, node_id);
-        let backwards_node_type = NodeType::from(&self, sender_id);
+        let forward_node = match NetNode::from(&self, node_id) {
+            Some(node) => node,
+            None => return Err(format!("Node {node_id} not found")),
+        };
+        let backwards_node = match NetNode::from(&self, sender_id){
+            Some(node) => node,
+            None => return Err(format!("Node {sender_id} not found")),
+        };
 
-        match self.cannot_remove(forward_node_type, node_id, backwards_node_type, sender_id) {
+        match self.cannot_remove(forward_node, backwards_node) {
             Ok(critical) => {
                 if critical {
-                    return Err(format!("Connection between {forward_node_type} {node_id} and {backwards_node_type} {sender_id} is Critical and cannot be removed!"))
+                    return Err(format!("Connection between {} {node_id} and {} {sender_id} is Critical and cannot be removed!", forward_node.node_type(), backwards_node.node_type()))
                 }
             }
             Err(e) => return Err(e),
         }
 
-        self.mono_remove_sender(forward_node_type, node_id, backwards_node_type, sender_id)?;
-        self.mono_remove_sender(backwards_node_type, sender_id, forward_node_type, node_id)
+        self.mono_remove_sender(forward_node, backwards_node)?;
+        self.mono_remove_sender(backwards_node, forward_node)
+    }*/
+
+#[derive(Debug, Clone)]
+enum NetworkOperation {
+    CrashDrone(NodeId),
+    RemoveConnection(NetNode, NetNode),
+    AddConnection(NetNode, NetNode),
+}
+// Struct to cache network state and avoid rebuilding maps
+struct NetworkState {
+    node_map: NodeMap,
+    drone_graph: HashMap<NodeId, Vec<NodeId>>,
+    host_ids: HashSet<NodeId>,
+}
+
+impl SimulationControllerData {
+    // Build network state once and reuse
+    // Build network state once and reuse
+    fn build_network_state(&self) -> NetworkState {
+        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
+        let mut host_ids = HashSet::new();
+
+        // Build network map and collect host IDs in one pass
+        for client in &self.clients {
+            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
+            host_ids.insert(client.id);
+        }
+        for server in &self.servers {
+            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
+            host_ids.insert(server.id);
+        }
+        for drone in &self.drones {
+            network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
+        }
+
+        // Build drone-only graph (excluding hosts)
+        let mut drone_graph: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
+        for (node, neighbors) in &network_map {
+            if let NetNode::Drone(drone_id) = node {
+                let drone_neighbors: Vec<NodeId> = neighbors
+                    .iter()
+                    .filter(|id| !host_ids.contains(id))
+                    .cloned()
+                    .collect();
+                drone_graph.insert(*drone_id, drone_neighbors);
+            }
+        }
+
+        NetworkState {
+            node_map: network_map,
+            drone_graph,
+            host_ids,
+        }
+    }
+    fn build_network_map(&mut self) -> NodeMap {
+        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
+        for client in self.clients.iter() {
+            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
+        }
+        for server in self.servers.iter() {
+            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
+        }
+        for drone in self.drones.iter() {
+            network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
+        }
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", network_map));
+        network_map
+    }
+    fn is_graph_connected_excluding(
+        &self,
+        graph: &HashMap<NodeId, Vec<NodeId>>,
+        exclude_node: Option<NodeId>,
+    ) -> bool
+    {
+        if graph.is_empty() {
+            return true;
+        }
+
+        // Find first non-excluded node as starting point - match original logic
+        let start_node = match graph.keys().find(|&&id| Some(id) != exclude_node) {
+            Some(&node) => node,
+            None => return true, // No nodes to check
+        };
+
+        let mut visited = HashSet::new();
+        let mut stack = vec![start_node];
+
+        while let Some(current) = stack.pop() {
+            if Some(current) == exclude_node || visited.contains(&current) {
+                continue;
+            }
+
+            visited.insert(current);
+
+            if let Some(neighbors) = graph.get(&current) {
+                for &neighbor in neighbors {
+                    if Some(neighbor) != exclude_node && !visited.contains(&neighbor) {
+                        stack.push(neighbor);
+                    }
+                }
+            }
+        }
+
+        // Check connectivity exactly like original: visited.len() + 1 != graph.len()
+        // But adjust for exclude_node presence
+        let expected_count = if exclude_node.is_some() && graph.contains_key(&exclude_node.unwrap()) {
+            graph.len() - 1
+        } else {
+            graph.len()
+        };
+
+        visited.len() == expected_count
     }
 
+    fn cannot_crash(&mut self, drone_id: NodeId) -> Result<bool, String> {
+        let network_state = self.build_network_state();
+
+        if network_state.node_map.len() <= 1 {
+            return Ok(false);
+        }
+
+        // Check if drone exists
+        if !network_state.node_map.contains_key(&NetNode::Drone(drone_id)) {
+            return Err(format!("Drone {drone_id} is not in the net!"));
+        }
+
+        // Get drone's neighbors to simulate removal
+        //let drone_neighbors = network_state.node_map.get(&NetNode::Drone(drone_id)).unwrap();
+
+        // Check host constraints after removing drone connections
+        for (node, neighbors) in &network_state.node_map {
+            match node {
+                NetNode::Client(client_id) => {
+                    let filtered_neighbors: Vec<NodeId> = neighbors
+                        .iter()
+                        .filter(|id| **id != drone_id)
+                        .cloned()
+                        .collect();
+                    let adj = filtered_neighbors.len();
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!(
+                            "Cannot Crash Drone {drone_id} because Client {client_id} would have {adj} Neighbors!"
+                        ));
+                    }
+                }
+                NetNode::Server(server_id) => {
+                    let filtered_neighbors: Vec<NodeId> = neighbors
+                        .iter()
+                        .filter(|id| **id != drone_id)
+                        .cloned()
+                        .collect();
+                    let adj = filtered_neighbors.len();
+                    if adj <= 1 {
+                        return Err(format!(
+                            "Cannot Crash Drone {drone_id} because Server {server_id} would have only {adj} Neighbors!"
+                        ));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        // Check if removing drone disconnects the drone network
+        let is_connected = self.is_graph_connected_excluding(&network_state.drone_graph, Some(drone_id));
+
+        // Return true if crashing would disconnect the network
+        Ok(!is_connected)
+    }
+
+    fn cannot_remove(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
+        let network_state = self.build_network_state();
+
+        // Validate both nodes exist and are connected - match original error messages
+        let first_neighbors = network_state.node_map.get(&first)
+            .ok_or_else(|| format!("{} {} is not in the map!", first.node_type(), first.id()))?;
+
+        if !first_neighbors.contains(second.id()) {
+            return Err(format!(
+                "{} {} is not connected to {} {}!",
+                first.node_type(), first.id(),
+                second.node_type(), second.id()
+            ));
+        }
+
+        let second_neighbors = network_state.node_map.get(&second)
+            .ok_or_else(|| format!("{} {} is not in the map!", second.node_type(), second.id()))?;
+
+        if !second_neighbors.contains(first.id()) {
+            return Err(format!(
+                "{} {} is not connected to {} {}!",
+                second.node_type(), second.id(),
+                first.node_type(), first.id()
+            ));
+        }
+
+        // Check host constraints after removing connection - match original logic
+        for (node, neighbors) in &network_state.node_map {
+            let mut adj = neighbors.len();
+
+            // Simulate removing the connection
+            if *node == first && neighbors.contains(second.id()) {
+                adj -= 1;
+            } else if *node == second && neighbors.contains(first.id()) {
+                adj -= 1;
+            }
+
+            match node {
+                NetNode::Client(client_id) => {
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!(
+                            "Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"
+                        ));
+                    }
+                }
+                NetNode::Server(server_id) => {
+                    if adj <= 1 {
+                        return Err(format!(
+                            "Connection cannot be removed because Server {server_id} would have only {adj} Neighbors!"
+                        ));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        // Create modified drone graph without this edge and check connectivity
+        let mut modified_drone_graph = network_state.drone_graph.clone();
+
+        if let NetNode::Drone(first_id) = first {
+            if let Some(neighbors) = modified_drone_graph.get_mut(&first_id) {
+                neighbors.retain(|&id| id != *second.id());
+            }
+        }
+        if let NetNode::Drone(second_id) = second {
+            if let Some(neighbors) = modified_drone_graph.get_mut(&second_id) {
+                neighbors.retain(|&id| id != *first.id());
+            }
+        }
+
+        // Add debug log like original
+        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", modified_drone_graph));
+
+        let is_connected = self.is_graph_connected_excluding(&modified_drone_graph, None);
+        Ok(!is_connected) // Return true if removal would disconnect the network
+    }
+
+    fn cannot_add(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
+        let network_map = self.build_network_map(); // Use original function to maintain exact behavior
+
+        // Check if nodes exist in the map - match original error messages
+        if !network_map.contains_key(&first) {
+            return Err(format!("{} {} is not in the map!", first.node_type(), first.id()));
+        }
+        if !network_map.contains_key(&second) {
+            return Err(format!("{} {} is not in the map!", second.node_type(), second.id()));
+        }
+
+        // Simulate adding the connection
+        let mut modified_net_map = network_map.clone();
+
+        if let Some(first_neighbors) = modified_net_map.get_mut(&first) {
+            first_neighbors.push(*second.id());
+        }
+        if let Some(second_neighbors) = modified_net_map.get_mut(&second) {
+            second_neighbors.push(*first.id());
+        }
+
+        // Check host constraints - match original logic exactly
+        for (node, neighbors) in modified_net_map.iter() {
+            match node {
+                NetNode::Client(client_id) => {
+                    let adj = neighbors.len();
+                    if adj <= 0 || adj > 2 {
+                        return Err(format!(
+                            "Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"
+                        ));
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        Ok(false)
+    }
+
+    /// - Drone Commands
+    pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
+        match self.cannot_crash(drone_id) {
+            Ok(cannot_crash) => {
+                if cannot_crash {
+                    return Err(format!("Drone {drone_id} cannot be crashed because it's critical!"))
+                }
+            }
+            Err(e) => return Err(e)
+        }
+        self.logs.push_sc_log(LogType::DEBUG, format!("Trying to Crash Drone: {drone_id}"));
+        let command = DroneCommand::Crash;
+        match self.drone_command_sender.get(&drone_id) {
+            Some(drone_command_sender) => {
+                match drone_command_sender.send(command) {
+                    Ok(_) => {
+                        //removing all neighboring channels
+                        let mut neighbors = vec![];
+                        for drone in self.drones.iter() {
+                            if drone.id == drone_id{
+                                for neighbor in drone.connected_node_ids.iter() {
+                                    neighbors.push(*neighbor);
+                                }
+                            }
+                        }
+                        if neighbors.is_empty() { return Err(format!("Drone {drone_id} does not exist")); }
+
+                        for neighbor in neighbors.iter() {
+                            let forward_node = match NetNode::from(&self, drone_id) {
+                                Some(node) => node,
+                                None => return Err(format!("Node {drone_id} not found")),
+                            };
+                            let backwards_node = match NetNode::from(&self, *neighbor){
+                                Some(node) => node,
+                                None => return Err(format!("Node {neighbor} not found")),
+                            };
+
+                            self.mono_remove_sender(forward_node, backwards_node)?;
+                            self.mono_remove_sender(backwards_node, forward_node)?
+                        }
+
+                        // ———> qui rimuovo COMPLETAMENTE il drone dallo stato
+                        self.drones.retain(|d| d.id != drone_id);
+                        self.drone_command_sender.remove(&drone_id);
+                        self.packet_sender.remove(&drone_id);
+                        // se tieni altri mappi (es. self.running_network, self.stats, ecc.)
+                        // rimuovi anche lì drone_id
+
+                        Ok(())
+                    },
+                    Err(e) => Err(format!("Error sending crash command - {}", e.to_string())),
+                }
+            },
+            None => Err(format!("Drone {drone_id} command sender not found"))
+        }
+    }
+
+    pub fn set_pdr(&mut self, drone_id: NodeId, new_pdr: f32) -> Result<(), String> {
+        let valid_pdr;
+        if new_pdr >= 0.0 && new_pdr <= 1.0 {
+            valid_pdr = new_pdr;
+        } else {
+            return Err(format!("Invalid PDR value: {} | 0.0 < PDR < 1.0", new_pdr));
+        }
+        let command = DroneCommand::SetPacketDropRate(valid_pdr);
+        match self.drone_command_sender.get(&drone_id) {
+            Some(drone_command_sender) => {
+                match drone_command_sender.send(command) {
+                    Ok(()) => {
+                        self.logs.push_sc_log(LogType::INFO, format!("Changing Drone {drone_id} PDR to: {valid_pdr}"));
+                        Ok(()) },
+                    Err(e) => Err(e.to_string()),
+                }
+            },
+            None => Err(format!("Drone {drone_id} command sender not found")),
+        }
+    }
+
+    /// - Drone Events
+    pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
+        match event {
+            DroneEvent::PacketSent(packet) => {
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
+                self.stats.received_packet();
+                Ok(())
+                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::PacketDropped(packet) => {
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
+                Ok(())
+                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
+            },
+            DroneEvent::ControllerShortcut(packet) => {
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
+                match self.controller_shortcut(*receiver_id, packet) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err((LogType::ERROR, e)),
+                }
+
+            },
+        }
+    }
+
+    /// - Nodes Commands
+    fn mono_add_sender(&mut self, first_node: NetNode, second_node: NetNode) -> Result<(), String> {
+        //checking if packet sender for forward node exists
+        match self.packet_sender.get(second_node.id()) {
+            Some(forward_packet_sender) => {
+                //checking if packet sender for backwards node exists
+                match first_node {
+                    NetNode::Drone(first_id) => {
+                        match self.drone_command_sender.get(first_node.id()) {
+                            Some(forward_drone_command_sender) => {
+                                let forward_command = DroneCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
+                                //trying to send command forward
+                                match forward_drone_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Drone {first_id} command sender not found")),
+                        }
+                        for drone in self.drones.iter_mut() {
+                            if drone.id == first_id {
+                                drone.connected_node_ids.push(*second_node.id());
+                            }
+                        }
+                    },
+                    NetNode::Client(first_id) => {
+                        match self.client_command_sender.get(&first_id) {
+                            Some(forward_client_command_sender) => {
+                                let forward_command = Internal(HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone()));
+                                //trying to send command forward
+                                match forward_client_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Client {first_id} command sender not found")),
+                        }
+                        for client in self.clients.iter_mut() {
+                            if client.id == first_id {
+                                client.connected_drone_ids.push(*second_node.id());
+                            }
+                        }
+                    },
+                    NetNode::Server(first_id) => {
+                        match self.server_command_sender.get(&first_id) {
+                            Some(forward_server_command_sender) => {
+                                let forward_command = HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
+                                //trying to send command forward
+                                match forward_server_command_sender.send(forward_command) {
+                                    Ok(()) => {
+                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                    },
+                                    Err(e) => return Err(e.to_string()),
+                                }
+                            },
+                            None => return Err(format!("Server {first_id} command sender not found")),
+                        }
+                        for server in self.servers.iter_mut() {
+                            if server.id == first_id {
+                                server.connected_drone_ids.push(*second_node.id());
+                            }
+                        }
+                    }
+                }
+            },
+            None => return Err(format!("{} {} packet sender not found", second_node.node_type(), second_node.id())),
+        }
+
+        Ok(())
+    }
+
+    pub fn add_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+        let forward_node = match NetNode::from(&self, node_id) {
+            Some(node) => node,
+            None => return Err(format!("Node {node_id} not found")),
+        };
+        let backwards_node = match NetNode::from(&self, sender_id){
+            Some(node) => node,
+            None => return Err(format!("Node {sender_id} not found")),
+        };
+
+        match self.cannot_add(forward_node, backwards_node) {
+            Ok(critical) => {
+                if critical {
+                    return Err(format!("Connection between {} {node_id} and {} {sender_id} is not possible!", forward_node.node_type(), backwards_node.node_type()))
+                }
+            }
+            Err(e) => return Err(e),
+        }
+
+        self.mono_add_sender(forward_node, backwards_node)?;
+        self.mono_add_sender(backwards_node, forward_node)
+    }
+
+    fn mono_remove_sender(&mut self, first_node: NetNode, second_node: NetNode) -> Result<(), String> {
+        match first_node {
+            NetNode::Drone(first_id) => {
+                match self.drone_command_sender.get(&first_id) {
+                    Some(forward_drone_command_sender) => {
+                        let forward_command = DroneCommand::RemoveSender(*second_node.id());
+                        //trying to send command forward
+                        match forward_drone_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                            },
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    },
+                    None => return Err(format!("Drone {first_id} command sender not found")),
+                }
+                for drone in self.drones.iter_mut() {
+                    if drone.id == first_id {
+                        drone.connected_node_ids.retain(|&id| id != *second_node.id());
+                    }
+                }
+            }
+            NetNode::Client(first_id) => {
+                match self.client_command_sender.get(&first_id) {
+                    Some(forward_client_command_sender) => {
+                        let forward_command = Internal(HostCommand::RemoveSender(*second_node.id()));
+                        //trying to send command forward
+                        match forward_client_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                            },
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    },
+                    None => return Err(format!("Client {first_id} command sender not found💥")),
+                }
+                for client in self.clients.iter_mut() {
+                    if client.id == first_id {
+                        client.connected_drone_ids.retain(|&id| id != *second_node.id());
+                    }
+                }
+            }
+            NetNode::Server(first_id) => {
+                match self.server_command_sender.get(&first_id) {
+                    Some(forward_server_command_sender) => {
+                        let forward_command = HostCommand::RemoveSender(*second_node.id());
+                        //trying to send command forward
+                        match forward_server_command_sender.send(forward_command) {
+                            Ok(()) => {
+                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                            },
+                            Err(e) => return Err(e.to_string()),
+                        }
+                    },
+                    None => return Err(format!("Server {first_id} command sender not found")),
+                }
+                for server in self.servers.iter_mut() {
+                    if server.id == first_id {
+                        server.connected_drone_ids.retain(|&id| id != *second_node.id());
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn remove_sender(&mut self, node_id: NodeId, sender_id: NodeId) -> Result<(), String> {
+        let forward_node = match NetNode::from(&self, node_id) {
+            Some(node) => node,
+            None => return Err(format!("Node {node_id} not found")),
+        };
+        let backwards_node = match NetNode::from(&self, sender_id){
+            Some(node) => node,
+            None => return Err(format!("Node {sender_id} not found")),
+        };
+
+        match self.cannot_remove(forward_node, backwards_node) {
+            Ok(critical) => {
+                if critical {
+                    return Err(format!("Connection between {} {node_id} and {} {sender_id} is Critical and cannot be removed!", forward_node.node_type(), backwards_node.node_type()))
+                }
+            }
+            Err(e) => return Err(e),
+        }
+
+        self.mono_remove_sender(forward_node, backwards_node)?;
+        self.mono_remove_sender(backwards_node, forward_node)
+    }
+
+// Helper enum for batch operations
     /// - Client Commands
 
     fn send_client_command(&self, client_id: ClientId, command: ClientCommand) -> Result<(), String> {
@@ -757,6 +1336,13 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
                     ServerToClient::Media(server_id, media_id, image)
                     => {
+
+                        /*let mut media_map = match self.net_cache.downloaded_medias.get(&server_id) {
+                            Some(media_map) => *media_map,
+                            None => HashMap::from((media_id, ((None, None), NetCacheMedia::Downloading(0.0))))
+                        }
+                        self.net_cache.downloaded_medias.insert(server_id, media_map);
+                            ()*/
                         let extension = match get_extension(&media_id) {
                             Some(extension) => extension,
                             None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
@@ -834,7 +1420,6 @@ impl SimulationControllerData {
                 self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
             },
             HostEvent::ChatUpdate(server_id, string) => {
-                self.logs.push_sc_log(LogType::DEBUG, format!("💥💥💥💥💥💥💥💥💥💥💥💥💥💥💥d"));
                 let chat: Chat = serde_json::from_str(&string)
                     .map_err(|e| (LogType::ERROR, e.to_string()))?;
 
@@ -844,7 +1429,6 @@ impl SimulationControllerData {
 
                 let chat_list = ChatList { chats_stored };
                 self.chat_cache.local_chats.insert(server_id, chat_list);
-                self.logs.push_sc_log(LogType::DEBUG, format!("Local chat list: {:?}", self.chat_cache.local_chats));
             }
         }
         Ok(())

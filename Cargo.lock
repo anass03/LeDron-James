@@ -1172,9 +1172,9 @@ dependencies = [
 
 [[package]]
 name = "gif"
-version = "0.13.2"
+version = "0.13.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc37f9a2bfe731e69f1e08d29d91d30604b9ce24bcb2880a961e82d89c6ed89"
+checksum = "4ae047235e33e2829703574b54fdec96bfbad892062d97fed2f76022287de61b"
 dependencies = [
  "color_quant",
  "weezl",
@@ -1837,18 +1837,19 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
+checksum = "a973b4e44ce6cad84ce69d797acf9a044532e4184c4f267913d1b546a0727b7a"
 dependencies = [
  "num_enum_derive",
+ "rustversion",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.7.3"
+version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
+checksum = "77e878c846a8abae00dd069496dbe8751b16ac1c3d6bd2a7283a938e8228f90d"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -2408,7 +2409,7 @@ dependencies = [
 [[package]]
 name = "rustaceans_wit_attitudes"
 version = "0.0.0"
-source = "git+https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git#ce6426af2b2a2ca366b4ed34391d420cf23e7957"
+source = "git+https://github.com/Nicklaskiaer/ap-rustaceans-wit-attitudes-drone.git#5f51a159e489dac333ae78beda4695fe8dc04e52"
 dependencies = [
  "crossbeam-channel",
  "rand 0.8.5",
@@ -2556,7 +2557,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#3d8941d4f3c7c3e96bef79e2a87d989a1fc56b52"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#3e7dd97c20193b4064c89a552f8b94da5e02b587"
 dependencies = [
  "chrono",
  "crossbeam-channel",

@@ -2,7 +2,7 @@ use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
 use std::fmt::Display;
 use client::ClientCommand;
-
+use std::collections::HashSet;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -72,26 +72,27 @@ impl SimulationControllerData {
             running_network.insert(NetNode::Drone(drone.id), connected_ids);
             drones.push(drone);
         }
+
         let mut clients = vec![];
         for client in config.client {
             let connected_ids = client.connected_drone_ids.clone();
             running_network.insert(NetNode::Client(client.id), connected_ids);
             clients.push(client);
         }
+
         let mut servers = vec![];
         for server in config.server {
             let connected_ids = server.connected_drone_ids.clone();
             running_network.insert(NetNode::Server(server.id), connected_ids);
             servers.push(server);
         }
-        use std::collections::HashSet;
+
+
         // Collect unique, undirected links
         let mut links = HashSet::new();
         for (net_node, neighbors) in &running_network {
             // Extract the NodeId from NetNode
-            let id = match net_node {
-                NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
-            };
+            let id = *net_node.id();
             for &neighbor in neighbors {
                 // Order the pair to avoid duplicates (min, max)
                 let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
@@ -114,6 +115,7 @@ impl SimulationControllerData {
             logs: Logs::default(),
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
+
             chat_cache: ChatCache::default(),
             net_cache: NetCache::default(),
 
