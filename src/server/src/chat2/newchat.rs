@@ -5,7 +5,7 @@ use host::{ServerToClient, Functionality, ServerTypes, HostEvent, HostCommand, C
 use std::collections::HashMap;
 use host::Image as LeImage;
 use std::time::Duration;
-use chrono::Utc;
+use chrono::{DateTime, Local};
 use toml::value::{Datetime};
 use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
@@ -239,7 +239,7 @@ impl ChatServer2 {
     /// Insert a message in the chat (creates the chat if it does not exist)
     fn insert_message(&mut self, source: NodeId, destination: NodeId, message: MessageSC) {
         let (min_user, max_user) = if source < destination { (source, destination) } else { (destination, source) };
-        let now = Utc::now();
+        let now: DateTime<Local> = Local::now();
 
         let timestamp: Datetime = match now.to_rfc3339().parse() {
             Ok(dt) => dt,
