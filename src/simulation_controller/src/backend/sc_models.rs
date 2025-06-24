@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use host::{ClientId, FileId, Image, MediaId, ServerId};
 use toml::value::{Datetime, Time};
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
 use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
@@ -65,10 +65,10 @@ impl Statistics{
 }
 
 pub enum RendererCommand{
-    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((MediaId,Image))
+    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((Sender<ResizeRequest>,ServerId, MediaId, Image))
 }
 pub enum RendererResponse{
-    Outcome((LogType,String)), Encoded(ThreadProtocol)
+    Outcome((LogType,String)), Encoded((ServerId,MediaId, ThreadProtocol))
 }
 
 pub struct NetCache{
@@ -102,6 +102,7 @@ impl NetCache{
     }
 }
 
+
 pub enum NetCacheMedia {
     Downloading(f32), // f32 € [0,100] representing client loading status.
     Downloaded(Image), // ByteStream of the file the clients sends to the Sim. Controller
@@ -109,6 +110,17 @@ pub enum NetCacheMedia {
     Rendered(ThreadProtocol), // Rendered file that has to be
     // re-rendered each time Terminal changes its size.
     FatalErrorRendering(), // Fatal error rendering, file has to be re-sent!
+}
+impl Debug for NetCacheMedia{
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self{
+            NetCacheMedia::Downloading(it) => {write!(f, "Downloading {:?}",it)}
+            NetCacheMedia::Downloaded(it) => {write!(f, "Downloaded {:?}",it)}
+            NetCacheMedia::Rendering(it) => {write!(f, "Rendering {:?}",it)}
+            NetCacheMedia::Rendered(_) => {write!(f, "Rendered")}
+            NetCacheMedia::FatalErrorRendering() => {write!(f, "Fatal ErrorRendering")}
+        }
+    }
 }
 pub enum NetCacheFile{
     Downloading(f32), // f32 € [0,100] representing client loading status.

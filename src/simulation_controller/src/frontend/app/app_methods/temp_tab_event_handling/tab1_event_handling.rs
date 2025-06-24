@@ -694,6 +694,8 @@ impl App<'_> {
                                                             self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                 ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                             )));
+                                                        }else{
+
                                                         }
                                                     }
                                                 }

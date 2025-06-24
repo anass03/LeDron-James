@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -12,8 +13,9 @@ use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia};
+use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate};
 use host::ServerTypes::*;
+use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
 
 #[derive(Default, Clone, Copy)]
@@ -600,6 +602,35 @@ struct NetworkState {
 }
 
 impl SimulationControllerData {
+    pub fn handle_rx_renderer(&mut self){
+        match &self.rx_from_renderer{
+            None => {}
+            Some(channel) => {
+                while let Ok(event) = channel.try_recv() {
+                    match event{
+                        RendererResponse::Outcome((logtype,log)) => {
+                            self.logs.push_log(logtype,log.as_str());
+                        }
+                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
+                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
+                                None => {}
+                                Some(hash) => {
+                                    match hash.remove(&enc_media){
+                                        None => {}
+                                        Some(((ch1,ch2),net)) => {
+                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
     // Build network state once and reuse
     // Build network state once and reuse
     fn build_network_state(&self) -> NetworkState {
@@ -1290,7 +1321,7 @@ impl SimulationControllerData {
                             .insert(server_id, file_list.clone());
                         self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
                     ServerToClient::File(server_id, file_id, file)
-                    => {
+                    => {/*
                         // Construct filename based on file ID and inferred extension
                         let path = PathBuf::from("assets").join(&file_id);
 
@@ -1324,7 +1355,7 @@ impl SimulationControllerData {
                         }
 
                         self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
-
+*/
                     },
                     ServerToClient::MediaList(client_id, server_id, media_list)
                     => {
@@ -1335,7 +1366,7 @@ impl SimulationControllerData {
                             .insert(server_id, media_list.clone());
                         self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
                     ServerToClient::Media(server_id, media_id, image)
-                    => {
+                    => {/*
 
                         /*let mut media_map = match self.net_cache.downloaded_medias.get(&server_id) {
                             Some(media_map) => *media_map,
@@ -1372,7 +1403,7 @@ impl SimulationControllerData {
                             }
                         } else {
                             self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
-                        }
+                        }*/
                     },
                     ServerToClient::ClientList(client_id, server_id, client_list)
                     => {

@@ -29,7 +29,7 @@ use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
-use crate::backend::sc_models::{FileRendererUpdate, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::tab1_types::RenderingImage;
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
@@ -93,6 +93,7 @@ impl App<'_>{
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
             terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
+            // Image drawing if active
             match self.cache.tab1_data.image_rendering_data.clone(){
                 RenderingImage::False => (),
                 RenderingImage::True(data) => {
@@ -193,7 +194,6 @@ impl App<'_>{
         // We initialize the TOML buffer with the file indicated in the settings
         match self.cache.tab2_data.compiler_buf{
             TOMLmessages::FirstInizialized => {
-
                 self.reload_file_to_buf();
 
                 match parse_and_check_config(&self.settings.toml_path){
@@ -203,8 +203,15 @@ impl App<'_>{
             }
             _ => ()
         }
+
         // Nodelist initialized check
         self.check_lists_initialized();
+
+
+        // Checks downloaded_media
+        self.handle_downloaded_medias();
+
+        self.simulation_controller_data.handle_rx_renderer();
 
 
         //self.refresh_cache();
@@ -250,19 +257,28 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                     RendererCommand::AddChannel((tx,rx)) => {
                         channels.push((tx, rx));
                     },
-                    RendererCommand::Encode((media_id,image))=> {
+                    RendererCommand::Encode((tx_to_renderer, server_id,media_id,image))=> {
                         if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
                             let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
                             match Picker::from_query_stdio(){
                                 Ok(pick) => {
-
+                                    let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
+                                    match tx_rsp.send(RendererResponse::Encoded((server_id,media_id,return_item))){
+                                        Ok(_) => {
+                                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::INFO, "[RENDERER] - Correctly sent an Encoded response".to_string())));
+                                        }
+                                        Err(str) => {
+                                            // Couldn't send the response, channel must be broke.
+                                        }
+                                    }
                                 }
                                 Err(err) => {
-                                    
+                                    let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image [{:?}]", err.to_string()))));
                                 }
                             }
                         }else{
                             // Error
+                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image"))));
                         }
                     },
                 }
