@@ -1358,25 +1358,21 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
                     ServerToClient::Media(server_id, media_id, image)
                     => {
-                        let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                        let (render_update_sender, render_update_receiver) = mpsc::channel();
-                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                        let renderer_channels = (render_update_sender, resize_request_receiver);
-                        let net_cache_media = NetCacheMedia::Downloaded(image);
-                        let mut media_map = HashMap::new();
-                        media_map.insert(media_id, (media_channels, net_cache_media));
-                        match self.tx_to_renderer.as_ref() {
-                            Some(sender) => {
-                                match sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                    Ok(_) => {},
-                                    Err(e) => {return Err((LogType::ERROR, e.to_string()))}
-                                }
-                            },
+                        let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
+                            Some(map) => map,
                             None => {
-                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                                return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
+                            }
+                        };
+
+                        match server_map.get_mut(&media_id) {
+                            Some((_, net_cache_media)) => {
+                                *net_cache_media = NetCacheMedia::Downloaded(image);
+                            }
+                            None => {
+                                return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
                             }
                         }
-                        self.net_cache.downloaded_medias.insert(server_id, media_map);
 
                         //----------------------------------------------------------------------
                         /*let extension = match get_extension(&media_id) {
@@ -1466,6 +1462,47 @@ impl SimulationControllerData {
                 let chat_list = ChatList { chats_stored };
                 self.chat_cache.local_chats.insert(server_id, chat_list);
             }
+            HostEvent::DownloadingInfo(client_id, _string, percentage) => {
+                let server_id = 0;
+                let media_id: MediaId = String::new();
+
+                let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
+                    Some(map) => map,
+                    None => {
+                        return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
+                    }
+                };
+
+                match server_map.get_mut(&media_id) {
+                    Some((channels, net_cache_media)) => {
+                        let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                        let (render_update_sender, render_update_receiver) = mpsc::channel();
+                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
+                        let renderer_channels = (render_update_sender, resize_request_receiver);
+
+                        match self.tx_to_renderer.as_ref() {
+                            Some(sender) => {
+                                if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                                    return Err((LogType::ERROR, e.to_string()));
+                                }
+                            },
+                            None => {
+                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                            }
+                        }
+
+                        *channels = media_channels;
+                        *net_cache_media = NetCacheMedia::Downloading(percentage as f32);
+                    }
+                    None => {
+                        return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
+                    }
+                }
+            },
+            HostEvent::UploadingInfo(client_id, _string, percentage) => {},
+            HostEvent::ExpectedPDR(client_id, map) => {},
+            HostEvent::NetSpeed(client_id, upload, download) => {},
+            HostEvent::UsageCPU(client_id, usage) => {},
         }
         Ok(())
     }
