@@ -3,6 +3,7 @@ use std::fmt::{Display, Formatter};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::mpsc;
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -12,7 +13,7 @@ use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia};
+use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererCommand};
 use host::ServerTypes::*;
 use server::chat2::Chat;
 
@@ -1291,6 +1292,27 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
                     ServerToClient::File(server_id, file_id, file)
                     => {
+
+                        /*let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                        let (render_update_sender, render_update_receiver) = mpsc::channel();
+                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
+                        let renderer_channels = (render_update_sender, resize_request_receiver);
+                        let net_cache_media = NetCacheMedia::Downloaded(file);
+                        let mut media_map = HashMap::new();
+                        media_map.insert(file_id, (media_channels, net_cache_media));
+                        match self.tx_to_renderer.as_ref() {
+                            Some(sender) => {
+                                match sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                                    Ok(_) => {},
+                                    Err(e) => {return Err((LogType::ERROR, e.to_string()))}
+                                }
+                            },
+                            None => {
+                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                            }
+                        }
+                        self.net_cache.downloaded_medias.insert(server_id, media_map);*/
+
                         // Construct filename based on file ID and inferred extension
                         let path = PathBuf::from("assets").join(&file_id);
 
@@ -1336,21 +1358,28 @@ impl SimulationControllerData {
                         self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
                     ServerToClient::Media(server_id, media_id, image)
                     => {
-
-                        match self.net_cache.downloaded_medias.get(&server_id) {
-                            Some(media_map) => {
-                                match media_map.get(&media_id) {
-                                    Some(media_data) =>
+                        let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                        let (render_update_sender, render_update_receiver) = mpsc::channel();
+                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
+                        let renderer_channels = (render_update_sender, resize_request_receiver);
+                        let net_cache_media = NetCacheMedia::Downloaded(image);
+                        let mut media_map = HashMap::new();
+                        media_map.insert(media_id, (media_channels, net_cache_media));
+                        match self.tx_to_renderer.as_ref() {
+                            Some(sender) => {
+                                match sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                                    Ok(_) => {},
+                                    Err(e) => {return Err((LogType::ERROR, e.to_string()))}
                                 }
                             },
                             None => {
-                                //error
+                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
                             }
                         }
                         self.net_cache.downloaded_medias.insert(server_id, media_map);
 
                         //----------------------------------------------------------------------
-                        let extension = match get_extension(&media_id) {
+                        /*let extension = match get_extension(&media_id) {
                             Some(extension) => extension,
                             None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
                         };
@@ -1379,7 +1408,7 @@ impl SimulationControllerData {
                             }
                         } else {
                             self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
-                        }
+                        }*/
                     },
                     ServerToClient::ClientList(client_id, server_id, client_list)
                     => {
