@@ -33,26 +33,50 @@ pub(crate) enum RenderingImage{
     False, True((Rect,ClientId, ServerId, MediaId)),
 }
 pub(crate) struct MediaListRenderUtils{
+    pub list_len: usize,
     pub selected: u8,
     pub state: ListState,
 }
 impl MediaListRenderUtils{
     fn default()->Self{
         Self{
+            list_len: 0,
             selected: 0,
             state: Default::default(),
         }
     }
+    pub(crate) fn increase(&mut self){
+        self.selected += 1;
+        self.state.select_next();
+    }
+    pub(crate) fn decrease(&mut self){
+        if self.selected > 0 {
+            self.selected -= 1;
+            self.state.select_previous();
+        }
+    }
 }
 pub(crate) struct FileListRenderUtils{
+    pub list_len: usize,
     pub selected: u8,
     pub state: ListState,
 }
 impl FileListRenderUtils{
     fn default()->Self{
         Self{
+            list_len: 0,
             selected: 0,
             state: Default::default(),
+        }
+    }
+    pub(crate) fn increase(&mut self){
+        self.selected += 1;
+        self.state.select_next();
+    }
+    pub(crate) fn decrease(&mut self){
+        if self.selected > 0 {
+            self.selected -= 1;
+            self.state.select_previous();
         }
     }
 }
@@ -145,13 +169,19 @@ pub(crate) struct NetFirstPage {
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetSecondPage {
     pub selected_server: NodeId,
-
     pub selected_file: SelectedFileMedia,
 
+    pub selected_item: NetSecondPageItems,
     // Depending on the selected client, we gotta view the available servers the client knows.
     pub scroll_offset:u8
 }
+
 #[derive(Debug, Clone, Default)]
+pub(crate) enum NetSecondPageItems{
+    #[default]
+    Blocks, FileList, MediaList
+}
+#[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) enum SelectedFileMedia{
     #[default]
     None, File(FileId), Media(MediaId)

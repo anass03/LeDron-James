@@ -18,10 +18,12 @@ use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
+use image::{DynamicImage, ImageBuffer, Rgba};
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
 use ratatui_image::errors::Errors;
+use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use initializer_utils::utils::parse_and_check_config;
@@ -248,8 +250,20 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                     RendererCommand::AddChannel((tx,rx)) => {
                         channels.push((tx, rx));
                     },
-                    RendererCommand::Encode(buffer_data)=> {
+                    RendererCommand::Encode((media_id,image))=> {
+                        if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
+                            let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+                            match Picker::from_query_stdio(){
+                                Ok(pick) => {
 
+                                }
+                                Err(err) => {
+                                    
+                                }
+                            }
+                        }else{
+                            // Error
+                        }
                     },
                 }
             }

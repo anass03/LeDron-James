@@ -1290,7 +1290,7 @@ pub(super) mod net_rendering{
             file_list,
             file_list_area,
             buf,
-            &mut app.cache.tab1_data.media_list_render_utils.state.clone(),
+            &mut app.cache.tab1_data.file_list_render_utils.state.clone(),
         );
 
 
@@ -1703,6 +1703,7 @@ pub(super) mod net_rendering{
                     .label(label)
                     .use_unicode(true)
                     .render(area, buf);
+
             }
             NetCacheMedia::Rendering(status) => {
                 let title = Line::from(format!(" Rendering media, please wait{:?} ",
