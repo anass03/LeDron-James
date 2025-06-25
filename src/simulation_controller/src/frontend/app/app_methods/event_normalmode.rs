@@ -17,7 +17,7 @@ impl App<'_>{
                 }
                 "q" => self.stay = false,
                 "i" => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?} \n {:?}", self.cache.tab1_data.viewing, self.cache.tab1_data.popup_selection ));
+                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?} \n {:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
                 }
                 _ => {
                     match self.selected_tab {

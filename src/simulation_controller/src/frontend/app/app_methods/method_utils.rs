@@ -5,14 +5,15 @@ use std::fs::File;
 use std::{fs, io};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
-use std::sync::mpsc::Receiver;
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread::Thread;
 use ratatui::text::Text;
+use ratatui_image::thread::ResizeRequest;
 use rodio::{Decoder, OutputStream, Sink};
 use tui_textarea::TextArea;
 use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
-use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia};
+use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand};
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
 use crate::frontend::app::topology_algorithm::vectors::Vector;
@@ -33,7 +34,26 @@ impl App<'_> {
 
                     }
                     NetCacheMedia::Downloaded(vec) => {
-
+                        match channels.0.clone(){
+                            None => {}
+                            Some(ch_resize_req) => {
+                                match self.simulation_controller_data.tx_to_renderer.clone(){
+                                    None => {
+                                        // Impossible
+                                    }
+                                    Some(ch_to_renderer) => {
+                                        match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req,server_id.clone(),id.clone(),vec.clone()))) {
+                                            Ok(_) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent encode request to the renderer".to_string())
+                                            }
+                                            Err(str) => {
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     NetCacheMedia::Rendering(status) => {
 
