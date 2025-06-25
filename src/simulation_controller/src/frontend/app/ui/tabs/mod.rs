@@ -16,6 +16,7 @@ use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use crate::frontend::app::App;
 use crate::frontend::app::models::main_types::AppMode;
 use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, SelectedFileMedia, ViewedTab1};
+use std::io::Write;
 
 pub const BG_COLOR: Color = Color::Rgb(13, 10, 28);
 pub(super) const POPUP_BG_COLOR: Color = Color::Rgb(24,19,54);
@@ -135,7 +136,7 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
             match tab1::render_tab1(app, inner_block, buf){
                 None => {}
                 Some(file_vis_area) => {
-                    match app.cache.tab1_data.viewing.clone() {
+                    match &mut app.cache.tab1_data.viewing {
                         ViewedTab1::Popup((node_id,ndpop)) => {
                             match ndpop {
                                 NodePopup::Client(clpop)=> {
@@ -143,9 +144,15 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
                                         ClientPopup::InternetPage(netpage) => {
                                             match netpage {
                                                 ClientNetPopup::SecondPage(ndpage) => {
-                                                    match ndpage.selected_file{
+                                                    match &mut ndpage.selected_file {
                                                         SelectedFileMedia::Media(id) => {
-                                                            app.cache.tab1_data.image_rendering_data = RenderingImage::True((file_vis_area,node_id,ndpage.selected_server,id ))
+                                                            ndpage.image_rendering_data = RenderingImage::True((file_vis_area,node_id.clone(),ndpage.selected_server,id.clone() ))
+                                                        }
+                                                        _ => (),
+                                                    }
+                                                    match &mut ndpage.selected_file{
+                                                        SelectedFileMedia::Media(id) => {
+                                                            app.cache.tab1_data.image_rendering_data = RenderingImage::True((file_vis_area,*node_id,ndpage.selected_server,id.clone() ))
                                                         }
                                                         _ => (),
                                                     }
@@ -227,11 +234,11 @@ pub(super) fn process_log_paragraph<'a>(app:&'a App<'a>) ->Paragraph<'a>{
         .logs_memory
         .iter()
         .map(|(_,msg)| {
-
             Line::from(Span::raw(msg)).style(Style::default().fg(Color::Gray))
         }
         )
         .collect();
+
     let mut log_block = Block::default()
         .title("Logs")
         .borders(Borders::ALL)

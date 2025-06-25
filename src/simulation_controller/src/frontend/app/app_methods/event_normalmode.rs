@@ -2,6 +2,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
 use crate::backend::sc_models::LogType;
 use super::super::App;
 use super::super::ui;
+use std::io::Write;
 impl App<'_>{
     pub(crate) fn handle_event_normalmode(&mut self, key: KeyEvent){
         if key.kind == KeyEventKind::Press {
@@ -17,7 +18,14 @@ impl App<'_>{
                 }
                 "q" => self.stay = false,
                 "i" => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("{:?} \n {:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
+                    if let Ok(mut file) = std::fs::OpenOptions::new()
+                        .create(true)
+                        .write(true)
+                        .append(true)
+                        .open("logs.txt")
+                    {
+                        let _ = writeln!(file, "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
+                    }
                 }
                 _ => {
                     match self.selected_tab {

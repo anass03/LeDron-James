@@ -613,8 +613,11 @@ impl SimulationControllerData {
                             self.logs.push_log(logtype,log.as_str());
                         }
                         RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
+                            self.logs.push_sc_log(LogType::ERROR,"Received encoded Response".to_string());
                             match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {}
+                                None => {
+
+                                }
                                 Some(hash) => {
                                     match hash.remove(&enc_media){
                                         None => {}

@@ -1239,9 +1239,12 @@ pub(super) mod net_rendering{
                                                             0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
                                                         }
                                                     }
-                                                    _ => {
-                                                        ' '
+                                                    NetCacheFile::Downloaded(_) => {
+                                                        match app.cache.counter % 2 {
+                                                            0 => '📱', 1=> '📲', _ => ' '
+                                                        }
                                                     }
+                                                    NetCacheFile::Rendered(_) => '✅',
                                                 };
                                                 ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
                                             }

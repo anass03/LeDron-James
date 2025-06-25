@@ -44,7 +44,7 @@ impl App<'_> {
                                     Some(ch_to_renderer) => {
                                         match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req,server_id.clone(),id.clone(),vec.clone()))) {
                                             Ok(_) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent encode request to the renderer".to_string())
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Successfully sent encode request to the renderer".to_string())
                                             }
                                             Err(str) => {
                                                 self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
@@ -68,6 +68,7 @@ impl App<'_> {
                                     match event {
                                         FileRendererUpdate::Redraw(redraw) => {
                                             rendered.update_resized_protocol(redraw);
+                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Updated resized protocol".to_string());
                                         }
                                         FileRendererUpdate::Error(err) => {
                                             self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err)
