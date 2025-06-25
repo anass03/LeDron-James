@@ -7,6 +7,9 @@ use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
 use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
+use std::io::Write;
+
+
 use crate::backend::sc_models::FileRendererUpdate::Redraw;
 
 /// Used in multiple crates, needs to be pub
@@ -39,22 +42,53 @@ impl Logs{
     }
 
     pub (crate) fn push_sc_log(&mut self, log_type: LogType, text: String) {
-        if self.logs_memory.len()>=50{
+        // Write all logs to a text file
+        match log_type{
+            LogType::ERROR | LogType::FATAL => {
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .append(true)
+                    .open("logs.txt")
+                {
+                    let _ = writeln!(file, "{}", text);
+                }
+            },
+            _ => {}
+        }
+
+/*        if self.logs_memory.len()>=50{
             self.logs_memory.remove(0);
             self.logs_memory.push((log_type, format!("[Simulation Controller] - {text}")));
         }else{
             self.logs_memory.push((log_type, format!("[Simulation Controller] - {text}")));
             self.log_scroll_offset += 1;
-        }
+        }*/
     }
     pub fn push_log(&mut self, log_type: LogType, text: &str){
+        // Write all logs to a text file
+        match log_type{
+            LogType::ERROR | LogType::FATAL => {
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .append(true)
+                    .open("logs.txt")
+                {
+                    let _ = writeln!(file, "{}", text);
+                }
+            },
+            _ => {}
+        }
+
+/*
         if self.logs_memory.len()>=50{
             self.logs_memory.remove(0);
             self.logs_memory.push((log_type, text.to_string()));
         }else{
             self.logs_memory.push((log_type, text.to_string()));
             self.log_scroll_offset += 1;
-        }
+        }*/
     }
 }
 impl Statistics{

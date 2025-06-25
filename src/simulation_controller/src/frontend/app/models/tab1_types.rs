@@ -28,9 +28,10 @@ pub(in crate::frontend::app) struct Tab1{
 
     pub selected_fn: FnList, // Deprecated
 }
-#[derive(Clone)]
+#[derive(Clone, Debug, Default)]
 pub(crate) enum RenderingImage{
-    False, True((Rect,ClientId, ServerId, MediaId)),
+    #[default]
+    False, True((Rect, ClientId, ServerId, MediaId)),
 }
 pub(crate) struct MediaListRenderUtils{
     pub list_len: usize,
@@ -170,7 +171,7 @@ pub(crate) struct NetFirstPage {
 pub(crate) struct NetSecondPage {
     pub selected_server: NodeId,
     pub selected_file: SelectedFileMedia,
-
+    pub image_rendering_data: RenderingImage,
     pub selected_item: NetSecondPageItems,
     // Depending on the selected client, we gotta view the available servers the client knows.
     pub scroll_offset:u8

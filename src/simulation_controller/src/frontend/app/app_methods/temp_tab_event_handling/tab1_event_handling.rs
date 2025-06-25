@@ -10,7 +10,7 @@ use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DronePopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, SelectedFileMedia, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DronePopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, ViewedTab1};
 
 
 impl App<'_> {
@@ -558,6 +558,7 @@ impl App<'_> {
                                                         NetSecondPage{
                                                             selected_server: *selected_server_id,
                                                             selected_file: SelectedFileMedia::None,
+                                                            image_rendering_data: RenderingImage::False,
                                                             selected_item: Default::default(),
                                                             scroll_offset: 0,
                                                         }
@@ -752,12 +753,26 @@ impl App<'_> {
                                                             Ok(_) => {
                                                                 let ret_values = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&ndpage.selected_server);
                                                                 match ret_values{
-                                                                    None => {}
-                                                                    Some(hash_mut) => {
-                                                                        hash_mut.insert(
-                                                                        media_id.clone(),
-                                                                        ((None,None), NetCacheMedia::Downloading(0f32))
+                                                                    None => {
+                                                                        self.simulation_controller_data.net_cache.downloaded_medias.insert(
+                                                                            ndpage.selected_server,
+                                                                            {
+                                                                                let mut ret_hash = HashMap::new();
+                                                                                ret_hash.insert(
+                                                                                    media_id.clone(),
+                                                                                    ((None,None), NetCacheMedia::Downloading(0f32))
+                                                                                );
+                                                                                ret_hash
+                                                                            }
                                                                         );
+                                                                    }
+                                                                    Some(hash_mut) => {
+                                                                        if !hash_mut.contains_key(&media_id.clone()){
+                                                                            hash_mut.insert(
+                                                                                media_id.clone(),
+                                                                                ((None,None), NetCacheMedia::Downloading(0f32))
+                                                                            );
+                                                                        }
                                                                     }
                                                                 }
                                                                 ndpage.selected_file = SelectedFileMedia::Media(media_id.clone());

@@ -10,7 +10,7 @@ use ratatui::{buffer::Buffer, layout::{
     Layout, Rect
 }, widgets::Widget, DefaultTerminal, Frame};
 
-use std::{io, thread, time};
+use std::{io, io::Write, thread, time};
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -31,7 +31,7 @@ use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
 use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
-use crate::frontend::app::models::tab1_types::RenderingImage;
+use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, ViewedTab1};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -83,27 +83,56 @@ impl App<'_>{
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()>{
         let mut instant = Instant::now();
+        let mut downloaded_instant = Instant::now();
+        let mut drawn:bool;
 
         while self.stay.clone() {
+            drawn=false;
+
             // Listening to channels
             self.simulation_controller_data.handle_channels();
+            self.simulation_controller_data.handle_rx_renderer();
             self.check_topology_status();
 
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
-
             // Image drawing if active
-            match self.cache.tab1_data.image_rendering_data.clone(){
-                RenderingImage::False => {
-                    terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
-                },
-                RenderingImage::True(data) => {
-                    terminal.draw(|f| {
-                        f.render_widget(&mut *self, f.area());
-                        Self::render_image(f, self, data);
-                    })?;
+            match self.cache.tab1_data.viewing.clone() {
+                ViewedTab1::Main => {}
+                ViewedTab1::Popup((id,popup)) => {
+                    match popup{
+                        NodePopup::Client(clpop) => {
+                            match clpop {
+                                ClientPopup::ChatPage(_) => {}
+                                ClientPopup::InternetPage(netpop) => {
+                                    match netpop{
+                                        ClientNetPopup::FirstPage(_) => {}
+                                        ClientNetPopup::SecondPage(ndpage) => {
+                                            match ndpage.image_rendering_data {
+                                                RenderingImage::False => {}
+                                                RenderingImage::True(data) => {
+                                                    drawn = true;
+                                                        terminal.draw(|f| {
+                                                            f.render_widget(&mut *self, f.area());
+                                                            Self::render_image(f, self, data);
+                                                        })?;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                ClientPopup::DataPage(_) => {}
+                                ClientPopup::SettingsPage(_) => {}
+                            }
+                        }
+                        NodePopup::Server(_) => {}
+                        NodePopup::Drone(_) => {}
+                    }
                 }
+            }
+            if !drawn{
+                terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
             }
 
             self.handle_events()?;
@@ -113,6 +142,13 @@ impl App<'_>{
                 instant = Instant::now();
                 self.tick_refresh();
             }
+
+            if downloaded_instant.elapsed() > Duration::from_millis(500) {
+                downloaded_instant = Instant::now();
+                self.handle_downloaded_medias();
+            }
+
+
 
             if self.stay == false{
                 // QUITTING MODE: We should ask again to be sure if the user wants to quit
@@ -213,13 +249,6 @@ impl App<'_>{
         // Nodelist initialized check
         self.check_lists_initialized();
 
-
-        // Checks downloaded_media
-        self.handle_downloaded_medias();
-
-        self.simulation_controller_data.handle_rx_renderer();
-
-
         //self.refresh_cache();
     }
 }
@@ -255,7 +284,7 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
 
         loop {
             // Ascolto il canale main
-            if let Ok(request) = rx_cmd.recv(){
+            if let Ok(request) = rx_cmd.try_recv(){
                 match request {
                     RendererCommand::Stop => {
                         break
@@ -271,10 +300,9 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
                                     match tx_rsp.send(RendererResponse::Encoded((server_id,media_id,return_item))){
                                         Ok(_) => {
-                                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::INFO, "[RENDERER] - Correctly sent an Encoded response".to_string())));
+                                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, "[RENDERER] - Correctly sent an Encoded response".to_string())));
                                         }
                                         Err(str) => {
-                                            // Couldn't send the response, channel must be broke.
                                         }
                                     }
                                 }
@@ -292,7 +320,7 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
 
             // Ascolto i canali dei file
             for (tx,rx) in &channels{
-                if let Ok(request) = rx.recv() {
+                if let Ok(request) = rx.try_recv() {
                     let rendered_maybe = request.resize_encode();
                     match rendered_maybe{
                         Ok(rendered) => {
