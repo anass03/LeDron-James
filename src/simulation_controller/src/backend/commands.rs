@@ -1165,7 +1165,6 @@ impl SimulationControllerData {
         self.mono_remove_sender(backwards_node, forward_node)
     }
 
-// Helper enum for batch operations
     /// - Client Commands
 
     fn send_client_command(&self, client_id: ClientId, command: ClientCommand) -> Result<(), String> {
