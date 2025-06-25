@@ -1,7 +1,7 @@
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
-use host::{ClientId, FileId};
+use host::{ClientId, FileId, MediaId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
 use drone::Drone;
@@ -626,7 +626,7 @@ impl App<'_> {
                                         match hash.get(&ndpage.selected_server){
                                             None => (), // Do nothing
                                             Some(vecfiles) => {
-                                                if ((self.cache.tab1_data.file_list_render_utils.selected + 1) as usize)  < vecfiles.len() {
+                                                if (self.cache.tab1_data.file_list_render_utils.selected as usize)  < vecfiles.len() {
                                                     self.cache.tab1_data.file_list_render_utils.increase();
                                                 }
                                             }
@@ -641,7 +641,7 @@ impl App<'_> {
                                         match hash.get(&ndpage.selected_server){
                                             None => (), // Do nothing
                                             Some(vecfiles) => {
-                                                if ((self.cache.tab1_data.media_list_render_utils.selected + 1) as usize)  < vecfiles.len() {
+                                                if (self.cache.tab1_data.media_list_render_utils.selected as usize)  < vecfiles.len() {
                                                     self.cache.tab1_data.media_list_render_utils.increase();
                                                 }
                                             }
@@ -750,18 +750,20 @@ impl App<'_> {
                                                         // Request the media
                                                         match self.simulation_controller_data.request_media(id, ndpage.selected_server, media_id.clone()){
                                                             Ok(_) => {
-                                                                self.simulation_controller_data.net_cache.downloaded_medias.insert(
-                                                                    ndpage.selected_server,
-                                                                    {
-                                                                        let mut ret_hash = HashMap::default();
-                                                                        ret_hash.insert(
-                                                                            media_id.clone(),
-                                                                            ((None,None), NetCacheMedia::Downloading(0f32))
+                                                                let ret_values = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&ndpage.selected_server);
+                                                                match ret_values{
+                                                                    None => {}
+                                                                    Some(hash_mut) => {
+                                                                        hash_mut.insert(
+                                                                        media_id.clone(),
+                                                                        ((None,None), NetCacheMedia::Downloading(0f32))
                                                                         );
-                                                                        ret_hash
                                                                     }
-                                                                );
+                                                                }
                                                                 ndpage.selected_file = SelectedFileMedia::Media(media_id.clone());
+                                                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                                )));
                                                             }
                                                             Err(str) => {
                                                                 self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);

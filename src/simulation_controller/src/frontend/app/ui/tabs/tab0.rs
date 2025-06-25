@@ -13,8 +13,9 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         ])
         .split(area);
 
-    let log_paragraph = tabs::process_log_paragraph(app);
-    log_paragraph.render(inner_columns[1], buf);
+    //let log_paragraph = tabs::process_log_paragraph(app);
+    //log_paragraph.render(inner_columns[1], buf);
+
 
     use crate::frontend::app::ui::tabs; // Statistic Block
     use super::super::utils::chart_rendering;

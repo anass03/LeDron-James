@@ -92,12 +92,18 @@ impl App<'_>{
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
-            terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
+
             // Image drawing if active
             match self.cache.tab1_data.image_rendering_data.clone(){
-                RenderingImage::False => (),
+                RenderingImage::False => {
+                    terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
+                },
                 RenderingImage::True(data) => {
-                    terminal.draw(|f| Self::render_image(f, self, data))?;                }
+                    terminal.draw(|f| {
+                        f.render_widget(&mut *self, f.area());
+                        Self::render_image(f, self, data);
+                    })?;
+                }
             }
 
             self.handle_events()?;
