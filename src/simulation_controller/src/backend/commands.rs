@@ -603,33 +603,6 @@ struct NetworkState {
 }
 
 impl SimulationControllerData {
-    pub fn handle_rx_renderer(&mut self){
-        match &self.rx_from_renderer{
-            None => {}
-            Some(channel) => {
-                while let Ok(event) = channel.try_recv() {
-                    match event{
-                        RendererResponse::Outcome((logtype,log)) => {
-                            self.logs.push_log(logtype,log.as_str());
-                        }
-                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {}
-                                Some(hash) => {
-                                    match hash.remove(&enc_media){
-                                        None => {}
-                                        Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
     // Build network state once and reuse
     // Build network state once and reuse
     fn build_network_state(&self) -> NetworkState {
@@ -727,7 +700,6 @@ impl SimulationControllerData {
 
         visited.len() == expected_count
     }
-
     fn cannot_crash(&mut self, drone_id: NodeId) -> Result<bool, String> {
         let network_state = self.build_network_state();
 
@@ -1213,7 +1185,7 @@ impl SimulationControllerData {
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Server Type Request to Client {client_id}"));
         self.send_client_command(client_id, command)
     }
- 
+
     pub fn request_files_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending File List Request to Client {client_id} for Server {server_id}"));
         let command = Net(FilesList(server_id));
@@ -1306,179 +1278,7 @@ impl SimulationControllerData {
     pub fn handle_host_event(&mut self, event: HostEvent) -> Result<(), (LogType, String)> {
         match event {
             HostEvent::PacketReconstructed(server_to_client) => {
-                match server_to_client {
-                    ServerToClient::ServerType(server_type)
-                    => {
-                        self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
-                    ServerToClient::FilesList(client_id, server_id, file_list)
-                    => {
-                        self.net_cache
-                            .known_file_list
-                            .entry(client_id)
-                            .or_default()
-                            .insert(server_id, file_list.clone());
-                        self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
-                    ServerToClient::File(server_id, file_id, file)
-                    => {
-
-                        /*let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                        let (render_update_sender, render_update_receiver) = mpsc::channel();
-                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                        let renderer_channels = (render_update_sender, resize_request_receiver);
-                        let net_cache_media = NetCacheMedia::Downloaded(file);
-                        let mut media_map = HashMap::new();
-                        media_map.insert(file_id, (media_channels, net_cache_media));
-                        match self.tx_to_renderer.as_ref() {
-                            Some(sender) => {
-                                match sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                    Ok(_) => {},
-                                    Err(e) => {return Err((LogType::ERROR, e.to_string()))}
-                                }
-                            },
-                            None => {
-                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                            }
-                        }
-                        self.net_cache.downloaded_medias.insert(server_id, media_map);*/
-
-                        // Construct filename based on file ID and inferred extension
-                        /*let path = PathBuf::from("assets").join(&file_id);
-
-                        fs::write(&path, &file).expect("file not downloaded");
-
-                        // Open with system default application
-                        #[cfg(target_os = "windows")]
-                        {
-                            let path_str = path.to_str().unwrap();
-                            //let quoted_path = format!("\"{}\"", path_str);
-                            Command::new("cmd")
-                                .args(&["/C", "start", "", &path_str])
-                                .spawn()
-                                .expect("Unable to open file on Windows");
-                        }
-
-                        #[cfg(target_os = "macos")]
-                        {
-                            Command::new("open")
-                                .arg(&path)
-                                .spawn()
-                                .expect("Unable to open file on macOS");
-                        }
-
-                        #[cfg(target_os = "linux")]
-                        {
-                            Command::new("xdg-open")
-                                .arg(&path)
-                                .spawn()
-                                .expect("Unable to open file on Linux");
-                        }
-
-                        self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
-*/
-                    },
-                    ServerToClient::MediaList(client_id, server_id, media_list)
-                    => {
-                        self.net_cache
-                            .known_media_list
-                            .entry(client_id)
-                            .or_default()
-                            .insert(server_id, media_list.clone());
-                        self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
-                    ServerToClient::Media(server_id, media_id, image)
-                    => {
-                        let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
-                            Some(map) => map,
-                            None => {
-                                return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
-                            }
-                        };
-
-                        match server_map.get_mut(&media_id) {
-                            Some((channels, net_cache_media)) => {
-                                let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                                let (render_update_sender, render_update_receiver) = mpsc::channel();
-                                let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                                let renderer_channels = (render_update_sender, resize_request_receiver);
-
-                                match self.tx_to_renderer.as_ref() {
-                                    Some(sender) => {
-                                        if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                            return Err((LogType::ERROR, e.to_string()));
-                                        }
-                                    },
-                                    None => {
-                                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                                    }
-                                }
-
-                                *channels = media_channels;
-                                *net_cache_media = NetCacheMedia::Downloaded(image);
-                            }
-                            None => {
-                                return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
-                            }
-                        }
-
-                        //----------------------------------------------------------------------
-                        /*let extension = match get_extension(&media_id) {
-                            Some(extension) => extension,
-                            None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
-                        };
-                        let path = format!("assets/{}", media_id);
-                        let path_ref = Path::new(&path);
-
-                        if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                            // Convert to DynamicImage
-                            let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
-
-                            // If extension is jpg/jpeg, convert to RGB to drop alpha
-                            let save_result = match extension.to_lowercase().as_str() {
-                                "jpg" | "jpeg" => {
-                                    let rgb_image: RgbImage = dynamic_image.to_rgb8();
-                                    rgb_image.save(path_ref)
-                                },
-                                _ => dynamic_image.save(path_ref), // png, etc.
-                            };
-
-                            match save_result {
-                                Ok(_) => {
-                                    self.logs.push_sc_log(LogType::INFO, format!("Media {} from Server {server_id} saved as {}", media_id, path));
-                                    open_image(&path)
-                                },
-                                Err(e) => self.logs.push_sc_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e)),
-                            }
-                        } else {
-                            self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
-                        }*/
-                    },
-                    ServerToClient::ClientList(client_id, server_id, client_list)
-                    => {
-                        let contacts: Vec<NodeId> = client_list.iter().filter(|id| **id != client_id).cloned().collect();
-                        self.chat_cache
-                            .known_contacts
-                            .entry(client_id)
-                            .or_default()
-                            .insert(server_id, contacts);
-                        self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
-                    ServerToClient::MessageFrom(server_id, client_id, message) 
-                    => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
-                    ServerToClient::FileFrom(server_id, client_id,..)
-                    => {
-                        self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
-                    }
-                    ServerToClient::MediaFrom(server_id, client_id, ..)
-                    => {
-                        self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
-                    }
-                    ServerToClient::WrongServer(server_id)
-                    => {
-                        self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
-                    }
-                    ServerToClient::ErrNotFound(server_id) 
-                    => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
-                    ServerToClient::ErrClientId(server_id) 
-                    => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
-                }
+                self.handle_packet_reconstructed(server_to_client)?
             },
             HostEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
@@ -1552,8 +1352,213 @@ impl SimulationControllerData {
         Ok(())
     }
 
+    fn handle_packet_reconstructed(&mut self, server_to_client: ServerToClient) -> Result<(), (LogType, String)> {
+        match server_to_client {
+            ServerToClient::ServerType(server_type)
+            => {
+                self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
+            ServerToClient::FilesList(client_id, server_id, file_list)
+            => {
+                self.net_cache
+                    .known_file_list
+                    .entry(client_id)
+                    .or_default()
+                    .insert(server_id, file_list.clone());
+                self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
+            ServerToClient::File(server_id, file_id, file)
+            => {
+
+                /*let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                let (render_update_sender, render_update_receiver) = mpsc::channel();
+                let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
+                let renderer_channels = (render_update_sender, resize_request_receiver);
+                let net_cache_media = NetCacheMedia::Downloaded(file);
+                let mut media_map = HashMap::new();
+                media_map.insert(file_id, (media_channels, net_cache_media));
+                match self.tx_to_renderer.as_ref() {
+                    Some(sender) => {
+                        match sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                            Ok(_) => {},
+                            Err(e) => {return Err((LogType::ERROR, e.to_string()))}
+                        }
+                    },
+                    None => {
+                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                    }
+                }
+                self.net_cache.downloaded_medias.insert(server_id, media_map);*/
+
+                // Construct filename based on file ID and inferred extension
+                /*let path = PathBuf::from("assets").join(&file_id);
+
+                fs::write(&path, &file).expect("file not downloaded");
+
+                // Open with system default application
+                #[cfg(target_os = "windows")]
+                {
+                    let path_str = path.to_str().unwrap();
+                    //let quoted_path = format!("\"{}\"", path_str);
+                    Command::new("cmd")
+                        .args(&["/C", "start", "", &path_str])
+                        .spawn()
+                        .expect("Unable to open file on Windows");
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    Command::new("open")
+                        .arg(&path)
+                        .spawn()
+                        .expect("Unable to open file on macOS");
+                }
+
+                #[cfg(target_os = "linux")]
+                {
+                    Command::new("xdg-open")
+                        .arg(&path)
+                        .spawn()
+                        .expect("Unable to open file on Linux");
+                }
+
+                self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
+*/
+            },
+            ServerToClient::MediaList(client_id, server_id, media_list)
+            => {
+                self.net_cache
+                    .known_media_list
+                    .entry(client_id)
+                    .or_default()
+                    .insert(server_id, media_list.clone());
+                self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
+            ServerToClient::Media(server_id, media_id, image)
+            => {
+                let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
+                    Some(map) => map,
+                    None => {
+                        return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
+                    }
+                };
+
+                match server_map.get_mut(&media_id) {
+                    Some((channels, net_cache_media)) => {
+                        let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                        let (render_update_sender, render_update_receiver) = mpsc::channel();
+                        let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
+                        let renderer_channels = (render_update_sender, resize_request_receiver);
+
+                        match self.tx_to_renderer.as_ref() {
+                            Some(sender) => {
+                                if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                                    return Err((LogType::ERROR, e.to_string()));
+                                }
+                            },
+                            None => {
+                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                            }
+                        }
+
+                        *channels = media_channels;
+                        *net_cache_media = NetCacheMedia::Downloaded(image);
+                    }
+                    None => {
+                        return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
+                    }
+                }
+
+                //----------------------------------------------------------------------
+                /*let extension = match get_extension(&media_id) {
+                    Some(extension) => extension,
+                    None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
+                };
+                let path = format!("assets/{}", media_id);
+                let path_ref = Path::new(&path);
+
+                if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
+                    // Convert to DynamicImage
+                    let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+
+                    // If extension is jpg/jpeg, convert to RGB to drop alpha
+                    let save_result = match extension.to_lowercase().as_str() {
+                        "jpg" | "jpeg" => {
+                            let rgb_image: RgbImage = dynamic_image.to_rgb8();
+                            rgb_image.save(path_ref)
+                        },
+                        _ => dynamic_image.save(path_ref), // png, etc.
+                    };
+
+                    match save_result {
+                        Ok(_) => {
+                            self.logs.push_sc_log(LogType::INFO, format!("Media {} from Server {server_id} saved as {}", media_id, path));
+                            open_image(&path)
+                        },
+                        Err(e) => self.logs.push_sc_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e)),
+                    }
+                } else {
+                    self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
+                }*/
+            },
+            ServerToClient::ClientList(client_id, server_id, client_list)
+            => {
+                let contacts: Vec<NodeId> = client_list.iter().filter(|id| **id != client_id).cloned().collect();
+                self.chat_cache
+                    .known_contacts
+                    .entry(client_id)
+                    .or_default()
+                    .insert(server_id, contacts);
+                self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
+            ServerToClient::MessageFrom(server_id, client_id, message)
+            => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
+            ServerToClient::FileFrom(server_id, client_id,..)
+            => {
+                self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
+            }
+            ServerToClient::MediaFrom(server_id, client_id, ..)
+            => {
+                self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
+            }
+            ServerToClient::WrongServer(server_id)
+            => {
+                self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
+            }
+            ServerToClient::ErrNotFound(server_id)
+            => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
+            ServerToClient::ErrClientId(server_id)
+            => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
+        }
+        Ok(())
+    }
+
     pub fn handle_log_event(&mut self, log: String) {
         self.logs.push_log(LogType::INFO, log.as_str())
+    }
+
+    pub fn handle_rx_renderer(&mut self){
+        match &self.rx_from_renderer{
+            None => {}
+            Some(channel) => {
+                while let Ok(event) = channel.try_recv() {
+                    match event{
+                        RendererResponse::Outcome((logtype,log)) => {
+                            self.logs.push_log(logtype,log.as_str());
+                        }
+                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
+                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
+                                None => {}
+                                Some(hash) => {
+                                    match hash.remove(&enc_media){
+                                        None => {}
+                                        Some(((ch1,ch2),net)) => {
+                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Populate the TopologyAlgorithm.map_links field from the running_network,
