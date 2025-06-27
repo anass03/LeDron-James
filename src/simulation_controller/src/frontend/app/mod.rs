@@ -307,12 +307,12 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                                     }
                                 }
                                 Err(err) => {
-                                    let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image [{:?}]", err.to_string()))));
+                                    let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]", err.to_string()))));
                                 }
                             }
                         }else{
                             // Error
-                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image"))));
+                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image-buffer"))));
                         }
                     },
                 }
