@@ -6,11 +6,12 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, ClientNetCommand, Edge};
+use host::{HostCommand, Message, Host, Functionality, generate_unique_session_id, ServerTypes, RecSessionData, ServerToClient, HostEvent, ClientNetCommand, Edge, ContentID};
 use host::ServerTypes::{Content,Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer};
 use std::io::{Cursor};
 use zstd::{decode_all, encode_all};
+use crate::transfer_tracker::TransferTracker;
 
 pub struct Client {
     host: Host,
@@ -19,14 +20,8 @@ pub struct Client {
     servers_discovered: usize,
     tx_bytes: Arc<AtomicUsize>,
     rx_bytes: Arc<AtomicUsize>,
-    active_downloads: HashMap<String, TransferProgress>,
-    active_uploads: HashMap<String, TransferProgress>,
-}
-pub struct TransferProgress {
-    pub total_bytes: usize,
-    pub transferred_bytes: Arc<AtomicUsize>,
-    pub start_time: Instant,
-    pub transfer_id: String, // FileId or MediaId as string
+    tracker: TransferTracker,
+    pending_fragments: HashMap<ContentID, (usize, usize)>, // ContentID → (totali, ricevuti finora)
 }
 impl Client {
     pub fn new(id:NodeId,
@@ -45,8 +40,8 @@ impl Client {
             servers_discovered: 0,
             tx_bytes: Arc::new(AtomicUsize::new(0)),
             rx_bytes: Arc::new(AtomicUsize::new(0)),
-            active_downloads: HashMap::new(),
-            active_uploads: HashMap::new()
+            tracker: TransferTracker::new(),
+            pending_fragments: HashMap::new(),
         }
     }
 
@@ -77,13 +72,16 @@ impl Client {
                 },
                 recv(cleanup_tick) -> _ => {
                     let timeout = Duration::from_secs(300);
-                    self.host.cleanup_expired_sessions(timeout);
+                    self.cleanup_expired_sessions(timeout);
                 },
                 recv(speed_tick) -> _ => {
-                    match self.host.controller_send.send(HostEvent::ExpectedPDR(self.host.id, self.host.network.drone_pdr.clone())) {
+                    //sending expected pdr to simulation
+                    match self.host.controller_send.send(HostEvent::ExpectedPDR(self.host.network.drone_pdr.clone())) {
                         Ok(_) => {}
                         Err(e) => {self.host.send_logging(format!("Error sending controller_send: {}", e));}
                     }
+
+                    //sending info on network speed
                     let total_tx = self.tx_bytes.load(Ordering::Relaxed);
                     let total_rx = self.rx_bytes.load(Ordering::Relaxed);
                     let up_speed = total_tx - prev_tx;   // B/s
@@ -92,10 +90,10 @@ impl Client {
                     prev_rx = total_rx;
 
                     // conversione in KiB/s
-                    let up_kb  = up_speed as f64 / 1024.0;
-                    let down_kb = down_speed as f64 / 1024.0;
+                    let up_kb  = up_speed as f32 / 1024.0;
+                    let down_kb = down_speed as f32 / 1024.0;
 
-                    match self.host.controller_send.send(HostEvent::NetSpeed(self.host.id, up_kb, down_kb)) {
+                    match self.host.controller_send.send(HostEvent::NetSpeed(up_kb, down_kb)) {
                         Ok(_) => {}
                         Err(e) => {self.host.send_logging(format!("Error sending controller_send: {}", e));}
                     }
@@ -147,7 +145,7 @@ impl Client {
     }
 
 
-    fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, ) {
+    fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, ) -> Option<(NodeId,Message)>{
         self.host.send_logging(format!("Preparing {} request", label));
         match self.servers.get(&srv_type) {
             Some(servers) if servers.contains(&server_id) => {
@@ -155,7 +153,7 @@ impl Client {
                     Ok(buf) => buf,
                     Err(e) => {
                         self.host.send_logging(format!("Serialization failed: {}", e));
-                        return;
+                        return None;
                     }
                 };
 
@@ -175,20 +173,23 @@ impl Client {
                     content: payload,
                 };
 
-                if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+                if let Err(err) = self.host.build_msg_fragment(server_id, message.clone(), |_| {}) {
                     self.host.send_logging(format!("Failed to send {}: {}", label, err));
                 } else {
                     self.host.send_logging(format!("{} sent to server {}", label, server_id));
                 }
+                Some((server_id,message))
             }
             Some(_) => {
                 self.host.send_logging(format!(
                     "Node {} is NOT a valid {:?}-SERVER",
                     server_id, srv_type
                 ));
+                None
             }
             None => {
                 self.host.send_logging(format!("No {:?} server available for {}", srv_type, label));
+                None
             }
         }
     }
@@ -219,7 +220,18 @@ impl Client {
                     }
                     ClientNetCommand::NewFile(sid, id, data) => {
                         let label = format!("Adding new file({}) for server {}", id, sid);
-                        self.send_net_cmd(Content, sid, ClientNetCommand::NewFile(sid, id, data), &label);
+                        if let Some((dest, message)) = self.send_net_cmd(Content, sid, ClientNetCommand::NewFile(sid, id.clone(), data.clone()), &label) {
+                            let content_id = ContentID::File(id.clone());
+
+                            self.tracker.start(content_id.clone(), data.len());
+                            let closure = self.tracker.get_closure(
+                                content_id,
+                                self.host.controller_send.clone(),
+                                self.host.log_sender.clone(),
+                            );
+
+                            let _ = self.host.build_msg_fragment(dest, message, closure);
+                        }
                     }
                     ClientNetCommand::MediaList(sid) => {
                         self.send_net_cmd(Content, sid, ClientNetCommand::MediaList(sid), "MediaList");
@@ -228,9 +240,20 @@ impl Client {
                         let label = format!("Media({})", id);
                         self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id), &label);
                     }
-                    ClientNetCommand::NewMedia(sid, id, data) => {
+                    ClientNetCommand::NewMedia(sid, id, img) => {
                         let label = format!("Adding new media({}) for server {}", id, sid);
-                        self.send_net_cmd(Content, sid, ClientNetCommand::NewMedia(sid, id, data), &label);
+                        if let Some((dest, message)) = self.send_net_cmd(Content, sid, ClientNetCommand::NewMedia(sid, id.clone(), img.clone()), &label) {
+                            let content_id = ContentID::Media(id.clone());
+
+                            self.tracker.start(content_id.clone(), img.data.len());
+                            let closure = self.tracker.get_closure(
+                                content_id,
+                                self.host.controller_send.clone(),
+                                self.host.log_sender.clone(),
+                            );
+
+                            let _ = self.host.build_msg_fragment(dest, message, closure);
+                        }
                     }
                     // Chat-server
                     ClientNetCommand::RegistrationToChat(sid) => {
@@ -243,13 +266,35 @@ impl Client {
                         let label = format!("MessageFor({})", cid);
                         self.send_net_cmd(Chat, sid, ClientNetCommand::MessageFor(cid, sid, msg), &label);
                     }
-                    ClientNetCommand::FileFor(cid, sid, fid, file) => {
+                    ClientNetCommand::FileFor(cid, sid, fid, data) => {
                         let label = format!("FileFor({})", cid);
-                        self.send_net_cmd(Chat, sid,ClientNetCommand::FileFor(cid, sid, fid, file), &label, );
+                        if let Some((dest, message)) = self.send_net_cmd(Chat, sid, ClientNetCommand::FileFor(cid, sid, fid.clone(), data.clone()), &label) {
+                            let content_id = ContentID::File(fid.clone());
+
+                            self.tracker.start(content_id.clone(), data.len());
+                            let closure = self.tracker.get_closure(
+                                content_id,
+                                self.host.controller_send.clone(),
+                                self.host.log_sender.clone(),
+                            );
+
+                            let _ = self.host.build_msg_fragment(dest, message, closure);
+                        }
                     }
                     ClientNetCommand::MediaFor(cid, sid, mid, img) => {
                         let label = format!("MediaFor({})", cid);
-                        self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid, img), &label, );
+                        if let Some((dest, message)) = self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid.clone(), img.clone()), &label) {
+                            let content_id = ContentID::Media(mid.clone());
+
+                            self.tracker.start(content_id.clone(), img.data.len());
+                            let closure = self.tracker.get_closure(
+                                content_id,
+                                self.host.controller_send.clone(),
+                                self.host.log_sender.clone(),
+                            );
+
+                            let _ = self.host.build_msg_fragment(dest, message, closure);
+                        }
                     }
                 }
             }
@@ -351,6 +396,12 @@ impl Client {
                             } else {
                                 self.host.send_logging("ServerType response without source".to_string());
                             }
+                        }
+                        ServerToClient::Sending(content_id, total_fragments) => {
+                            self.pending_fragments.insert(content_id.clone(), (total_fragments, 0));
+                            self.host.send_logging(format!(
+                                "Incoming content: {:?} with {} total fragments", content_id, total_fragments
+                            ));
                         }
                         ClientList(client_id, server_id,clients) => {
                             self.host.send_logging(format!("Received Client List: {:?}", clients));
@@ -455,7 +506,7 @@ impl Client {
                 content: payload,
             };
 
-            if let Err(err) = self.host.build_msg_fragment(server_id, message) {
+            if let Err(err) = self.host.build_msg_fragment(server_id, message,|_| {}) {
                 self.host.send_logging(format!("Failed to send ServerType request: {}", err));
             } else {
                 self.host.send_logging(format!("ServerType request sent to server {}", server_id));
@@ -468,7 +519,14 @@ impl Client {
         let total = fragment.total_n_fragments as usize;
 
         // inizializza se necessario
-        let mut received = self.host.received_fragments.lock().unwrap();
+        let mut received = match self.host.received_fragments.lock() {
+            Ok(r) => r,
+            Err(e) => {
+                self.host.send_logging(format!("Failed to lock received_fragments: {}", e));
+                return None;
+            }
+        };
+
         let session = received.entry(session_id).or_insert_with(|| {
             RecSessionData {
                 buffer: vec![None; total],
@@ -489,6 +547,34 @@ impl Client {
                 "Received fragment, pending: {}, host: {}, session: {}",
                 session.pending,self.host.id, session_id,
             ));
+
+            if let Some(content_id) = self.pending_fragments.iter_mut().find_map(|(cid, (total, received))| {
+                // Criterio: la sessione è ancora attiva e non completata
+                if *received < *total {
+                    *received += 1;
+                    Some(cid.clone())
+                } else {
+                    None
+                }
+            }) {
+
+                // Notifica il Simulation Controller
+                let (total, received) = self.pending_fragments[&content_id];
+                let percent = (received as f32 / total as f32) * 100.0;
+
+                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(content_id.clone(), percent));
+                self.host.send_logging(format!(
+                    "Fragment received for {:?}: {}/{} ({:.1}%)",
+                    content_id, received, total, percent
+                ));
+
+                // Rimuovi se completato
+                if received == total {
+                    self.pending_fragments.remove(&content_id);
+                    self.host.send_logging(format!("Completed fragment tracking for {:?}", content_id));
+                }
+            }
+
         }
 
         // invia ACK
@@ -497,20 +583,18 @@ impl Client {
         let _ = self.host.send_packet(ack, None);
 
         let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
-            .filter(|&&nid| {
-                matches!(
-                        self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
-                        Some(NodeType::Drone))}
+            .filter(|&&nid| { matches!(
+                    self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
+                    Some(NodeType::Drone))}
             )
             .copied()
             .collect();
         self.host.network.pdr_helper(&drone_hops);
 
         self.host.send_logging(format!(
-            "PDR updated host={} header hops={:?}",
-            self.host.id,
-            packet.routing_header.hops,
+            "PDR updated host={} header hops={:?}", self.host.id, packet.routing_header.hops,
         ));
+
         // se finito, reassembly e rimozione
         if session.pending == 0 {
             self.host.send_logging( format!(
@@ -523,8 +607,7 @@ impl Client {
                 format!("host: {}, session: {}, All fragments received",
                         self.host.id, session_id));
 
-            let data = session.buffer
-                .iter()
+            let data = session.buffer.iter()
                 .filter_map(|f| f.as_ref())
                 .flat_map(|f| f.data[..f.length as usize].iter().cloned())
                 .collect::<Vec<u8>>();
@@ -534,124 +617,39 @@ impl Client {
         }
         None
     }
-    pub fn start_download_tracking(&mut self, transfer_id: String, total_bytes: usize) {
-        let progress = TransferProgress {
-            total_bytes,
-            transferred_bytes: Arc::new(AtomicUsize::new(0)),
-            start_time: Instant::now(),
-            transfer_id: transfer_id.clone(),
-        };
-
-        self.active_downloads.insert(transfer_id.clone(), progress);
-        self.host.send_logging(format!("Started tracking download: {} ({} bytes)", transfer_id, total_bytes));
-    }
-    pub fn start_upload_tracking(&mut self, transfer_id: String, total_bytes: usize) {
-        let progress = TransferProgress {
-            total_bytes,
-            transferred_bytes: Arc::new(AtomicUsize::new(0)),
-            start_time: Instant::now(),
-            transfer_id: transfer_id.clone(),
-        };
-
-        self.active_uploads.insert(transfer_id.clone(), progress);
-        self.host.send_logging(format!("Started tracking upload: {} ({} bytes)", transfer_id, total_bytes));
-    }
-
-    pub fn update_download_progress(&mut self, transfer_id: &str, bytes_received: usize) {
-        if let Some(progress) = self.active_downloads.get(transfer_id) {
-            let current = progress.transferred_bytes.fetch_add(bytes_received, Ordering::Relaxed) + bytes_received;
-            let percentage = (current as f64 / progress.total_bytes as f64) * 100.0;
-            let elapsed = progress.start_time.elapsed();
-            let speed = if elapsed.as_secs() > 0 {
-                current as f64 / elapsed.as_secs() as f64 / 1024.0 // KB/s
-            } else {
-                0.0
-            };
-
-            // Invia aggiornamento ogni 10% o quando completato
-            if current >= progress.total_bytes || (current * 10 / progress.total_bytes) > ((current - bytes_received) * 10 / progress.total_bytes) {
-                let info = format!("{}|{:.1}%|{:.1}KB/s|{}/{}bytes",
-                                   transfer_id, percentage, speed, current, progress.total_bytes);
-
-                match self.host.controller_send.send(HostEvent::DownloadingInfo(self.host.id, info, percentage)) {
-                    Ok(_) => {
-                        self.host.send_logging(format!("Download progress: {} - {:.1}%", transfer_id, percentage));
-                    }
-                    Err(e) => {
-                        self.host.send_logging(format!("Error sending download info: {}", e));
-                    }
-                }
-
-                // Rimuovi il tracking se completato
-                if current >= progress.total_bytes {
-                    self.active_downloads.remove(transfer_id);
-                    self.host.send_logging(format!("Download completed: {}", transfer_id));
-                }
-            }
-        }
-    }
-
-    pub fn update_upload_progress(&mut self, transfer_id: &str, bytes_sent: usize) {
-        if let Some(progress) = self.active_uploads.get(transfer_id) {
-            let current = progress.transferred_bytes.fetch_add(bytes_sent, Ordering::Relaxed) + bytes_sent;
-            let percentage = (current as f64 / progress.total_bytes as f64) * 100.0;
-            let elapsed = progress.start_time.elapsed();
-            let speed = if elapsed.as_secs() > 0 {
-                current as f64 / elapsed.as_secs() as f64 / 1024.0 // KB/s
-            } else {
-                0.0
-            };
-
-            // Invia aggiornamento ogni 10% o quando completato
-            if current >= progress.total_bytes || (current * 10 / progress.total_bytes) > ((current - bytes_sent) * 10 / progress.total_bytes) {
-                let info = format!("{}|{:.1}%|{:.1}KB/s|{}/{}bytes",
-                                   transfer_id, percentage, speed, current, progress.total_bytes);
-
-                match self.host.controller_send.send(HostEvent::UploadingInfo(self.host.id, info, percentage)) {
-                    Ok(_) => {
-                        self.host.send_logging(format!("Upload progress: {} - {:.1}%", transfer_id, percentage));
-                    }
-                    Err(e) => {
-                        self.host.send_logging(format!("Error sending upload info: {}", e));
-                    }
-                }
-
-                // Rimuovi il tracking se completato
-                if current >= progress.total_bytes {
-                    self.active_uploads.remove(transfer_id);
-                    self.host.send_logging(format!("Upload completed: {}", transfer_id));
-                }
-            }
-        }
-    }
-
-    pub fn cleanup_stale_transfers(&mut self) {
-        let timeout = Duration::from_secs(300); // 5 minuti di timeout
+    fn cleanup_expired_sessions(&self, timeout: Duration) {
+        let host = self.host.id;
+        self.host.send_logging(format!("Cleanup start host={} timeout_secs={}", host, timeout.as_secs()));
         let now = Instant::now();
 
-        // Cleanup downloads
-        let stale_downloads: Vec<String> = self.active_downloads
-            .iter()
-            .filter(|(_, progress)| now.duration_since(progress.start_time) > timeout)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for id in stale_downloads {
-            self.active_downloads.remove(&id);
-            self.host.send_logging(format!("Removed stale download: {}", id));
+        // 1) raccogli ID da rimuovere
+        let mut to_remove_sent = Vec::new();
+        if let Ok(sent) = self.host.sent_fragments.lock() {
+            for (&sid, sess) in sent.iter() {
+                let expired = now.duration_since(sess.last_activity) > timeout;
+                let all_conf = sess.buffer.iter().all(|f| f.is_none());
+                if expired || all_conf {
+                    to_remove_sent.push((sid, expired));
+                }
+            }
+        } else {
+            self.host.send_logging("[Cleanup] Failed to acquire lock on sent_fragments (read phase)".to_string());
+            return;
         }
 
-        // Cleanup uploads
-        let stale_uploads: Vec<String> = self.active_uploads
-            .iter()
-            .filter(|(_, progress)| now.duration_since(progress.start_time) > timeout)
-            .map(|(id, _)| id.clone())
-            .collect();
-
-        for id in stale_uploads {
-            self.active_uploads.remove(&id);
-            self.host.send_logging(format!("Removed stale upload: {}", id));
+        // 2) rimuovi
+        if !to_remove_sent.is_empty() {
+            if let Ok(mut sent) = self.host.sent_fragments.lock() {
+                for (sid, expired) in to_remove_sent {
+                    sent.remove(&sid);
+                    let reason = if expired { "expired" } else { "completed" };
+                    self.host.send_logging(format!("Removed {} sent session host={} session={}", reason, host, sid));
+                }
+            } else {
+                self.host.send_logging("[Cleanup] Failed to acquire lock on sent_fragments (write phase)".to_string());
+            }
         }
+        self.host.send_logging(format!("Cleanup completed host={}", host));
     }
 }
 fn compress_data(data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {

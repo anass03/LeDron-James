@@ -1,11 +1,10 @@
 use std::cmp::Reverse;
 use crossbeam_channel::{after, select, Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Packet, FloodRequest, FloodResponse, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
+use wg_2024::packet::{Packet, FloodRequest, Ack, Nack, NackType, NodeType, Fragment, FRAGMENT_DSIZE, PacketType};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
-use std::thread::sleep;
 use std::time::{Duration, Instant};
 use rand::Rng;
 use rand::rngs::ThreadRng;
@@ -16,9 +15,9 @@ pub type FileId = String;
 pub type MediaId = String;
 pub type ClientId = NodeId;
 pub type ServerId = NodeId;
-pub type Upload = f64;
-pub type Download = f64;
-pub type Usage = f64;
+pub type Upload = f32;
+pub type Download = f32;
+pub type Usage = f32;
 const ALPHA: f64 = 0.01; // fattore di smussamento (regolabile)
 
 
@@ -81,7 +80,7 @@ pub struct SentSessionData {
 }
 #[derive(Clone, Debug)]
 pub struct Edge {
-    pub to:     NodeId,
+    pub to:  NodeId,
     pub weight: f64,
 }
 #[derive(Clone)]
@@ -298,8 +297,9 @@ pub trait Functionality{
     fn sendto_controller(&self, packet: Packet) -> Result<(),String>;
     fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
     fn handle_nack(&mut self, nack: Nack,nack_generator: NodeId, session_id: u64);
-    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
-    fn cleanup_expired_sessions(&self, timeout: Duration);
+    fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, on_fragment_sent: F) -> Result<(), String>
+    where
+        F: FnMut(usize);
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment>;
     fn send_fragment(&self, session_id: u64, fragment: Fragment);
     fn build_packet_ack(&self,packet: Packet, fragment_index: Option<u64>) -> Packet;
@@ -876,7 +876,10 @@ impl Functionality for Host {
         }
     }
 
-    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
+    fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, mut on_fragment_sent: F) -> Result<(), String>
+    where
+        F: FnMut(usize), //serve al client
+    {
         self.send_logging(format!(
             "Starting fragmentation host={} session={} dest={}",
             self.id,
@@ -962,6 +965,7 @@ impl Functionality for Host {
             //     i,
             // ));
             let result = self.send_packet(packet, None);
+            on_fragment_sent(chunk.len());
 
             // self.send_logging(format!(
             //     "Send result host={} session={} fragment={} result={}",
@@ -976,39 +980,6 @@ impl Functionality for Host {
             message.session_id,
         ));
         Ok(())
-    }
-    fn cleanup_expired_sessions(&self, timeout: Duration) {
-        let host = self.id;
-        self.send_logging(format!("Cleanup start host={} timeout_secs={}", host, timeout.as_secs()));
-        let now = Instant::now();
-
-        // 1) raccogli ID to remove
-        let mut to_remove_sent = Vec::new();
-        {
-            let sent = self.sent_fragments.lock().unwrap();
-            for (&sid, sess) in sent.iter() {
-                let expired = now.duration_since(sess.last_activity) > timeout;
-                let all_conf = sess.buffer.iter().all(|f| f.is_none());
-                if expired || all_conf {
-                    to_remove_sent.push((sid, expired));
-                }
-            }
-        }
-
-        // 2) rimuovi con lock
-        if !to_remove_sent.is_empty() {
-            let mut sent = self.sent_fragments.lock().unwrap();
-            for (sid, expired) in to_remove_sent {
-                sent.remove(&sid);
-                if expired {
-                    self.send_logging(format!("Removed expired sent session host={} session={}", host, sid));
-                } else {
-                    self.send_logging(format!("Removed completed sent session host={} session={}", host, sid));
-                }
-            }
-        }
-
-        self.send_logging(format!("Cleanup completed host={}", host));
     }
     fn get_fragment(&self, session_id: u64, fragment_index: u64) -> Option<Fragment> {
         let sent_fragments = self.sent_fragments.lock().unwrap();
@@ -1088,6 +1059,7 @@ pub enum HostCommand {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum ServerToClient{
     ServerType(ServerTypes),
+    Sending(ContentID, usize),
 
     //content server
     FilesList(ClientId, ServerId, Vec<FileId>),
@@ -1118,26 +1090,30 @@ pub enum HostEvent {
     ///Servers discovered, response at ServerType
     ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
     ///Expected pdr from client
-    ExpectedPDR(ClientId, HashMap<NodeId, f64>),
+    ExpectedPDR(HashMap<NodeId, f64>),
     ///Network speed
-    NetSpeed(ClientId, Upload, Download),
+    NetSpeed(Upload, Download),
     ///Performance of network
-    UsageCPU(ClientId, Usage),
+    UsageCPU(Usage),
     ///Info on downloading/uploading the entire data
-    DownloadingInfo(ClientId, String, f64),
-    UploadingInfo(ClientId, String, f64),
+    DownloadingInfo(ContentID, f32),
+    UploadingInfo(ContentID, f32),
     //server
     ///for real time chat
     ChatUpdate(ServerId, String)
 }
-
+#[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub enum ContentID{
+    Media(MediaId),
+    File(FileId),
+}
 #[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
 pub enum ServerTypes{
     Chat,
     Content
 }
 ///MESSAGES WG_2024
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Message {
     pub session_id: u64,
     pub content: Vec<u8>,
