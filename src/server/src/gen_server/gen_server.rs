@@ -5,8 +5,8 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Fragment, NodeType, Packet};
-use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionData, HostEvent, Edge, ServerToClient, generate_unique_session_id};
+use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
+use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionData, HostEvent, Edge, ServerToClient, generate_unique_session_id, ContentID};
 use zstd::{decode_all, encode_all};
 
 /// GenServer represents a generic server (Chat or Content server),
@@ -37,13 +37,14 @@ pub trait GenServerBehavior {
     fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
     /// Serializes, compresses, and sends ServerToClient responses back to clients.
     fn send_response(&mut self, response: ServerToClient, destination: NodeId);
+    fn send_download(&mut self, destination: NodeId,total:usize, content:Contentype,id:String);
 }
 
 impl GenServer {
     delegate! {
         to self.host {
             /// Builds a message fragment from a high-level message
-            pub fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String>;
+            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, on_fragment_sent: F) -> Result<(), String> where F: FnMut(usize);
             /// Sends log messages to the central logger
             pub fn send_logging(&self, message: String);
         }
@@ -228,7 +229,26 @@ impl GenServerBehavior for GenServer {
                             session_id: generate_unique_session_id(),
                             content: compressed_data,
                         };
-                        match self.build_msg_fragment(destination, msg) {
+                        match response {
+                            ServerToClient::File(_, id, _) => {
+                                let bytes = &msg.content.clone();
+                                let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+                                self.send_download(destination,total, Contentype::File, id)}
+                            ServerToClient::Media(_, id, _) => {
+                                let bytes = &msg.content.clone();
+                                let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+                                self.send_download(destination,total, Contentype::Media, id)}
+                            ServerToClient::FileFrom(_, _, id, _) => {
+                                let bytes = &msg.content.clone();
+                                let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+                                self.send_download(destination,total, Contentype::File, id)}
+                            ServerToClient::MediaFrom(_, _, id, _) => {
+                                let bytes = &msg.content.clone();
+                                let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+                                self.send_download(destination,total, Contentype::Media, id)}
+                            _ => {}
+                        }
+                        match self.build_msg_fragment(destination, msg,|_|{}) {
                             Ok(_) => {
                                 self.send_logging("Successfully build message".to_string());
                             }
@@ -245,4 +265,14 @@ impl GenServerBehavior for GenServer {
             }
         }
     }
+    fn send_download(&mut self, destination: NodeId,total:usize, content:Contentype,id:String) {
+        match content{
+            Contentype::File => {self.send_response(ServerToClient::Sending(ContentID::File(id),total), destination);},
+            Contentype::Media => {self.send_response(ServerToClient::Sending(ContentID::Media(id),total), destination);},
+        }
+    }
+}
+pub enum Contentype{
+    File,
+    Media
 }
