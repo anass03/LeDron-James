@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::{env, fs};
 use std::path::{Path, PathBuf};
 use image::{ColorType, ImageResult, save_buffer};
+use tempfile::TempDir;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
@@ -14,6 +15,9 @@ use delegate::delegate;
 /// It handles client requests for files and media, processes protocol packets,
 /// and communicates with clients through source routing.
 pub struct ContentServer {
+    private_dir: TempDir,
+    private_files_dir: PathBuf,
+    private_images_dir: PathBuf,
     info: GenServer,                 // Internal GenServer used for common server logic
     files: Vec<String>,               // List of file IDs (text files)
     media: Vec<String>,               // List of media IDs (images)
@@ -60,6 +64,13 @@ impl ContentServer {
         packet_send: HashMap<NodeId, Sender<Packet>>,
         log_sender: Sender<String>,
     ) -> Self {
+        let private_dir = TempDir::new().expect("Failed to create private dir");
+        let private_files_dir = private_dir.path().join("files");
+        let private_images_dir = private_dir.path().join("images");
+
+        fs::create_dir_all(&private_files_dir).expect("Failed to create private files dir");
+        fs::create_dir_all(&private_images_dir).expect("Failed to create private images dir");
+
         Self {
             info: GenServer::new(
                 id,
@@ -76,6 +87,9 @@ impl ContentServer {
             media: vec![],
             file_map: Default::default(),
             media_map: Default::default(),
+            private_dir,
+            private_files_dir,
+            private_images_dir,
         }
     }
 
@@ -115,59 +129,73 @@ impl ContentServer {
     /// Populates internal maps that associate file IDs to disk paths.
     pub fn count_files(&mut self) {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let files_dir = manifest_dir.join("src/content/files");
-        let images_dir = manifest_dir.join("src/content/images");
+        let public_files_dir = manifest_dir.join("src/content/files");
+        let public_images_dir = manifest_dir.join("src/content/images");
+        self.send_logging(format!("Private dir active at: {}", self.private_dir.path().display()));
 
-        self.send_logging(format!("Scanning files: {}", files_dir.display()));
-        self.send_logging(format!("Scanning images: {}", images_dir.display()));
+        let private_files_dir = self.private_files_dir.clone();
+        let private_images_dir = self.private_images_dir.clone();
+
+        self.send_logging(format!("Scanning public files: {}", public_files_dir.display()));
+        self.send_logging(format!("Scanning public images: {}", public_images_dir.display()));
+        self.send_logging(format!("Scanning private files: {}", private_files_dir.display()));
+        self.send_logging(format!("Scanning private images: {}", private_images_dir.display()));
 
         self.file_map.clear();
         self.media_map.clear();
         self.files.clear();
         self.media.clear();
 
-        // Scan text files
-        match fs::read_dir(&files_dir) {
-            Ok(entries) => {            
+        // Primo: carica file pubblici
+        for dir in [&public_files_dir, &private_files_dir] {
+            if let Ok(entries) = fs::read_dir(dir) {
                 for entry in entries.filter_map(Result::ok) {
                     let path = entry.path();
                     if path.is_file() {
                         if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
                             let id = filename.to_string();
-                            self.file_map.insert(id.clone(), path.clone());
-                            self.files.push(id);
-                        }
-                    } 
-                }
-            }
-            Err(e) => {
-                self.send_logging(format!("Error reading files: {}", e));
-            }
-        }
-        
-        //scan media files
-        match fs::read_dir(&images_dir) {
-            Ok(entries) => {
-                for entry in entries.filter_map(Result::ok) {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            let id = filename.to_string();
-                            self.media_map.insert(id.clone(), path.clone());
-                            self.media.push(id);
+                            // Inserisce solo se non già presente (priorità ai pubblici)
+                            self.file_map.entry(id.clone()).or_insert(path.clone());
+                            if !self.files.contains(&id) {
+                                self.files.push(id);
+                            }
                         }
                     }
                 }
+            } else {
+                self.send_logging(format!("Error reading files from {}", dir.display()));
             }
-            Err(e) => {
-                self.send_logging(format!("Error finding media: {}", e));
+        }
+
+        // Poi: carica immagini pubbliche e private
+        for dir in [&public_images_dir, &private_images_dir] {
+            if let Ok(entries) = fs::read_dir(dir) {
+                for entry in entries.filter_map(Result::ok) {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                            let id = filename.to_string();
+                            self.media_map.entry(id.clone()).or_insert(path.clone());
+                            if !self.media.contains(&id) {
+                                self.media.push(id);
+                            }
+                        }
+                    }
+                }
+            } else {
+                self.send_logging(format!("Error reading images from {}", dir.display()));
             }
         }
 
         self.files.sort();
         self.media.sort();
-        self.send_logging(format!("Loaded {} text files and {} images.", self.files.len(), self.media.len()));
+        self.send_logging(format!(
+            "Loaded {} text files and {} images.",
+            self.files.len(),
+            self.media.len()
+        ));
     }
+
 
 
     /// Handles high-level client commands after full message reassembly.
@@ -188,15 +216,15 @@ impl ContentServer {
                 if receiver_id == self.info.host.id {
                     self.count_files();
                     self.send_logging("Checking files ids".to_string());
-                    self.send_response(ServerToClient::FilesList(source,self.info.host.id, self.files.clone()), source); 
+                    self.send_response(ServerToClient::FilesList(source,self.info.host.id, self.files.clone()), source);
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
                 }
             }
             ClientNetCommand::File(receiver_id, file_id) => {
                 if receiver_id == self.info.host.id {
-                    if let Some(path) = self.file_map.get(&file_id) {
-                        match Self::convert_file_path(path) {
+                    if let Some(path) = self.file_map.get(&file_id){
+                        match Self::convert_file_path(&path) {
                             Ok(data) => {
                                 self.send_logging("Sending file".to_string());
                                 self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
@@ -220,12 +248,12 @@ impl ContentServer {
                     self.send_response(ServerToClient::MediaList(source,self.info.host.id, self.media.clone()), source);
                 } else {
                     self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-               }
+                }
             }
             ClientNetCommand::Media(receiver_id, file_id) => {
                 if receiver_id == self.info.host.id {
                     if let Some(path) = self.media_map.get(&file_id) {
-                        match Self::process_image_path(path) {
+                        match Self::process_image_path(&path) {
                             Ok(image) => {
                                 self.send_logging(format!("Image {} loaded: {}x{}", file_id, image.width, image.height));
                                 self.send_response(ServerToClient::Media(self.info.host.id, file_id, image), source);
@@ -244,13 +272,12 @@ impl ContentServer {
             }
             ClientNetCommand::NewMedia(receiver_id, file_id, data) => {
                 if receiver_id == self.info.host.id {
-                    let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
                     let safe_file_id = Path::new(&file_id)
                         .file_name()
                         .unwrap_or_else(|| std::ffi::OsStr::new("invalid_media"));
-                    let path = base_dir.join(safe_file_id);
+                    let path = self.private_files_dir.join(safe_file_id);
 
-                    match Self::save_image(&path, &data) {
+                    match Self::save_image(&self.private_images_dir.join(safe_file_id), &data) {
                         Ok(_) => {
                             self.send_logging(format!("Media salvato in {}", path.display()));
                             // self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
@@ -266,11 +293,10 @@ impl ContentServer {
             }
             ClientNetCommand::NewFile(receiver_id, file_id, data) => {
                 if receiver_id == self.info.host.id {
-                    let base_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/files");
                     let safe_file_id = Path::new(&file_id)
                         .file_name()
                         .unwrap_or_else(|| std::ffi::OsStr::new("invalid_file"));
-                    let path = base_dir.join(safe_file_id);
+                    let path = self.private_files_dir.join(safe_file_id);
 
                     match fs::write(&path, &data) {
                         Ok(_) => {
@@ -332,4 +358,5 @@ impl ContentServer {
 
 impl MediaServer for ContentServer {}
 impl TextServer for ContentServer {}
+
 
