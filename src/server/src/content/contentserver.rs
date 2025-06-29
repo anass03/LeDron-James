@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use std::{env, fs};
+use std::fs;
 use std::path::{Path, PathBuf};
-use image::{ColorType, ImageResult, save_buffer};
 use tempfile::TempDir;
 use std::time::Duration;
 use crossbeam_channel::{Receiver, Sender};
@@ -125,206 +124,18 @@ impl ContentServer {
             }
         }
     }
-    /// Scans the file system to load available text and media files.
-    /// Populates internal maps that associate file IDs to disk paths.
-    pub fn count_files(&mut self) {
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let public_files_dir = manifest_dir.join("src/content/files");
-        let public_images_dir = manifest_dir.join("src/content/images");
-        self.send_logging(format!("Private dir active at: {}", self.private_dir.path().display()));
-
-        let private_files_dir = self.private_files_dir.clone();
-        let private_images_dir = self.private_images_dir.clone();
-
-        self.send_logging(format!("Scanning public files: {}", public_files_dir.display()));
-        self.send_logging(format!("Scanning public images: {}", public_images_dir.display()));
-        self.send_logging(format!("Scanning private files: {}", private_files_dir.display()));
-        self.send_logging(format!("Scanning private images: {}", private_images_dir.display()));
-
-        self.file_map.clear();
-        self.media_map.clear();
-        self.files.clear();
-        self.media.clear();
-
-        // Primo: carica file pubblici
-        for dir in [&public_files_dir, &private_files_dir] {
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.filter_map(Result::ok) {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            let id = filename.to_string();
-                            // Inserisce solo se non già presente (priorità ai pubblici)
-                            self.file_map.entry(id.clone()).or_insert(path.clone());
-                            if !self.files.contains(&id) {
-                                self.files.push(id);
-                            }
-                        }
-                    }
-                }
-            } else {
-                self.send_logging(format!("Error reading files from {}", dir.display()));
-            }
-        }
-
-        // Poi: carica immagini pubbliche e private
-        for dir in [&public_images_dir, &private_images_dir] {
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.filter_map(Result::ok) {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            let id = filename.to_string();
-                            self.media_map.entry(id.clone()).or_insert(path.clone());
-                            if !self.media.contains(&id) {
-                                self.media.push(id);
-                            }
-                        }
-                    }
-                }
-            } else {
-                self.send_logging(format!("Error reading images from {}", dir.display()));
-            }
-        }
-
-        self.files.sort();
-        self.media.sort();
-        self.send_logging(format!(
-            "Loaded {} text files and {} images.",
-            self.files.len(),
-            self.media.len()
-        ));
-    }
-
-
-
     /// Handles high-level client commands after full message reassembly.
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
-            ClientNetCommand::ServerType => {
-                match self.servertype(){
-                    Ok(server_type) => {
-                        self.send_logging("Sending server type".to_string());
-                        self.send_response(ServerToClient::ServerType(server_type), source);
-                    }
-                    Err(e) =>{
-                        self.send_logging(format!("Error in getting ServerType {}",e));
-                    }
-                }
-            }
-            ClientNetCommand::FilesList(receiver_id) => {
-                if receiver_id == self.info.host.id {
-                    self.count_files();
-                    self.send_logging("Checking files ids".to_string());
-                    self.send_response(ServerToClient::FilesList(source,self.info.host.id, self.files.clone()), source);
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::File(receiver_id, file_id) => {
-                if receiver_id == self.info.host.id {
-                    if let Some(path) = self.file_map.get(&file_id){
-                        match Self::convert_file_path(&path) {
-                            Ok(data) => {
-                                self.send_logging("Sending file".to_string());
-                                self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
-                            }
-                            Err(e) => {
-                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                                self.send_logging(format!("Error converting file: {}",e));
-                            }
-                        }
-                    } else {
-                        self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::MediaList(receiver_id) => {
-                if receiver_id == self.info.host.id {
-                    self.count_files();
-                    self.send_logging("Checking Medias ids".to_string());
-                    self.send_response(ServerToClient::MediaList(source,self.info.host.id, self.media.clone()), source);
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::Media(receiver_id, file_id) => {
-                if receiver_id == self.info.host.id {
-                    if let Some(path) = self.media_map.get(&file_id) {
-                        match Self::process_image_path(&path) {
-                            Ok(image) => {
-                                self.send_logging(format!("Image {} loaded: {}x{}", file_id, image.width, image.height));
-                                self.send_response(ServerToClient::Media(self.info.host.id, file_id, image), source);
-                            }
-                            Err(e) => {
-                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                                self.send_logging(format!("Error in processing image: {}", e));
-                            }
-                        }
-                    } else {
-                        self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::NewMedia(receiver_id, file_id, data) => {
-                if receiver_id == self.info.host.id {
-                    let safe_file_id = Path::new(&file_id)
-                        .file_name()
-                        .unwrap_or_else(|| std::ffi::OsStr::new("invalid_media"));
-                    let path = self.private_files_dir.join(safe_file_id);
-
-                    match Self::save_image(&self.private_images_dir.join(safe_file_id), &data) {
-                        Ok(_) => {
-                            self.send_logging(format!("Media salvato in {}", path.display()));
-                            // self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
-                        },
-                        Err(e) => {
-                            self.send_logging(format!("Errore scrivendo media {}: {}", path.display(), e));
-                            //self.send_response(ServerToClient::Nack, source); // da capire se aggiungere una risposta
-                        }
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::NewFile(receiver_id, file_id, data) => {
-                if receiver_id == self.info.host.id {
-                    let safe_file_id = Path::new(&file_id)
-                        .file_name()
-                        .unwrap_or_else(|| std::ffi::OsStr::new("invalid_file"));
-                    let path = self.private_files_dir.join(safe_file_id);
-
-                    match fs::write(&path, &data) {
-                        Ok(_) => {
-                            self.send_logging(format!("File salvato in {}", path.display()));
-                            //self.send_response(ServerToClient::Ack, source); // da capire se aggiungere una risposta
-                        },
-                        Err(e) => {
-                            self.send_logging(format!("Errore scrivendo file {}: {}", path.display(), e));
-                            //self.send_response(ServerToClient::Nack, source); // da capire se aggiungere una risposta
-                        }
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            _ => {
-                self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-            }
+            ClientNetCommand::ServerType => self.send_server_type(source),
+            ClientNetCommand::FilesList(id) => self.handle_files_list(id, source),
+            ClientNetCommand::File(id, file_id) => self.handle_file_request(id, file_id, source),
+            ClientNetCommand::MediaList(id) => self.handle_media_list(id, source),
+            ClientNetCommand::Media(id, media_id) => self.handle_media_request(id, media_id, source),
+            ClientNetCommand::NewMedia(id, file_id, image) => self.handle_new_media(id, file_id, image, source),
+            ClientNetCommand::NewFile(id, file_id, data) => self.handle_new_file(id, file_id, data, source),
+            _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
         }
-    }
-    fn save_image(path: &PathBuf, image: &Image) -> ImageResult<()> {
-        save_buffer(
-            path,
-            &image.data,
-            image.width,
-            image.height,
-            ColorType::Rgba8,
-        )
     }
 
     /// Handles any protocol packet received by the server.
@@ -352,6 +163,118 @@ impl ContentServer {
                     self.send_logging("The packet is not complete; server is waiting.".to_string());
                 }
             }
+        }
+    }
+    fn send_server_type(&mut self, source: NodeId) {
+        match self.servertype() {
+            Ok(server_type) => {
+                self.send_logging("Sending server type".to_string());
+                self.send_response(ServerToClient::ServerType(server_type), source);
+            }
+            Err(e) => {
+                self.send_logging(format!("Error in getting ServerType {}", e));
+            }
+        }
+    }
+    fn handle_files_list(&mut self, receiver_id: NodeId, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            let map = self.scan_text_files(&self.private_files_dir);
+            self.file_map = map.clone();
+            self.files = map.keys().cloned().collect();
+            self.files.sort();
+            self.send_logging("Checking file IDs".to_string());
+            self.send_response(ServerToClient::FilesList(source, self.info.host.id, self.files.clone()), source);
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_file_request(&mut self, receiver_id: NodeId, file_id: String, source: NodeId) {
+        if receiver_id != self.info.host.id {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+            return;
+        }
+
+        match self.file_map.get(&file_id) {
+            Some(path) => match Self::convert_file_path(path) {
+                Ok(data) => {
+                    self.send_logging("Sending file".to_string());
+                    self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
+                }
+                Err(e) => {
+                    self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                    self.send_logging(format!("Error converting file: {}", e));
+                }
+            },
+            None => {
+                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+            }
+        }
+    }
+    fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            let map = self.scan_media_files(&self.private_images_dir);
+            self.media_map = map.clone();
+            self.media = map.keys().cloned().collect();
+            self.media.sort();
+            self.send_logging("Checking media IDs".to_string());
+            self.send_response(ServerToClient::MediaList(source, self.info.host.id, self.media.clone()), source);
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_media_request(&mut self, receiver_id: NodeId, media_id: String, source: NodeId) {
+        if receiver_id != self.info.host.id {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+            return;
+        }
+
+        match self.media_map.get(&media_id) {
+            Some(path) => match Self::process_image_path(path) {
+                Ok(image) => {
+                    self.send_logging(format!("Image {} loaded: {}x{}", media_id, image.width, image.height));
+                    self.send_response(ServerToClient::Media(self.info.host.id, media_id, image), source);
+                }
+                Err(e) => {
+                    self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+                    self.send_logging(format!("Error processing image: {}", e));
+                }
+            },
+            None => {
+                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
+            }
+        }
+    }
+
+    fn handle_new_media(&mut self, receiver_id: NodeId, file_id: String, image: Image, source: NodeId) {
+        if receiver_id != self.info.host.id {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+            return;
+        }
+
+        let safe_file_id = Path::new(&file_id)
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("invalid_media"));
+        let path = self.private_images_dir.join(safe_file_id);
+
+        match Self::save_image_to(&path, &image) {
+            Ok(_) => self.send_logging(format!("Media saved in {}", path.display())),
+            Err(e) => self.send_logging(format!("Error writing media {}: {}", path.display(), e)),
+        }
+    }
+    fn handle_new_file(&mut self, receiver_id: NodeId, file_id: String, data: Vec<u8>, source: NodeId) {
+        if receiver_id != self.info.host.id {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+            return;
+        }
+
+        let safe_file_id = Path::new(&file_id)
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("invalid_file"));
+        let path = self.private_files_dir.join(safe_file_id);
+
+        match Self::save_text_file(&path, &data) {
+            Ok(_) => self.send_logging(format!("File saved in {}", path.display())),
+            Err(e) => self.send_logging(format!("Error writing file {}: {}", path.display(), e)),
         }
     }
 }

@@ -1,7 +1,7 @@
 use crate::{GenServer, GenServerBehavior};
 use crossbeam_channel::{Receiver, Sender};
 use delegate::delegate;
-use host::{ServerToClient, Functionality, ServerTypes, HostEvent, HostCommand, ClientNetCommand};
+use host::{ServerToClient, Functionality, ServerTypes, HostEvent, HostCommand, ClientNetCommand, Image};
 use std::collections::HashMap;
 use host::Image as LeImage;
 use std::time::Duration;
@@ -104,98 +104,17 @@ impl ChatServer2 {
     /// Handles high-level ClientNetCommand requests after fragment reassembly
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
-            ClientNetCommand::ServerType => {
-                match self.servertype(){
-                    Ok(server_type) => {
-                        self.send_logging("Sending server type".to_string());
-                        self.send_response(ServerToClient::ServerType(server_type), source);
-                    }
-                    Err(e) =>{
-                        self.send_logging(format!("Error in getting ServerType {}",e));
-                    }
-                }
-            }
-            ClientNetCommand::RegistrationToChat(receiver_id) => {
-                if receiver_id == self.info.host.id {
-                    if !self.client_list.contains(&source) {
-                        self.client_list.push(source);
-                        self.send_logging(format!("Registered new client to chat: {}", source));
-                    } else {
-                        self.send_logging(format!("Duplicate registration from: {}", source));
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::ClientList(receiver_id) => {
-                if receiver_id == self.info.host.id {
-                    self.send_response(ServerToClient::ClientList(source ,self.info.host.id, self.client_list.clone()), source);
-                    self.send_logging("Sending client list".to_string());
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::MessageFor(destination, receiver_id, msg) => {
-                if receiver_id == self.info.host.id {
-                    if self.check_if_in_client_list(source) {
-                        if self.check_if_in_client_list(destination) {
-                            self.save_message(ClientNetCommand::MessageFor(destination, receiver_id, msg.clone()), source);
-                            self.send_logging(format!("Sending message to {}: {}", destination, msg));
-                            self.send_response(ServerToClient::MessageFrom(self.info.host.id, source, msg), destination);
-                        } else {
-                            self.send_logging(format!("Destination {} not registered", destination));
-                            self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
-                        }
-                    } else {
-                        self.send_logging("Source client not registered".to_string());
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::FileFor(destination, receiver_id, file_id, message) => {
-                if receiver_id == self.info.host.id {
-                    if self.check_if_in_client_list(source) {
-                        if self.check_if_in_client_list(destination) {
-                            self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
-                            self.send_logging(format!("Sending file to {}", destination));
-                            self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, message), destination);
-                        } else {
-                            self.send_logging(format!("Destination {} not registered", destination));
-                            self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
-                        }
-                    } else {
-                        self.send_logging("Source client not registered".to_string());
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            ClientNetCommand::MediaFor(destination, receiver_id, media_id, message) => {
-                if receiver_id == self.info.host.id {
-                    if self.check_if_in_client_list(source) {
-                        if self.check_if_in_client_list(destination) {
-                            self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
-                            self.send_logging(format!("Sending media to {}", destination));
-                            self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, message), destination);
-                        } else {
-                            self.send_logging("Destination client not registered".to_string());
-                        }
-                    } else {
-                        self.send_logging("Source client not registered".to_string());
-                        self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
-                    }
-                } else {
-                    self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-                }
-            }
-            _ => {
-                self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
-            }
+            ClientNetCommand::ServerType => self.send_server_type(source),
+            ClientNetCommand::RegistrationToChat(id) => self.handle_registration(id, source),
+            ClientNetCommand::ClientList(id) => self.handle_client_list_request(id, source),
+            ClientNetCommand::MessageFor(dest, recv, msg) => self.handle_chat_message(dest, recv, msg, source),
+            ClientNetCommand::FileFor(dest, recv, file_id, msg) => self.handle_file_transfer(dest, recv, file_id, msg, source),
+            ClientNetCommand::MediaFor(dest, recv, media_id, msg) => self.handle_media_transfer(dest, recv, media_id, msg, source),
+            _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
         }
     }
     /// Check if the client is currently registered
-    fn check_if_in_client_list(&mut self, id: NodeId) -> bool {
+    fn check_if_in_client_list(&self, id: NodeId) -> bool {
         self.client_list.contains(&id)
     }
 
@@ -284,6 +203,91 @@ impl ChatServer2 {
             Err(e) => {
                 self.send_logging(format!("Failed to serialize chat: {}", e));
             }
+        }
+    }
+    fn send_server_type(&mut self, source: NodeId) {
+        match self.servertype() {
+            Ok(server_type) => {
+                self.send_logging("Sending server type".to_string());
+                self.send_response(ServerToClient::ServerType(server_type), source);
+            }
+            Err(e) => {
+                self.send_logging(format!("Error in getting ServerType {}", e));
+            }
+        }
+    }
+    fn handle_registration(&mut self, receiver_id: NodeId, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            if !self.client_list.contains(&source) {
+                self.client_list.push(source);
+                self.send_logging(format!("Registered new client to chat: {}", source));
+            } else {
+                self.send_logging(format!("Duplicate registration from: {}", source));
+            }
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_client_list_request(&mut self, receiver_id: NodeId, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            self.send_response(ServerToClient::ClientList(source, self.info.host.id, self.client_list.clone()), source);
+            self.send_logging("Sending client list".to_string());
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_chat_message(&mut self, destination: NodeId, receiver_id: NodeId, msg: String, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            if self.check_if_in_client_list(source) {
+                if self.check_if_in_client_list(destination) {
+                    self.save_message(ClientNetCommand::MessageFor(destination, receiver_id, msg.clone()), source);
+                    self.send_logging(format!("Sending message to {}: {}", destination, msg));
+                    self.send_response(ServerToClient::MessageFrom(self.info.host.id, source, msg), destination);
+                } else {
+                    self.send_logging(format!("Destination {} not registered", destination));
+                    self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
+                }
+            } else {
+                self.send_logging("Source client not registered".to_string());
+            }
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_file_transfer(&mut self, destination: NodeId, receiver_id: NodeId, file_id: String, message: Vec<u8>, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            if self.check_if_in_client_list(source) {
+                if self.check_if_in_client_list(destination) {
+                    self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
+                    self.send_logging(format!("Sending file to {}", destination));
+                    self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, message), destination);
+                } else {
+                    self.send_logging(format!("Destination {} not registered", destination));
+                    self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
+                }
+            } else {
+                self.send_logging("Source client not registered".to_string());
+            }
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        }
+    }
+    fn handle_media_transfer(&mut self, destination: NodeId, receiver_id: NodeId, media_id: String, message: Image, source: NodeId) {
+        if receiver_id == self.info.host.id {
+            if self.check_if_in_client_list(source) {
+                if self.check_if_in_client_list(destination) {
+                    self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
+                    self.send_logging(format!("Sending media to {}", destination));
+                    self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, message), destination);
+                } else {
+                    self.send_logging("Destination client not registered".to_string());
+                }
+            } else {
+                self.send_logging("Source client not registered".to_string());
+                self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
+            }
+        } else {
+            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
         }
     }
 }
