@@ -1,3 +1,4 @@
+// Versione migliorata di GenServer
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Cursor;
@@ -29,7 +30,7 @@ pub trait GenServerBehavior {
 impl GenServer {
     delegate! {
         to self.host {
-            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, on_fragment_sent: F) -> Result<(), String> where F: FnMut(usize);
+            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, _on_fragment_sent: F) -> Result<(), String> where F: FnMut(usize);
             pub fn send_logging(&self, message: String);
         }
     }
@@ -46,7 +47,6 @@ impl GenServer {
         log_sender: Sender<String>,
     ) -> Self {
         assert!((1..=2).contains(&connected_drone_ids.len()), "Server must connect to 1 or 2 drones");
-
         let host = Host::new(id, type_host, controller_send, packet_recv, packet_send, log_sender);
         Self { host, controller_recv, server_type }
     }
@@ -62,10 +62,8 @@ impl GenServerBehavior for GenServer {
                     self.send_logging("Cannot add more than 2 channels.".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
-                    let entry = self.host.network.nodes.entry(self.host.id).or_insert_with(|| (NodeType::Server, Vec::new()));
-                    entry.1.push(Edge { to: id, weight: 0.0 });
-                    let entry = self.host.network.nodes.entry(id).or_insert_with(|| (NodeType::Drone, Vec::new()));
-                    entry.1.push(Edge { to: self.host.id, weight: 0.0 });
+                    self.host.network.nodes.entry(self.host.id).or_insert_with(|| (NodeType::Server, Vec::new())).1.push(Edge { to: id, weight: 0.0 });
+                    self.host.network.nodes.entry(id).or_insert_with(|| (NodeType::Drone, Vec::new())).1.push(Edge { to: self.host.id, weight: 0.0 });
                     self.send_logging("Sender added successfully.".to_string());
                 }
             }
@@ -111,11 +109,11 @@ impl GenServerBehavior for GenServer {
 
         session.last_activity = Instant::now();
         if session.buffer[idx].is_none() {
-            session.buffer[idx] = Some(fragment.clone());
+            session.buffer[idx] = Some(fragment);
             session.pending = session.pending.saturating_sub(1);
         }
 
-        let mut ack = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        let mut ack = self.host.build_packet_ack(packet.clone(), Some(idx as u64));
         ack.routing_header.hop_index += 1;
         let _ = self.host.send_packet(ack, None);
 
@@ -128,7 +126,7 @@ impl GenServerBehavior for GenServer {
         if session.pending == 0 {
             let data = session.buffer.iter()
                 .filter_map(|f| f.as_ref())
-                .flat_map(|f| f.data[..f.length as usize].iter().cloned())
+                .flat_map(|f| f.data[..f.length as usize].iter().copied())
                 .collect::<Vec<u8>>();
 
             received.remove(&session_id);
@@ -162,6 +160,8 @@ impl GenServerBehavior for GenServer {
             if let Err(e) = self.build_msg_fragment(destination, msg, |_| {}) {
                 self.send_logging(format!("Failed to send response to {}: {}", destination, e));
             }
+        } else {
+            self.send_logging("prepare_message returned None".to_string());
         }
     }
 
@@ -172,12 +172,13 @@ impl GenServerBehavior for GenServer {
         };
         self.send_response(ServerToClient::Sending(cid, total), destination);
     }
+
     fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>)> {
         let data = serde_json::to_vec(response).ok()?;
         let compressed = self.compress_anything(&data).ok()?;
         let msg = Message {
             session_id: generate_unique_session_id(),
-            content: compressed.clone(),
+            content: compressed,
         };
 
         let meta = match response {

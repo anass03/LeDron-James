@@ -1,39 +1,34 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs, io::Cursor, path::{Path, PathBuf}};
 use image::{save_buffer, ColorType, ImageReader};
-use std::fs;
-use std::io::Cursor;
-use std::path::PathBuf;
 use host::Image;
 
-/// MediaServer trait provides shared logic for media (image) processing.
-/// It allows servers to load images from disk and convert them into serializable
-/// structures that can be transmitted to clients.
+/// Errori specifici per MediaServer, al posto di Box<dyn Error>
+#[derive(Debug, thiserror::Error)]
+pub enum MediaServerError {
+    #[error("Errore I/O: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("Errore immagine: {0}")]
+    Image(#[from] image::ImageError),
+}
+
 pub trait MediaServer {
-    /// Legge e decodifica un'immagine da disco, restituendo una struct `Image` serializzabile.
-    ///
-    /// # Argomenti
-    /// * `path` - Path dell'immagine.
-    ///
-    /// # Ritorna
-    /// * `Ok(Image)` se corretta.
-    /// * `Err` in caso di errore I/O o decodifica.
-    fn process_image_path(path: &PathBuf) -> Result<Image, Box<dyn std::error::Error>> {
-        let data_bytes = fs::read(path)?;
+    /// Carica e decodifica un'immagine dal path dato
+    fn process_image_path<P: AsRef<Path>>(path: P) -> Result<Image, MediaServerError> {
+        let data_bytes = fs::read(&path)?;
         let img = ImageReader::new(Cursor::new(&data_bytes))
             .with_guessed_format()?
             .decode()?;
-        
-        let width = img.width();
-        let height = img.height();
-        let rgba = img.to_rgba8();
-        
+
         Ok(Image {
-            width,
-            height,
-            data: rgba.to_vec(),
+            width: img.width(),
+            height: img.height(),
+            data: img.to_rgba8().to_vec(),
         })
     }
-    fn save_image_to(path: &PathBuf, image: &Image) -> Result<(), Box<dyn std::error::Error>> {
+
+    /// Salva l'immagine su disco nel path specificato
+    fn save_image_to<P: AsRef<Path>>(path: P, image: &Image) -> Result<(), MediaServerError> {
         save_buffer(
             path,
             &image.data,
@@ -43,25 +38,23 @@ pub trait MediaServer {
         )?;
         Ok(())
     }
-    fn scan_media_files(&self, private_images_dir: &PathBuf) -> HashMap<String, PathBuf> {
-        let mut map = HashMap::new();
 
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let public_dir = manifest_dir.join("src/content/images");
-
-        for dir in [&public_dir, private_images_dir] {
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.filter_map(Result::ok) {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            map.entry(filename.to_string()).or_insert(path);
-                        }
-                    }
+    /// Scansiona le directory pubblica e privata per file immagine
+    fn scan_media_files(&self, private_images_dir: &Path) -> HashMap<String, PathBuf> {
+        let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
+        [&public_dir, private_images_dir]
+            .iter()
+            .flat_map(|dir| fs::read_dir(dir).into_iter().flatten())
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .filter_map(|path| {
+                if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
+                    Some((filename.to_string(), path.clone()))
+                } else {
+                    None
                 }
-            }
-        }
-        map
+            })
+            .collect()
     }
 }
-

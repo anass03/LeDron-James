@@ -1,44 +1,39 @@
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
+use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-/// TextServer trait provides shared logic for serving text files to clients.
-/// It allows reading files from disk and preparing them for transmission.
-pub trait TextServer {
-    /// Legge un file di testo dal disco e restituisce i dati in byte.
-    ///
-    /// # Argomenti
-    /// * `path` - Path completo del file.
-    ///
-    /// # Ritorna
-    /// * `Ok(data)` - Contenuto del file come `Vec<u8>`
-    /// * `Err` - In caso di errore di lettura.
-    fn convert_file_path(path: &PathBuf) -> std::io::Result<Vec<u8>> {
-        fs::read(path)
-    }
-
-    fn save_text_file(path: &PathBuf, data: &[u8]) -> std::io::Result<()> {
-        fs::write(path, data) 
-    }
-    fn scan_text_files(&self, private_files_dir: &PathBuf) -> HashMap<String, PathBuf> { 
-        let mut map = HashMap::new();
-
-        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let public_dir = manifest_dir.join("src/content/files");
-
-        for dir in [&public_dir, private_files_dir] {
-            if let Ok(entries) = fs::read_dir(dir) {
-                for entry in entries.filter_map(Result::ok) {
-                    let path = entry.path();
-                    if path.is_file() {
-                        if let Some(filename) = path.file_name().and_then(|s| s.to_str()) {
-                            map.entry(filename.to_string()).or_insert(path);
-                        }
-                    }
-                }
-            }
-        }
-        map
-    }
+/// Errori specifici per il TextServer
+#[derive(Debug, thiserror::Error)]
+pub enum TextServerError {
+    #[error("Errore I/O: {0}")]
+    Io(#[from] std::io::Error),
 }
 
+/// Trait che fornisce logica condivisa per gestire file di testo
+pub trait TextServer {
+    /// Legge un file di testo dal disco e restituisce i dati in byte.
+    fn convert_file_path<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, TextServerError> {
+        Ok(fs::read(path)?)
+    }
+
+    /// Scrive un file di testo sul disco
+    fn save_text_file<P: AsRef<Path>>(path: P, data: &[u8]) -> Result<(), TextServerError> {
+        Ok(fs::write(path, data)?)
+    }
+
+    /// Scansiona le directory pubblica e privata per file di testo
+    fn scan_text_files(&self, private_files_dir: &Path) -> HashMap<String, PathBuf> {
+        let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/files");
+
+        [&public_dir, private_files_dir]
+            .iter()
+            .flat_map(|dir| fs::read_dir(dir).into_iter().flatten())
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.is_file())
+            .filter_map(|path| {
+                path.file_name()
+                    .and_then(|s| s.to_str())
+                    .map(|name| (name.to_string(), path.clone()))
+            })
+            .collect()
+    }
+}
