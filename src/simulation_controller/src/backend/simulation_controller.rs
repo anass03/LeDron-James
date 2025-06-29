@@ -63,7 +63,8 @@ impl SimulationControllerData {
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
         log_receiver: Receiver<String>,
-    ) -> Self {
+    ) -> Self
+    {
         let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
 
         let mut drones = vec![];

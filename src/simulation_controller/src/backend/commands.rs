@@ -604,7 +604,6 @@ struct NetworkState {
 
 impl SimulationControllerData {
     // Build network state once and reuse
-    // Build network state once and reuse
     fn build_network_state(&self) -> NetworkState {
         let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
         let mut host_ids = HashSet::new();
@@ -1307,7 +1306,7 @@ impl SimulationControllerData {
                 let chat_list = ChatList { chats_stored };
                 self.chat_cache.local_chats.insert(server_id, chat_list);
             }
-            HostEvent::DownloadingInfo(client_id, _string, percentage) => {
+            HostEvent::DownloadingInfo(client_id, percentage) => {
                 /*let server_id = 0;
                 let media_id: MediaId = String::new();
 
@@ -1344,10 +1343,10 @@ impl SimulationControllerData {
                     }
                 }*/
             },
-            HostEvent::UploadingInfo(client_id, _string, percentage) => {},
-            HostEvent::ExpectedPDR(client_id, map) => {},
-            HostEvent::NetSpeed(client_id, upload, download) => {},
-            HostEvent::UsageCPU(client_id, usage) => {},
+            HostEvent::UploadingInfo(client_id, percentage) => {},
+            HostEvent::ExpectedPDR(expected_pdr) => {},
+            HostEvent::NetSpeed(upload, download) => {},
+            HostEvent::UsageCPU(usage) => {},
         }
         Ok(())
     }
@@ -1517,6 +1516,7 @@ impl SimulationControllerData {
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
             }
+            ServerToClient::Sending(content_id, d) => {}
             ServerToClient::WrongServer(server_id)
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
@@ -1590,7 +1590,7 @@ fn get_extension(media_id: &MediaId) -> Option<&str> {
     media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
 }
 
-    fn open_image(path: &str) {
+fn open_image(path: &str) {
     #[cfg(target_os = "macos")]
     {
         Command::new("open").arg(path).spawn().ok();
