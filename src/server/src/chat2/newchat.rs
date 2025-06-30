@@ -62,7 +62,7 @@ impl ChatServer2 {
         }
     }
 
-    pub fn run(&mut self)->Result<(), std::io::Error>  {
+    pub fn run(&mut self){
         self.initiate_flood();
         self.send_logging("Starting Chat Server...".into());
         loop {

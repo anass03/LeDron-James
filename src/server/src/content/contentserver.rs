@@ -80,23 +80,19 @@ impl ContentServer {
         })
     }
 
-    pub fn run(&mut self)->Result<(), std::io::Error> {
+    pub fn run(&mut self){
         self.initiate_flood();
-        self.send_logging("Starting Content Server...".to_string());
+        self.send_logging("Starting Content Server...".into());
         loop {
             crossbeam_channel::select_biased! {
-                recv(self.info.controller_recv) -> cmd => {
-                    match cmd {
-                        Ok(command) => self.handle_sim_command(command),
-                        Err(e) => self.send_logging(format!("Command not recognized: {}", e)),
-                    }
-                }
-                recv(self.info.host.packet_recv) -> pkt => {
-                    match pkt {
-                        Ok(packet) => self.handling_packets(packet),
-                        Err(e) => self.send_logging(format!("Packet not recognized: {}", e)),
-                    }
-                }
+                recv(self.info.controller_recv) -> cmd => match cmd {
+                    Ok(c) => self.handle_sim_command(c),
+                    Err(e) => self.send_logging(format!("Command error: {e}")),
+                },
+                recv(self.info.host.packet_recv) -> pkt => match pkt {
+                    Ok(p) => self.handling_packets(p),
+                    Err(e) => self.send_logging(format!("Packet error: {e}")),
+                },
                 default(Duration::from_millis(3)) => {}
             }
         }
