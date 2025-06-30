@@ -360,7 +360,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 server.run();
             }),
             ServerType::Content => thread::spawn(move || {
-                let mut server = LeContentServer::new(
+                match LeContentServer::new(
                 server_id,
                 NodeType::Server,
                 connected_drone_ids,
@@ -369,8 +369,14 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 packet_recv,
                 packet_send,
                 log_send
-                );
-                server.run();
+                ) {
+                    Ok(mut server) => server.run(),
+                    Err(e) => {
+                        eprintln!("Server initialization failed: {e}");
+                        return;
+                    }
+                };
+
             }),
         };
 
