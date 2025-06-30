@@ -178,7 +178,7 @@ impl ContentServer {
 
     fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
-            self.media_map = self.scan_text_files(&self.private_files_dir);
+            self.media_map = self.scan_media_files(&self.private_files_dir);
             self.media = self.media_map.keys().cloned().collect();
             self.media.sort();
             self.send_logging("Checking media IDs".to_string());
