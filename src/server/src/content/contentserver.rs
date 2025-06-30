@@ -80,7 +80,7 @@ impl ContentServer {
         })
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self)->Result<(), std::io::Error> {
         self.initiate_flood();
         self.send_logging("Starting Content Server...".to_string());
         loop {
