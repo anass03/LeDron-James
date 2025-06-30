@@ -50,15 +50,15 @@ impl ContentServer {
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         log_sender: Sender<String>,
-    ) -> Self {
-        let private_dir = TempDir::new().expect("Failed to create TempDir");
+    ) -> Result<Self, std::io::Error> {
+        let private_dir = TempDir::new()?;
         let private_files_dir = private_dir.path().join("files");
         let private_images_dir = private_dir.path().join("images");
 
-        fs::create_dir_all(&private_files_dir).expect("Failed to create private_files_dir");
-        fs::create_dir_all(&private_images_dir).expect("Failed to create private_images_dir");
+        fs::create_dir_all(&private_files_dir)?;
+        fs::create_dir_all(&private_images_dir)?;
 
-        Self {
+        Ok(Self {
             info: GenServer::new(
                 id,
                 type_host,
@@ -77,7 +77,7 @@ impl ContentServer {
             media: Vec::new(),
             file_map: HashMap::new(),
             media_map: HashMap::new(),
-        }
+        })
     }
 
 
