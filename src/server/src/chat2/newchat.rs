@@ -248,6 +248,11 @@ pub struct Chat {
     pub chat: Vec<(MessageSC, MessageMetaData)>,
     pub users: ChatUsers,
 }
+impl Chat{
+    pub fn get_last_message(&self)->Option<&(MessageSC,MessageMetaData)> {
+        self.chat.last()
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChatUsers {
