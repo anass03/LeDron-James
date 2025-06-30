@@ -1285,6 +1285,47 @@ impl SimulationControllerData {
 
     }
 
+    pub fn new_media<P: AsRef<Path>>(&mut self,sender_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
+        let media_vec = match fs::read(&path) {
+            Ok(vec) => vec,
+            Err(e) => return Err(format!("Failed to read media {}: {}", path.as_ref().display(), e)),
+        };
+        let media = match ImageReader::new(Cursor::new(&media_vec))
+            .with_guessed_format().map_err(|e| e.to_string())?
+            .decode() {
+            Ok(media) => media,
+            Err(e) => return Err(e.to_string()),
+        };
+
+        let image = Image {
+            width: media.width(),
+            height: media.height(),
+            data: media.to_rgba8().to_vec(),
+        };
+        let media_id = match get_filename(path) {
+            Some(media_id) => media_id,
+            None => return Err(String::from("Failed to get Media ID")),
+        };
+        self.logs.push_sc_log(LogType::DEBUG, format!("Sending New Media Request from Client {sender_client_id} to Server {server_id}"));
+        let command = Net(NewMedia(0, media_id, image));
+        self.send_client_command(sender_client_id, command)
+    }
+
+    pub fn new_file<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
+        let file = match fs::read(&path) {
+            Ok(vec) => vec,
+            Err(e) => return Err(format!("Failed to read file {}: {}", path.as_ref().display(), e)),
+        };
+        let file_id = match get_filename(path) {
+            Some(file_id) => file_id,
+            None => return Err(String::from("Failed to get File ID")),
+        };
+        self.logs.push_sc_log(LogType::DEBUG, format!("Sending NewFile Request from Client {sender_client_id} to Server {server_id}"));
+        let command = Net(NewFile(server_id, file_id, file));
+        self.send_client_command(sender_client_id, command)
+
+    }
+
     pub fn controller_shortcut(&mut self, client_id: ClientId, packet: Packet) -> Result<(), String> {
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Controller Shortcut to Client {client_id}"));
         let command = ControllerShortcut(packet);
