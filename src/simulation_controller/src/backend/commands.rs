@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::fs;
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
@@ -12,12 +13,13 @@ use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, S
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
-use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
+use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
 use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
+use server::MediaServerError;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -1241,9 +1243,44 @@ impl SimulationControllerData {
         self.send_client_command(sender_client_id, command)
     }
 
-    pub fn media_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, media_id: MediaId, image: Image) -> Result<(), String> {
+    pub fn media_for<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
+        let media_vec = match fs::read(&path) {
+                Ok(vec) => vec,
+                Err(e) => return Err(format!("Failed to read media {}: {}", path.as_ref().display(), e)),
+            };
+        let media = match ImageReader::new(Cursor::new(&media_vec))
+                .with_guessed_format().map_err(|e| e.to_string())?
+                .decode() {
+                    Ok(media) => media,
+                    Err(e) => return Err(e.to_string()),
+            };
+
+        let image = Image {
+            width: media.width(),
+            height: media.height(),
+            data: media.to_rgba8().to_vec(),
+        };
+        let media_id = match get_filename(path) {
+            Some(media_id) => media_id,
+            None => return Err(String::from("Failed to get Media ID")),
+        };
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending Media For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
         let command = Net(MediaFor(receiver_client_id, server_id, media_id, image));
+        self.send_client_command(sender_client_id, command)
+
+    }
+
+    pub fn file_for<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
+        let file = match fs::read(&path) {
+            Ok(vec) => vec,
+            Err(e) => return Err(format!("Failed to read file {}: {}", path.as_ref().display(), e)),
+        };
+        let file_id = match get_filename(path) {
+            Some(file_id) => file_id,
+           None => return Err(String::from("Failed to get File ID")),
+        };
+        self.logs.push_sc_log(LogType::DEBUG, format!("Sending File For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
+        let command = Net(FileFor(receiver_client_id, server_id, file_id, file));
         self.send_client_command(sender_client_id, command)
 
     }
@@ -1588,6 +1625,13 @@ impl SimulationControllerData {
 
 fn get_extension(media_id: &MediaId) -> Option<&str> {
     media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
+}
+
+fn get_filename<P: AsRef<Path>>(path: P) -> Option<String> {
+    path.as_ref()
+        .file_name()
+        .and_then(|name| name.to_str())
+        .map(|s| s.to_string())
 }
 
 fn open_image(path: &str) {
