@@ -8,12 +8,16 @@ use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
-
-
+use std::sync::{Arc, Mutex};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+use crossbeam_channel::{Sender as Sender_c, Receiver as Receiver_c};
+use wg_2024::network::NodeId;
 use crate::backend::sc_models::FileRendererUpdate::Redraw;
+use crate::backend::simulation_controller::SimulationControllerData;
 
 /// Used in multiple crates, needs to be pub
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum LogType{
     WARN, ERROR, INFO, DEBUG, FATAL
 }
@@ -304,3 +308,120 @@ impl Display for DroneType {
         write!(f, "{}", name)
     }
 }
+
+//-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
+
+/// Commands that can be sent to the Simulation Controller
+#[derive(Debug, Clone)]
+pub enum WorkerCommand {
+    // Drone operations
+    CrashDrone(NodeId),
+    SetDronePDR(NodeId, f32),
+
+    // Network operations
+    AddConnection(NodeId, NodeId),
+    RemoveConnection(NodeId, NodeId),
+
+    // Client operations
+    RequestServerType(ClientId),
+    RequestFilesList(ClientId, ServerId),
+    RequestFile(ClientId, ServerId, FileId),
+    RequestMediaList(ClientId, ServerId),
+    RequestMedia(ClientId, ServerId, MediaId),
+    RequestRegistrationToChat(ClientId, ServerId),
+    RequestClientList(ClientId, ServerId),
+    MessageFor(ClientId, ClientId, ServerId, String),
+    MediaFor(ClientId, ClientId, ServerId, String), // path
+    FileFor(ClientId, ClientId, ServerId, String),  // path
+    NewMedia(ClientId, ServerId, String),           // path
+    NewFile(ClientId, ServerId, String),            // path
+
+    // Control operations
+    Execute,
+    Shutdown,
+}
+
+/// Responses from the simulation controller
+#[derive(Debug, Clone)]
+pub enum WorkerResponse {
+    Success,
+    Error(String),
+    Processed,
+}
+
+pub struct SimulationHelper {
+    //data shared with frontend
+    pub(crate) simulation_data: Arc<Mutex<SimulationControllerData>>,
+
+    //worker thread channels
+    pub(crate) worker_command_sender: Sender_c<WorkerCommand>,
+    pub(crate) worker_response_receiver: Receiver_c<WorkerResponse>,
+
+    //worker thread handle
+    pub(crate) worker_handle: Option<JoinHandle<()>>,
+
+    //log channel
+    pub(crate) log_receiver: Receiver_c<(LogType, String)>,
+
+    pub(crate) is_running: bool,
+}
+
+/*/// Statistics snapshot
+#[derive(Debug, Clone)]
+pub struct SimulationStats {
+    pub total_packets: usize,
+    pub active_connections: usize,
+    pub network_reliability: u8,
+    pub uptime: Duration,   //time from start of simulation
+    pub nodes_active: usize,
+    pub critical_nodes: Vec<NodeId>,
+    pub critical_edges: Vec<(NodeId, NodeId)>,
+    pub throughput: f64, // packets per second
+    pub average_latency: Duration,
+}
+
+/// Network state snapshot
+#[derive(Debug, Clone)]
+pub struct NetworkStateSnapshot {
+    pub nodes: HashMap<NodeId, NodeInfo>,
+    pub connections: Vec<(NodeId, NodeId)>,
+    pub components: Vec<Vec<NodeId>>,   //number of subnets (should be 1)
+    pub generation: u64,    //incremented at each change in the net
+    pub is_connected: bool,
+    pub diameter: Option<usize>,    //longest shortest path
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeInfo {
+    pub node_type: String,
+    pub neighbors: Vec<NodeId>,
+    pub is_critical: bool,
+    pub status: NodeStatus,
+    pub packet_drop_rate: Option<f32>, // For drones
+    pub load: usize, // Number of packets processed
+}
+
+#[derive(Debug, Clone)]
+pub enum NodeStatus {
+    Active,
+    Crashed,
+    Paused,
+    Disconnected,
+}
+
+/// Threaded simulation controller
+pub struct ThreadedSimulationController {
+    pub(crate) command_sender: Sender<WorkerCommand>,
+    pub(crate) response_receiver: Receiver<WorkerResponse>,
+    pub(crate) thread_handle: Option<JoinHandle<()>>,
+    pub(crate) is_running: bool,
+    pub(crate) performance_metrics: PerformanceMetrics,
+}
+
+#[derive(Debug, Clone)]
+pub struct PerformanceMetrics {
+    pub commands_processed: u64,
+    pub responses_sent: u64,
+    pub average_command_time: Duration,
+    pub last_update: Instant,
+}*/

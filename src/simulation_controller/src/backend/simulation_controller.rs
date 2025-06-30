@@ -1,8 +1,10 @@
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::fmt::Display;
 use client::ClientCommand;
 use std::collections::HashSet;
+use std::thread;
+use std::time::{Duration, Instant};
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -11,7 +13,7 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, PerformanceMetrics, RendererCommand, RendererResponse, WorkerCommand, WorkerResponse, Statistics, ThreadedSimulationController};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -125,3 +127,4 @@ impl SimulationControllerData {
         }
     }
 }
+
