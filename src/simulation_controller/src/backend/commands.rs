@@ -2,10 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::io::Cursor;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -13,13 +12,11 @@ use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, S
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
-use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, Rgba};
+use image::ImageReader;
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
-use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
-use server::MediaServerError;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
