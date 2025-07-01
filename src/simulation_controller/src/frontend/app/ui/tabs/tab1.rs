@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::Alignment::Center;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{NodePopup, PopupSelection, ViewedTab1};
-use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, POPUP_BG_COLOR};
+use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, POPUP_BG_COLOR};
 // popup code
 
 use ratatui::layout::{Constraint, Direction, Layout};
@@ -12,8 +12,8 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets;
 use ratatui::widgets::{Block, BorderType, Borders, Widget};
 use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine,};
-use tui_popup::Popup;
 use crate::backend::simulation_controller::NetNode;
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -75,6 +75,79 @@ pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, 
 }
 
 // Utils needed by the single tabs
+
+pub(super) fn draw_map(topology_algorithm_data:&TopologyAlgorithm, area: Rect, buf: &mut Buffer, canvas_block:Block){
+    let canvas = Canvas::default()
+        .block(canvas_block)
+        .background_color(BG_COLOR)
+        .x_bounds([0.0, 100.0])
+        .y_bounds([0.0, 80.0])
+        .paint(|ctx| {
+            // Draw topology links
+            for &(a, b) in &topology_algorithm_data.map_links {
+                if let (Some(na), Some(nb)) = (
+                    topology_algorithm_data.map.get(&a),
+                    topology_algorithm_data.map.get(&b),
+                ) {
+                    let line = CanvasLine {
+                        x1: na.position.x as f64,
+                        y1: na.position.y as f64,
+                        x2: nb.position.x as f64,
+                        y2: nb.position.y as f64,
+                        color: Color::White,
+                        ..Default::default()
+                    };
+                    ctx.draw(&line);
+                }
+            }
+            for (id, pos) in &topology_algorithm_data.map {
+                let cx = pos.position.x as f64;
+                let cy = pos.position.y as f64;
+                let size = 3.0;
+                // Draw shape based on node type
+                match pos.node{
+                    NetNode::Drone(_) => {
+                        // Drone: circle
+                        let circle = Circle {
+                            x: cx,
+                            y: cy,
+                            radius: size,
+                            color: CANVAS_DRONE_COLOR,
+                            ..Default::default()
+                        };
+                        ctx.draw(&circle);
+                    }
+                    NetNode::Client(_) => {
+                        // Client: square
+                        let top = CanvasLine { x1: cx - size, y1: cy - size, x2: cx + size, y2: cy - size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
+                        let bottom = CanvasLine { x1: cx - size, y1: cy + size, x2: cx + size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
+                        let left = CanvasLine { x1: cx - size, y1: cy - size, x2: cx - size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
+                        let right = CanvasLine { x1: cx + size, y1: cy - size, x2: cx + size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
+                        ctx.draw(&top);
+                        ctx.draw(&bottom);
+                        ctx.draw(&left);
+                        ctx.draw(&right);
+                    }
+                    NetNode::Server(_) => {
+                        // Server: diamond
+                        let d = size;
+                        let d1 = CanvasLine { x1: cx, y1: cy - d, x2: cx + d, y2: cy, color: CANVAS_SERVER_COLOR, ..Default::default() };
+                        let d2 = CanvasLine { x1: cx + d, y1: cy, x2: cx, y2: cy + d, color: CANVAS_SERVER_COLOR, ..Default::default() };
+                        let d3 = CanvasLine { x1: cx, y1: cy + d, x2: cx - d, y2: cy, color: CANVAS_SERVER_COLOR, ..Default::default() };
+                        let d4 = CanvasLine { x1: cx - d, y1: cy, x2: cx, y2: cy - d, color: CANVAS_SERVER_COLOR, ..Default::default() };
+                        ctx.draw(&d1);
+                        ctx.draw(&d2);
+                        ctx.draw(&d3);
+                        ctx.draw(&d4);
+                    }
+                }
+                // Draw node ID at center
+                ctx.print(cx, cy, format!("{}", id));
+            }
+        });
+    // Render the canvas into the allocated area
+    canvas.render(area, buf);
+}
 
 pub(super) fn get_settings_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&mut Context)>{
     // Draw settings icon

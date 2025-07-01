@@ -150,12 +150,12 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
                                                         }
                                                         _ => (),
                                                     }
-                                                    match &mut ndpage.selected_file{
+/*                                                    match &mut ndpage.selected_file{
                                                         SelectedFileMedia::Media(id) => {
                                                             app.cache.tab1_data.image_rendering_data = RenderingImage::True((file_vis_area,*node_id,ndpage.selected_server,id.clone() ))
                                                         }
                                                         _ => (),
-                                                    }
+                                                    }*/
                                                 }
                                                 _ => (),
                                             }

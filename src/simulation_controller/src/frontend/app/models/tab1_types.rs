@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::layout::Rect;
 use ratatui::widgets::ListState;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
 use crate::frontend::app::models::general_types::{FnList, NetNodeList};
-
+use crate::frontend::app::topology_algorithm::vectors::Vector;
 
 /// Tab n.01 data
 pub(in crate::frontend::app) struct Tab1{
@@ -24,10 +25,12 @@ pub(in crate::frontend::app) struct Tab1{
     pub image_rendering_data: RenderingImage,
     pub file_exploring_data: FileExploring,
 
+
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
 }
+
 #[derive(Clone, Debug, Default)]
 pub(crate) enum RenderingImage{
     #[default]
@@ -81,23 +84,28 @@ impl FileListRenderUtils{
         }
     }
 }
+#[derive(Clone, Debug)]
 pub(crate) struct FileExploring {
-    last_selected_cl_sender: ClientId,
-    last_selected_cl_receiver: ClientId,
-    last_selected_sr: ServerId,
+    pub file_request_source: u8, // 0 for none, 1 for Chat Page, 2 for NetPage Media, 3 for NetPage File
+    // All the fields that come here doesn't need a None, as they are gonna get overwrote by the new selected client, etc.
+    pub last_selected_cl_sender: ClientId,
+    pub last_selected_cl_receiver: ClientId,
+    pub last_selected_sr: ServerId,
 }
 impl FileExploring {
     fn default()->Self{
         Self{
+            file_request_source: 0,
             last_selected_cl_sender: 0,
             last_selected_cl_receiver: 0,
             last_selected_sr: 0,
         }
     }
-    pub(crate) fn set_fields(&mut self, cl_sender:ClientId, cl_receiver:ClientId, server_id:ServerId) {
+    pub(crate) fn set_fields(&mut self, cl_sender:ClientId, cl_receiver:ClientId, server_id:ServerId, req_source: u8) {
         self.last_selected_cl_receiver = cl_receiver;
         self.last_selected_cl_sender = cl_sender;
         self.last_selected_sr = server_id;
+        self.file_request_source = req_source;
     }
 
     /// ( Client Sender, Client Receiver, Server )
@@ -203,9 +211,26 @@ pub(crate) enum ServerPopup{
 }
 #[derive(Debug, Clone)]
 pub(crate) enum DronePopup{
-    DataPage(),
-    SettingsPage()
+    DataPage(DroneDataPopup),
+    SettingsPage(DroneSettingsPopup)
 }
+
+#[derive(Debug, Clone)]
+pub(crate) enum DroneDataPopup{
+    FirstPage(), // View some statistics
+}
+#[derive(Debug, Clone)]
+pub(crate) enum DroneSettingsPopup{
+    FirstPage(DroneSettingsFirstPage), // View the drone popup settings
+}
+#[derive(Clone, Debug)]
+pub(crate) struct DroneSettingsFirstPage{
+    pub command_offset:u8, // Which command I've selected
+    pub drone_pdr: u8,
+}
+
+
+
 
 // END LOGIC SECTION
 // - - - - - - - - - - - - - - -
@@ -226,11 +251,6 @@ impl Tab1{
             image_rendering_data: RenderingImage::False,
             file_exploring_data: FileExploring::default(),
             viewing: ViewedTab1::Main
-            /*ViewedTab1::Popup((1, NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(ClThirdPage{
-                selected_server: 1,
-                selected_contact: 2,
-            })))))*/,
-
         }
     }
     pub(crate) fn return_to_main(&mut self){

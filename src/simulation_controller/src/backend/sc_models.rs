@@ -43,19 +43,19 @@ impl Logs{
 
     pub (crate) fn push_sc_log(&mut self, log_type: LogType, text: String) {
         // Write all logs to a text file
-        match log_type{
-            LogType::ERROR | LogType::FATAL => {
-                if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .append(true)
-                    .open("logs.txt")
-                {
-                    let _ = writeln!(file, "{}", text);
-                }
-            },
-            _ => {}
+        /*        match log_type{
+                    LogType::ERROR | LogType::FATAL => {*/
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .append(true)
+            .open("logs.txt")
+        {
+            let _ = writeln!(file, "{}", text);
         }
+        /*            },
+                    _ => {}
+                }*/
 
 /*        if self.logs_memory.len()>=50{
             self.logs_memory.remove(0);
@@ -67,8 +67,8 @@ impl Logs{
     }
     pub fn push_log(&mut self, log_type: LogType, text: &str){
         // Write all logs to a text file
-        match log_type{
-            LogType::ERROR | LogType::FATAL => {
+/*        match log_type{
+            LogType::ERROR | LogType::FATAL => {*/
                 if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .write(true)
@@ -77,9 +77,9 @@ impl Logs{
                 {
                     let _ = writeln!(file, "{}", text);
                 }
-            },
+/*            },
             _ => {}
-        }
+        }*/
 
 /*
         if self.logs_memory.len()>=50{

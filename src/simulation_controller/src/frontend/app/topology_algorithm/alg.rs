@@ -2,12 +2,75 @@ use std::collections::HashMap;
 use ratatui::layout::Rect;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::LogType;
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::frontend::app::App;
 use crate::frontend::app::topology_algorithm::vectors::{generate_force_vec, Vector};
-use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
+use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
 
 impl App<'_>{
+    /// Populate the TopologyAlgorithm.map_links field from the running_network,
+    /// inserting each undirected edge exactly once.
+    pub fn populate_topology_links(&mut self)-> Vec<(NodeId, NodeId)>{
+        use std::collections::HashSet;
+        // Collect unique, undirected links
+        let mut links = HashSet::new();
+        for (net_node, neighbors) in &self.simulation_controller_data.running_network {
+            // Extract the NodeId from NetNode
+            let id = match net_node {
+                NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
+            };
+            for &neighbor in neighbors {
+                // Order the pair to avoid duplicates (min, max)
+                let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
+                links.insert((a, b));
+            }
+        }
+        links.into_iter().collect()
+    }
+    pub fn initialize_node_map(&self, top_alg: &mut TopologyAlgorithm ,id:NodeId){
+        top_alg.status = TopologyStatus::Computing;
+        fn create_map(sim: &SimulationControllerData, top_alg:&mut TopologyAlgorithm, connected: &Vec<NodeId>){
+            for id in connected{
+                top_alg.map.insert(*id, DisplayedNode::new_with_position({
+                                                                             if sim.running_network.contains_key(&NetNode::Drone(*id)){
+                                                                                 NetNode::Drone(*id)
+                                                                             }else if sim.running_network.contains_key(&NetNode::Server(*id)){
+                                                                                 NetNode::Server(*id)
+                                                                             }else{
+                                                                                 NetNode::Client(*id)
+                                                                             }
+                                                                         }, Vector::random(100,80)));
+            }
+        }
+        match &self.simulation_controller_data.running_network.get(&NetNode::Drone(id)){
+            None => {
+                match &self.simulation_controller_data.running_network.get(&NetNode::Server(id)){
+                    None => {
+                        match &self.simulation_controller_data.running_network.get(&NetNode::Client(id)) {
+                            None => (),
+                            Some(vec) => {
+                                create_map(&self.simulation_controller_data, top_alg,vec);
+                            }
+                        }
+                    }
+                    Some(vec) => {
+                        create_map(&self.simulation_controller_data, top_alg,vec);
+                    }
+                }
+            }
+            Some(vec) => {
+                create_map(&self.simulation_controller_data, top_alg,vec);
+            }
+        }
+        for (x,y) in &self.simulation_controller_data.topology_algorithm_data.map_links{
+            if x.eq(&id){
+                top_alg.map_links.push((*x, *y));
+            }else if y.eq(&id){
+                top_alg.map_links.push((*x, *y));
+            }
+        }
+
+    }
     pub fn check_topology_status(&mut self){
         match self.simulation_controller_data.topology_algorithm_data.status{
             TopologyStatus::Stopped => {

@@ -30,9 +30,6 @@ impl App<'_> {
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (id,(channels,media)) in values{
                 match media{
-                    NetCacheMedia::Downloading(status) => {
-
-                    }
                     NetCacheMedia::Downloaded(vec) => {
                         match channels.0.clone(){
                             None => {}
@@ -55,9 +52,6 @@ impl App<'_> {
                             }
                         }
                     }
-                    NetCacheMedia::Rendering(status) => {
-
-                    }
                     NetCacheMedia::Rendered(ref mut rendered) => {
                         match &channels.1{
                             None => {
@@ -79,8 +73,9 @@ impl App<'_> {
                         }
                     }
                     NetCacheMedia::FatalErrorRendering() => {
-
+                        // Recovery mode?
                     }
+                    _ => (),
                 }
             }
         }

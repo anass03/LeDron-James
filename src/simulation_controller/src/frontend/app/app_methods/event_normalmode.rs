@@ -10,7 +10,7 @@ impl App<'_>{
                 "a" => self.previous_tab(),
                 "d" => self.next_tab(),
                 "p" => {
-                    let new_links = self.simulation_controller_data.populate_topology_links();
+                    let new_links = self.populate_topology_links();
                     self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
                 },
                 "o" => {

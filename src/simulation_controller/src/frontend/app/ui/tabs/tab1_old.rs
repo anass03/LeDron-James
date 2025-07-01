@@ -49,7 +49,7 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
         .netnode_list
         .items
         .iter()
-        .map(|(n, b)| ListItem::from(n)) // Into<ListItem> because you impl From<&Node>
+        .map(|(n, b,_)| ListItem::from(n)) // Into<ListItem> because you impl From<&Node>
         .collect::<Vec<ListItem>>();
 
     let list = List::new(list_items)
@@ -86,7 +86,7 @@ fn render_selected_fns(app: &App, area: Rect, buf: &mut Buffer) {
     use super::super::super::super::app::models;
     let selected_n = app.cache.tab1_data.netnode_list.selected;
     match app.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
-        Some((n, b)) => {
+        Some((n, b, _)) => {
             // Function Process
             let mut vec_and_block = match n {
                 Node::Client(_) => {
@@ -208,7 +208,7 @@ fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
                 .centered();
             paragraph.render(area, buf);
         }
-        Some((n, b)) => {
+        Some((n, b, _)) => {
             match n {
                 Node::Client(_) => {
                     match app.cache.tab1_data.selected_fn.selected {

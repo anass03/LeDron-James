@@ -17,9 +17,12 @@ use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
+use petgraph::visit::Topo;
 use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
 use server::MediaServerError;
+use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
+use crate::frontend::app::topology_algorithm::vectors::Vector;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -1642,25 +1645,7 @@ impl SimulationControllerData {
         }
     }
 
-    /// Populate the TopologyAlgorithm.map_links field from the running_network,
-    /// inserting each undirected edge exactly once.
-    pub fn populate_topology_links(&mut self)-> Vec<(NodeId, NodeId)>{
-        use std::collections::HashSet;
-        // Collect unique, undirected links
-        let mut links = HashSet::new();
-        for (net_node, neighbors) in &self.running_network {
-            // Extract the NodeId from NetNode
-            let id = match net_node {
-                NetNode::Drone(id) | NetNode::Client(id) | NetNode::Server(id) => *id,
-            };
-            for &neighbor in neighbors {
-                // Order the pair to avoid duplicates (min, max)
-                let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
-                links.insert((a, b));
-            }
-        }
-        links.into_iter().collect()
-    }
+
 }
 
 

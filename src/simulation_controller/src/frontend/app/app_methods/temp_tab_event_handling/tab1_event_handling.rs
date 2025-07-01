@@ -10,8 +10,7 @@ use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DronePopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, ViewedTab1};
-
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DroneDataPopup, DronePopup, DroneSettingsFirstPage, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -56,7 +55,7 @@ impl App<'_> {
                             None => {
 
                             }
-                            Some((node,is_active)) => {
+                            Some((node,is_active,_)) => {
                                 if *is_active{
                                     match node{
                                         Node::Client(cl) => {
@@ -81,7 +80,7 @@ impl App<'_> {
                                             self.cache.tab1_data.viewing =
                                                 ViewedTab1::Popup((
                                                     dr.id,
-                                                    NodePopup::Drone(DronePopup::DataPage())
+                                                    NodePopup::Drone(DronePopup::DataPage(DroneDataPopup::FirstPage()))
                                                 ))
                                         }
                                     }
@@ -168,6 +167,35 @@ impl App<'_> {
                     ))
             }
             _ => (),
+        }
+    }
+    fn coordinate_drone_popup_cursor_with_opt_menu(&mut self, id:NodeId, current_cursor: usize){
+        match current_cursor{
+            0 => {
+               self.cache.tab1_data.viewing =
+                   ViewedTab1::Popup((
+                       id,
+                       NodePopup::Drone(
+                           DronePopup::DataPage(
+                               DroneDataPopup::FirstPage()
+                           )
+                       )
+                   ));
+            }
+            1 => {
+                self.cache.tab1_data.viewing =
+                    ViewedTab1::Popup((
+                        id,
+                        NodePopup::Drone(
+                            DronePopup::SettingsPage(
+                                DroneSettingsPopup::FirstPage(DroneSettingsFirstPage { command_offset: 0, drone_pdr: 0 })
+                            )
+                        )
+                    ));
+            }
+            _ => {
+                self.cache.tab1_data.popup_cursor = 0;
+            }
         }
     }
     fn handle_client_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: ClientPopup){
@@ -465,7 +493,7 @@ impl App<'_> {
                                     }
                                     1 => {
                                         // Attach a file, il restituito andrà direttamente inviato
-                                        self.cache.tab1_data.file_exploring_data.set_fields(id, chat_data.selected_contact, chat_data.selected_server);
+                                        self.cache.tab1_data.file_exploring_data.set_fields(id, chat_data.selected_contact, chat_data.selected_server, 1);
                                         self.app_mode = AppMode::FileExploring;
                                     }
                                     _ => ()
@@ -705,6 +733,11 @@ impl App<'_> {
                                     }
                                     1 => {
                                         // Upload your media
+                                        // Attach a file, il restituito andrà direttamente inviato
+                                        // Devo settare i fields in modo corretto
+                                        // todo()!
+                                        self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 2);
+                                        self.app_mode = AppMode::FileExploring;
                                     }
                                     2 => {
                                         match self.simulation_controller_data.net_cache.known_media_list.get(&id){
@@ -726,7 +759,13 @@ impl App<'_> {
                                     }
                                     3 => {
                                         // Upload your file
-
+                                        // Upload your media
+                                        // Attach a file, il restituito andrà direttamente inviato
+                                        // Devo settare i fields in modo corretto
+                                        // todo()!
+                                        self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("{:?}",self.cache.tab1_data.file_exploring_data));
+                                        self.app_mode = AppMode::FileExploring;
                                     }
                                     4 => {
                                         // Open the media if it is selected!
@@ -804,7 +843,40 @@ impl App<'_> {
 
 
     fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){}
-    fn handle_drone_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: DronePopup){}
+    fn handle_drone_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: DronePopup){
+        match self.cache.tab1_data.popup_selection {
+            PopupSelection::MenuArea => {
+                match key.code{
+                    KeyCode::Up => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }else{
+                            self.cache.tab1_data.popup_cursor = 1;
+                        }
+                        // Need same for drone
+                        self.coordinate_drone_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                    }
+                    KeyCode::Down => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }else{
+                            self.cache.tab1_data.popup_cursor = 0;
+                        }
+                        self.coordinate_drone_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                    }
+                    KeyCode::Right | KeyCode::Enter => {
+                        self.cache.tab1_data.popup_selection = PopupSelection::OptArea;
+                        self.coordinate_drone_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                        self.cache.tab1_data.popup_cursor = 0;
+                    }
+                    _ => (),
+                }
+            }
+            PopupSelection::OptArea => {
+                
+            }
+        }
+    }
 
 }
 

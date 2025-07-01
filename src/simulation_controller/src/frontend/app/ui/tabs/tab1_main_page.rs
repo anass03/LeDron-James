@@ -8,6 +8,7 @@ use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyStatus;
 use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
+use crate::frontend::app::ui::tabs::tab1::draw_map;
 
 pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect, buf: &mut Buffer){
     let [top_area,log_area] = Layout::default()
@@ -40,7 +41,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
         .items
         .iter()
         .enumerate()
-        .map(|(idx, (n, _))| {
+        .map(|(idx, (n, _, _))| {
             let base_style = if idx % 2 == 0 {
                 // even rows – brighter foreground
                 Style::default().bg(BG_COLOR)
@@ -116,8 +117,8 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
 
         }
     }
-
-    let canvas = Canvas::default()
+    draw_map(&app.simulation_controller_data.topology_algorithm_data, map_area, buf, canvas_block);
+/*    let canvas = Canvas::default()
         .block(canvas_block)
         .background_color(BG_COLOR)
         .x_bounds([0.0, 100.0])
@@ -182,7 +183,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
             }
         });
     // Render the canvas into the allocated area
-    canvas.render(map_area, buf);
+    canvas.render(map_area, buf);*/
 }
 
 impl From<&Node> for ListItem<'_> {

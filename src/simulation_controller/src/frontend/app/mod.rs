@@ -96,42 +96,48 @@ impl App<'_>{
 
 
             // Terminal drawing and other basic app functions
+
+
             self.cache.update_counter();
             // Image drawing if active
-            match self.cache.tab1_data.viewing.clone() {
-                ViewedTab1::Main => {}
-                ViewedTab1::Popup((id,popup)) => {
-                    match popup{
-                        NodePopup::Client(clpop) => {
-                            match clpop {
-                                ClientPopup::ChatPage(_) => {}
-                                ClientPopup::InternetPage(netpop) => {
-                                    match netpop{
-                                        ClientNetPopup::FirstPage(_) => {}
-                                        ClientNetPopup::SecondPage(ndpage) => {
-                                            match ndpage.image_rendering_data {
-                                                RenderingImage::False => {}
-                                                RenderingImage::True(data) => {
-                                                    drawn = true;
-                                                        terminal.draw(|f| {
-                                                            f.render_widget(&mut *self, f.area());
-                                                            Self::render_image(f, self, data);
-                                                        })?;
+            match self.selected_tab{
+                SelectedTab::Topology => {
+                    match self.cache.tab1_data.viewing.clone() {
+                        ViewedTab1::Main => {}
+                        ViewedTab1::Popup((id,popup)) => {
+                            match popup{
+                                NodePopup::Client(clpop) => {
+                                    match clpop {
+                                        ClientPopup::ChatPage(_) => {}
+                                        ClientPopup::InternetPage(netpop) => {
+                                            match netpop{
+                                                ClientNetPopup::FirstPage(_) => {}
+                                                ClientNetPopup::SecondPage(ndpage) => {
+                                                    match ndpage.image_rendering_data {
+                                                        RenderingImage::False => {}
+                                                        RenderingImage::True(data) => {
+                                                            drawn = true;
+                                                            terminal.draw(|f| {
+                                                                f.render_widget(&mut *self, f.area());
+                                                                Self::render_image(f, self, data);
+                                                            })?;
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
+                                        ClientPopup::DataPage(_) => {}
+                                        ClientPopup::SettingsPage(_) => {}
                                     }
                                 }
-                                ClientPopup::DataPage(_) => {}
-                                ClientPopup::SettingsPage(_) => {}
+                                NodePopup::Server(_) => {}
+                                NodePopup::Drone(_) => {}
                             }
                         }
-                        NodePopup::Server(_) => {}
-                        NodePopup::Drone(_) => {}
                     }
                 }
-            }
-            if !drawn{
+                _ => (),
+            }if !drawn{
                 terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
             }
 
@@ -142,12 +148,10 @@ impl App<'_>{
                 instant = Instant::now();
                 self.tick_refresh();
             }
-
             if downloaded_instant.elapsed() > Duration::from_millis(500) {
                 downloaded_instant = Instant::now();
                 self.handle_downloaded_medias();
             }
-
 
 
             if self.stay == false{

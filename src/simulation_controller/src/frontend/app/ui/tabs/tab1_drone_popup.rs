@@ -4,7 +4,7 @@ use ratatui::prelude::{Color, Modifier, Style};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 use wg_2024::network::NodeId;
 use crate::frontend::app::models::tab1_types::{ClientPopup, DronePopup, PopupSelection, ServerPopup};
-use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
+use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
 use std::cmp::PartialEq;
 
 use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine, Map};
@@ -14,8 +14,10 @@ use ratatui::text::ToSpan;
 use crate::backend::sc_models::DroneType;
 use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
+use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
 use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
+use crate::frontend::app::ui::tabs::tab1::draw_map;
 
 pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rect, buf : &mut Buffer, drone_popup: &DronePopup, id:NodeId) {
 
@@ -71,15 +73,81 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
 
 fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &DronePopup, selected_node: &NodeId){
     match drone_popup{
-        DronePopup::DataPage() => {
+        DronePopup::DataPage(datapage) => {
             render_cl_sr_data_options(app, area, buf)
         }
-        DronePopup::SettingsPage() => {
-
+        DronePopup::SettingsPage(setpage) => {
+            render_settings_page(app, area, buf, *selected_node)
         }
     }
 }
-fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer) {
+fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId) {
+    let [sett_area, view_area] = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+        .spacing(1)
+        .areas(area);
+
+    let commands_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style( Style::default().fg(
+            if app.cache.tab1_data.popup_cursor == 0 {
+                app.animation_color()
+            }else {
+                MAIN_BLOCK_BORDERS
+            }
+        ))
+        .title(" Commands ")
+        .title_alignment(Alignment::Left);
+
+    let inner_commands_block = commands_block
+        .inner(sett_area);
+
+    commands_block.render(sett_area, buf);
+
+
+    // I have to render an option list
+
+    let [text_area, map_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .spacing(1)
+        .areas(view_area);
+
+    let map_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style( Style::default().fg(
+            if app.cache.tab1_data.popup_cursor == 1 {
+                app.animation_color()
+            }else {
+                MAIN_BLOCK_BORDERS
+            }
+        ));
+
+    for (node,_,top_alg) in &app.cache.tab1_data.netnode_list.items{
+        match node{
+            Node::Client(id_1) => {
+                if id_1.id.eq(&id) {
+                    draw_map(top_alg, map_area, buf, map_block.clone());
+                    break;
+                }
+            }
+            Node::Server(id_1) => {
+                if id_1.id.eq(&id){
+                    draw_map(top_alg,map_area,buf,map_block.clone());
+                    break;
+                }
+            }
+            Node::Drone(id_1) => {
+                if id_1.id.eq(&id){
+                    draw_map(top_alg,map_area,buf,map_block.clone());
+                    break;
+                }
+            }
+        }
+    }
 
 
 }

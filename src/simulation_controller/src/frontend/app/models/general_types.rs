@@ -3,6 +3,8 @@ use ratatui::widgets::ListState;
 use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as ServerConfig};
 use wg_2024::network::NodeId;
 use std::str::FromStr;
+use tui_textarea::CursorMove::Top;
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub(in crate::frontend::app) struct TextBuffer<'a>{
     pub text_buffer: Vec<String>,
@@ -19,7 +21,7 @@ pub(in crate::frontend::app) struct FnList{
 }
 
 pub(in crate::frontend::app) struct NetNodeList {
-    pub(in crate::frontend::app) items: Vec<(Node, bool)>,
+    pub(in crate::frontend::app) items: Vec<(Node, bool, TopologyAlgorithm)>,
     pub(in crate::frontend::app) selected: u8,
     pub(in crate::frontend::app) state: ListState,
     pub(in crate::frontend::app) initialized: bool,
@@ -64,13 +66,13 @@ impl NetNodeList {
                 let mut nodes = Vec::new();
 
                 for d in drones{
-                    nodes.push((Node::Drone(d),true))
+                    nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
                 }
                 for s in servers{
-                    nodes.push((Node::Server(s),true))
+                    nodes.push((Node::Server(s),true, TopologyAlgorithm::default()))
                 }
                 for c in clients{
-                    nodes.push((Node::Client(c),true))
+                    nodes.push((Node::Client(c),true, TopologyAlgorithm::default()))
                 }
                 self.items = nodes;
             self.selected= 0;
@@ -82,20 +84,20 @@ impl NetNodeList {
         let mut nodes = Vec::new();
 
         for d in drones{
-            nodes.push((Node::Drone(d),true))
+            nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()))
         }
         for s in servers{
-            nodes.push((Node::Server(s),true))
+            nodes.push((Node::Server(s),true, TopologyAlgorithm::default()))
         }
         for c in clients{
-            nodes.push((Node::Client(c),true))
+            nodes.push((Node::Client(c),true, TopologyAlgorithm::default()))
         }
 
         self.items = nodes
     }
 
     pub(in crate::frontend::app) fn set_inactive_node(&mut self, id: NodeId){
-        for (n,b) in &mut self.items{
+        for (n,b,_) in &mut self.items{
             match n{
                 Node::Client(c) => {
                     if c.id == id{
