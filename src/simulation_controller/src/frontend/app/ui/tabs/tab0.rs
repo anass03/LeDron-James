@@ -3,6 +3,7 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::widgets::{Block, Borders, Widget};
 use crate::frontend::app::App;
+
 /// Renders Overview tab-page
 pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
     let inner_columns = Layout::default()
@@ -14,8 +15,8 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
         .split(area);
 
 /*    let log_paragraph = tabs::process_log_paragraph(app);
-    log_paragraph.render(inner_columns[1], buf);*/
-
+    log_paragraph.render(inner_columns[1], buf);
+*/
 
     use crate::frontend::app::ui::tabs; // Statistic Block
     use super::super::utils::chart_rendering;

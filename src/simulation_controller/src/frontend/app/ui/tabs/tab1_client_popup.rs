@@ -1027,7 +1027,7 @@ pub(super) mod net_rendering{
     use std::sync::mpsc::Receiver;
     use client::Client;
     use host::{ClientId, FileId, MediaId, ServerId};
-    use ratatui::Frame;
+    use ratatui::{widgets, Frame};
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::{ToSpan, ToText};
     use ratatui_image::protocol::StatefulProtocol;
@@ -1047,7 +1047,17 @@ pub(super) mod net_rendering{
                 None
             }
             ClientNetPopup::SecondPage(nd) => {
-                render_net_second_page(app,area,buf,nd,selected_node)
+                let ret = render_net_second_page(app,area,buf,nd,selected_node);
+                if app.app_mode == AppMode::FileExploring{
+                    let centered_popup_area = centered_popup_area(area);
+                    widgets::Clear.render(centered_popup_area, buf);
+                    let colored_bg_block = Block::default().style(Style::default().bg(POPUP_BG_COLOR));
+                    let colored_popup_area = colored_bg_block
+                        .inner(centered_popup_area);
+                    colored_bg_block.render(centered_popup_area, buf);
+                    app.cache.file_explorer.widget().render(centered_popup_area, buf);
+                }
+                ret
             }
         }
     }
