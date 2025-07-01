@@ -5,17 +5,10 @@ use std::time::{Duration, Instant};
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use host::{ClientId, FileId, MediaId, ServerId};
 use wg_2024::network::NodeId;
-use crate::backend::sc_models::{LogType, SimulationHelper, WorkerCommand, WorkerResponse};
+use crate::backend::sc_models::{LogType, SimulationHelper, WorkerCommand, WorkerHelper, WorkerResponse};
 use crate::backend::simulation_controller::SimulationControllerData;
 
-/// Worker thread helper - handles heavy operations
-struct WorkerHelper {
-    simulation_data: Arc<Mutex<SimulationControllerData>>,
-    command_receiver: Receiver<WorkerCommand>,
-    response_sender: Sender<WorkerResponse>,
-    log_sender: Sender<(LogType, String)>,
-    is_running: bool,
-}
+
 
 impl WorkerHelper {
     fn new(
@@ -294,19 +287,19 @@ impl SimulationHelper {
     }
 
     pub fn media_for<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
-        self.send_worker_command(WorkerCommand::MediaFor(sender_client_id, receiver_client_id, server_id, path))
+        self.send_worker_command(WorkerCommand::MediaFor(sender_client_id, receiver_client_id, server_id, asref_to_string(path)))
     }
 
     pub fn file_for<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
-        self.send_worker_command(WorkerCommand::FileFor(sender_client_id, receiver_client_id, server_id, path))
+        self.send_worker_command(WorkerCommand::FileFor(sender_client_id, receiver_client_id, server_id, asref_to_string(path)))
     }
 
     pub fn new_media<P: AsRef<Path>>(&mut self,sender_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
-        self.send_worker_command(WorkerCommand::NewMedia(sender_client_id, server_id, path))
+        self.send_worker_command(WorkerCommand::NewMedia(sender_client_id, server_id, asref_to_string(path)))
     }
 
     pub fn new_file<P: AsRef<Path>>(&mut self, sender_client_id: ClientId, server_id: ServerId, path: P) -> Result<(), String> {
-        self.send_worker_command(WorkerCommand::NewFile(sender_client_id, server_id, path))
+        self.send_worker_command(WorkerCommand::NewFile(sender_client_id, server_id, asref_to_string(path)))
     }
 
     pub fn try_receive_worker_response(&self) -> Option<WorkerResponse> {
@@ -379,4 +372,11 @@ impl SimulationHelper {
     pub fn is_running(&self) -> bool {
         self.is_running
     }
+}
+
+fn asref_to_string<P: AsRef<Path>>(p: P) -> String {
+    p.as_ref()
+        .to_str()                  // Option<&str>
+        .unwrap_or("<invalid>")    // or handle Option properly
+        .to_owned()                // convert &str to String
 }

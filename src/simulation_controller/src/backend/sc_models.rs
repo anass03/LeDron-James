@@ -8,6 +8,7 @@ use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -310,6 +311,15 @@ impl Display for DroneType {
 }
 
 //-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
+
+/// Worker thread helper - handles heavy operations
+pub(crate) struct WorkerHelper{
+    pub(crate) simulation_data: Arc<Mutex<SimulationControllerData>>,
+    pub(crate) command_receiver: crossbeam_channel::Receiver<WorkerCommand>,
+    pub(crate) response_sender: crossbeam_channel::Sender<WorkerResponse>,
+    pub(crate) log_sender: crossbeam_channel::Sender<(LogType, String)>,
+    pub(crate) is_running: bool,
+}
 
 /// Commands that can be sent to the Simulation Controller
 #[derive(Debug, Clone)]

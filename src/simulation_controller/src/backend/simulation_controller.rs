@@ -13,7 +13,7 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, PerformanceMetrics, RendererCommand, RendererResponse, WorkerCommand, WorkerResponse, Statistics, ThreadedSimulationController};
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, WorkerCommand, WorkerResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
