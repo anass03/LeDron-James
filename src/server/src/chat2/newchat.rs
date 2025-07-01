@@ -5,12 +5,13 @@ use host::{ServerToClient, ServerTypes, HostEvent, HostCommand, ClientNetCommand
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::time::Duration;
-use chrono:: Local;
+use chrono::Local;
 use toml::value::Datetime;
 use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 
+/// A chat server implementation that supports text, media, and file communication between clients.
 pub struct ChatServer2 {
     info: GenServer,
     client_list: Vec<NodeId>,
@@ -35,6 +36,7 @@ impl ChatServer2 {
         }
     }
 
+    /// Constructs a new instance of `ChatServer2`.
     pub fn new(
         id: NodeId,
         type_host: NodeType,
@@ -62,6 +64,7 @@ impl ChatServer2 {
         }
     }
 
+    /// Starts the main event loop of the Chat Server.
     pub fn run(&mut self){
         self.initiate_flood();
         self.send_logging("Starting Chat Server...".into());
@@ -80,13 +83,15 @@ impl ChatServer2 {
         }
     }
 
+    /// Handles all incoming packets based on their packet type.
     fn handling_packets(&mut self, packet: Packet) {
+        use PacketType::*;
         match packet.clone().pack_type {
-            PacketType::Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            PacketType::Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
-            PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
-            PacketType::FloodResponse(_) => self.process_flood_response(packet),
-            PacketType::MsgFragment(fragment) => {
+            Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
+            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
+            FloodRequest(r) => self.process_flood_request(r, packet),
+            FloodResponse(_) => self.process_flood_response(packet),
+            MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
                         Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
@@ -99,6 +104,7 @@ impl ChatServer2 {
         }
     }
 
+    /// Processes high-level commands from the client.
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         use ClientNetCommand::*;
         match cmd {
@@ -111,7 +117,8 @@ impl ChatServer2 {
             _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
         }
     }
-
+    
+    /// Saves a message or media command into the server's chat history.
     fn save_message(&mut self, cmd: ClientNetCommand, source: NodeId) {
         match cmd {
             ClientNetCommand::MessageFor(destination, _, msg) => {
@@ -127,6 +134,7 @@ impl ChatServer2 {
         }
     }
 
+    /// Inserts a message into the chat history, initializing a new chat if necessary.
     fn insert_message(&mut self, from: NodeId, to: NodeId, message: MessageSC) {
         let (a, b) = if from < to { (from, to) } else { (to, from) };
         let timestamp = Local::now().to_rfc3339().parse().unwrap_or_else(|_| Datetime::from_str("1970-01-01T00:00:00Z").unwrap());
@@ -135,7 +143,7 @@ impl ChatServer2 {
         match self.chats.iter_mut().find(|chat| chat.users == ChatUsers { user1: a, user2: b }) {
             Some(chat) => {
                 chat.chat.push((message, metadata));
-                let snapshot = chat.clone(); // copia il chat per poterlo usare dopo
+                let snapshot = chat.clone();
                 self.send_chat_to_simcontroller(&snapshot);
             },
             None => {
@@ -149,6 +157,7 @@ impl ChatServer2 {
         }
     }
 
+    /// Sends the serialized chat to the simulation controller.
     fn send_chat_to_simcontroller(&self, chat: &Chat) {
         match serde_json::to_string(chat) {
             Ok(serialized_chat) => {
@@ -160,12 +169,15 @@ impl ChatServer2 {
         }
     }
 
+    /// Registers a new client to the chat server.
     fn register_client(&mut self, receiver: NodeId, source: NodeId) {
-        if receiver == self.info.host.id && !self.client_list.contains(&source) {
+        if self.is_right_receiver(receiver) && !self.client_list.contains(&source) {
             self.client_list.push(source);
             self.send_logging(format!("Client {} registered", source));
         }
     }
+
+    /// Sends the type of server to the client.
     fn send_server_type(&mut self, source: NodeId) {
         match self.servertype() {
             Ok(server_type) => {
@@ -176,8 +188,9 @@ impl ChatServer2 {
         }
     }
 
+    /// Sends the list of registered clients to the requester.
     fn send_client_list(&mut self, receiver: NodeId, source: NodeId) {
-        if receiver == self.info.host.id {
+        if self.is_right_receiver(receiver) {
             self.send_response(ServerToClient::ClientList(source, self.info.host.id, self.client_list.clone()), source);
             self.send_logging("Sending client list".into());
         } else {
@@ -185,8 +198,9 @@ impl ChatServer2 {
         }
     }
 
+    /// Handles a plain text chat message between clients.
     fn handle_chat_message(&mut self, destination: NodeId, receiver_id: NodeId, msg: String, source: NodeId) {
-        if receiver_id == self.info.host.id {
+        if self.is_right_receiver(receiver_id) {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::MessageFor(destination, receiver_id, msg.clone()), source);
@@ -204,8 +218,9 @@ impl ChatServer2 {
         }
     }
 
+    /// Handles a file transfer between clients.
     fn handle_file_transfer(&mut self, destination: NodeId, receiver_id: NodeId, file_id: String, message: Vec<u8>, source: NodeId) {
-        if receiver_id == self.info.host.id {
+        if self.is_right_receiver(receiver_id) {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
@@ -223,8 +238,9 @@ impl ChatServer2 {
         }
     }
 
+    /// Handles a media (image) transfer between clients.
     fn handle_media_transfer(&mut self, destination: NodeId, receiver_id: NodeId, media_id: String, message: Image, source: NodeId) {
-        if receiver_id == self.info.host.id {
+        if self.is_right_receiver(receiver_id) {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
@@ -241,37 +257,49 @@ impl ChatServer2 {
             self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
         }
     }
+
+    /// Checks whether the receiver ID matches this server.
+    fn is_right_receiver(&self, receiver: NodeId) -> bool {
+        self.info.host.id == receiver
+    }
 }
 
+/// Represents a chat between two clients.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Chat {
     pub chat: Vec<(MessageSC, MessageMetaData)>,
     pub users: ChatUsers,
 }
-impl Chat{
-    pub fn get_last_message(&self)->Option<&(MessageSC,MessageMetaData)> {
+
+impl Chat {
+    /// Returns the last message in the chat, if any.
+    pub fn get_last_message(&self) -> Option<&(MessageSC, MessageMetaData)> {
         self.chat.last()
     }
 }
 
+/// Represents a pair of users in a chat.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ChatUsers {
     pub user1: NodeId,
     pub user2: NodeId,
 }
 
+/// Contains metadata about a message.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MessageMetaData {
     pub id: NodeId,
     pub timestamp: Datetime,
 }
 
+/// Enum representing a chat message.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum MessageSC {
     Message(String),
     Media(MediaSC),
 }
 
+/// Enum for media types in chat.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum MediaSC {
     Image(String, Image),

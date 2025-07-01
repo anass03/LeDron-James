@@ -1,25 +1,26 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-/// Errori specifici per il TextServer
+/// Error types specific to the `TextServer` operations.
 #[derive(Debug, thiserror::Error)]
 pub enum TextServerError {
-    #[error("Errore I/O: {0}")]
+    /// I/O error wrapper.
+    #[error("I/O Error: {0}")]
     Io(#[from] std::io::Error),
 }
 
-/// Trait che fornisce logica condivisa per gestire file di testo
+/// Trait providing logic to manage text files for servers.
 pub trait TextServer {
-    /// Legge un file di testo dal disco e restituisce i dati in byte.
+    /// Reads a text file from the disk and returns its content as bytes.
     fn convert_file_path<P: AsRef<Path>>(path: P) -> Result<Vec<u8>, TextServerError> {
         Ok(fs::read(path)?)
     }
 
-    /// Scrive un file di testo sul disco
+    /// Writes a text file to disk with the provided byte content.
     fn save_text_file<P: AsRef<Path>>(path: P, data: &[u8]) -> Result<(), TextServerError> {
         Ok(fs::write(path, data)?)
     }
 
-    /// Scansiona le directory pubblica e privata per file di testo
+    /// Scans both public and private directories for available text files and returns a mapping of file names to paths.
     fn scan_text_files(&self, private_files_dir: &Path) -> HashMap<String, PathBuf> {
         let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/files");
 

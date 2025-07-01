@@ -2,18 +2,21 @@ use std::{collections::HashMap, fs, io::Cursor, path::{Path, PathBuf}};
 use image::{save_buffer, ColorType, ImageReader};
 use host::Image;
 
-/// Errori specifici per MediaServer, al posto di Box<dyn Error>
+/// Error types specific to MediaServer operations.
 #[derive(Debug, thiserror::Error)]
 pub enum MediaServerError {
-    #[error("Errore I/O: {0}")]
+    /// Represents a file I/O error.
+    #[error("I/O Error: {0}")]
     Io(#[from] std::io::Error),
 
-    #[error("Errore immagine: {0}")]
+    /// Represents an error while decoding or encoding an image.
+    #[error("Image Error: {0}")]
     Image(#[from] image::ImageError),
 }
 
+/// Trait providing image-related functionality for server components.
 pub trait MediaServer {
-    /// Carica e decodifica un'immagine dal path dato
+    /// Loads and decodes an image from the given path.
     fn process_image_path<P: AsRef<Path>>(path: P) -> Result<Image, MediaServerError> {
         let data_bytes = fs::read(&path)?;
         let img = ImageReader::new(Cursor::new(&data_bytes))
@@ -27,7 +30,7 @@ pub trait MediaServer {
         })
     }
 
-    /// Salva l'immagine su disco nel path specificato
+    /// Saves the given image to disk at the specified path.
     fn save_image_to<P: AsRef<Path>>(path: P, image: &Image) -> Result<(), MediaServerError> {
         save_buffer(
             path,
@@ -39,9 +42,10 @@ pub trait MediaServer {
         Ok(())
     }
 
-    /// Scansiona le directory pubblica e privata per file immagine
+    /// Scans public and private directories for image files.
     fn scan_media_files(&self, private_images_dir: &Path) -> HashMap<String, PathBuf> {
         let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
+
         [&public_dir, private_images_dir]
             .iter()
             .flat_map(|dir| fs::read_dir(dir).into_iter().flatten())

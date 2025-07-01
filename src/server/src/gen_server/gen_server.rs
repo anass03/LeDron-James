@@ -1,4 +1,3 @@
-// Versione migliorata di GenServer
 use std::collections::HashMap;
 use std::error::Error;
 use std::io::Cursor;
@@ -10,12 +9,14 @@ use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
 use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionData, HostEvent, Edge, ServerToClient, generate_unique_session_id, ContentID};
 use zstd::{decode_all, encode_all};
 
+/// Generic Server structure used to implement Content or Communication servers.
 pub struct GenServer {
     pub host: Host,
     pub controller_recv: Receiver<HostCommand>,
     pub server_type: ServerTypes,
 }
 
+/// Defines the behavior required for a generic server.
 pub trait GenServerBehavior {
     fn handle_sim_command(&mut self, cmd: HostCommand);
     fn servertype(&mut self) -> Result<ServerTypes, String>;
@@ -30,11 +31,16 @@ pub trait GenServerBehavior {
 impl GenServer {
     delegate! {
         to self.host {
-            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, _on_fragment_sent: F) -> Result<(), String> where F: FnMut(usize);
+            /// Builds and sends message fragments to a given destination.
+            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, _on_fragment_sent: F) -> Result<(), String>
+            where F: FnMut(usize);
+
+            /// Sends a log message to the controller.
             pub fn send_logging(&self, message: String);
         }
     }
 
+    /// Constructs a new `GenServer` instance.
     pub fn new(
         id: NodeId,
         type_host: NodeType,
@@ -53,6 +59,7 @@ impl GenServer {
 }
 
 impl GenServerBehavior for GenServer {
+    /// Handles commands from the Simulation Controller.
     fn handle_sim_command(&mut self, cmd: HostCommand) {
         match cmd {
             HostCommand::AddSender(id, sender) => {
@@ -62,8 +69,12 @@ impl GenServerBehavior for GenServer {
                     self.send_logging("Cannot add more than 2 channels.".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
-                    self.host.network.nodes.entry(self.host.id).or_insert_with(|| (NodeType::Server, Vec::new())).1.push(Edge { to: id, weight: 0.0 });
-                    self.host.network.nodes.entry(id).or_insert_with(|| (NodeType::Drone, Vec::new())).1.push(Edge { to: self.host.id, weight: 0.0 });
+                    self.host.network.nodes.entry(self.host.id)
+                        .or_insert_with(|| (NodeType::Server, Vec::new()))
+                        .1.push(Edge { to: id, weight: 0.0 });
+                    self.host.network.nodes.entry(id)
+                        .or_insert_with(|| (NodeType::Drone, Vec::new()))
+                        .1.push(Edge { to: self.host.id, weight: 0.0 });
                     self.send_logging("Sender added successfully.".to_string());
                 }
             }
@@ -83,6 +94,7 @@ impl GenServerBehavior for GenServer {
         }
     }
 
+    /// Returns the type of the server (Text/Media/Communication).
     fn servertype(&mut self) -> Result<ServerTypes, String> {
         match self.host.type_host {
             NodeType::Server => Ok(self.server_type.clone()),
@@ -90,6 +102,7 @@ impl GenServerBehavior for GenServer {
         }
     }
 
+    /// Handles a received message fragment.
     fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
         let session_id = packet.session_id;
         let idx = fragment.fragment_index as usize;
@@ -143,15 +156,18 @@ impl GenServerBehavior for GenServer {
         }
     }
 
+    /// Decompresses a byte slice.
     fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         decode_all(Cursor::new(compressed)).map_err(|e| Box::new(e) as Box<dyn Error>)
     }
 
+    /// Compresses a byte slice.
     fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
         encode_all(data, 0).map_err(|e| Box::new(e) as Box<dyn Error>)
     }
 
-    fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
+    /// Sends a high-level response to a client.
+    fn send_response(&mut self, response: ServerToClient, destination: NodeId) { 
         if let Some((msg, meta)) = self.prepare_message(&response) {
             if let Some((content_type, id)) = meta {
                 let total = (msg.content.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
@@ -165,6 +181,7 @@ impl GenServerBehavior for GenServer {
         }
     }
 
+    /// Sends a content download notification before sending the actual data.
     fn send_download(&mut self, destination: NodeId, total: usize, content: ContentType, id: String) {
         let cid = match content {
             ContentType::File => ContentID::File(id),
@@ -173,6 +190,7 @@ impl GenServerBehavior for GenServer {
         self.send_response(ServerToClient::Sending(cid, total), destination);
     }
 
+    /// Prepares a message for transmission, optionally extracting content metadata.
     fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>)> {
         let data = serde_json::to_vec(response).ok()?;
         let compressed = self.compress_anything(&data).ok()?;
@@ -193,6 +211,7 @@ impl GenServerBehavior for GenServer {
     }
 }
 
+/// Enum to indicate content type being transferred.
 pub enum ContentType {
     File,
     Media,

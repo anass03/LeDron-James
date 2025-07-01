@@ -7,7 +7,7 @@ use crate::{GenServer, GenServerBehavior, MediaServer, TextServer};
 use host::{ServerToClient, ServerTypes, HostCommand, HostEvent, Image, ClientNetCommand, Functionality};
 use delegate::delegate;
 
-/// ContentServer: un server che combina funzionalità di testo e media.
+/// A content server that integrates both text and media server capabilities.
 pub struct ContentServer {
     private_dir: TempDir,
     private_files_dir: PathBuf,
@@ -19,6 +19,7 @@ pub struct ContentServer {
     media_map: HashMap<String, PathBuf>,
 }
 
+/// Trait extension for handling packets in a content server.
 pub trait ContentServerBehavior: MediaServer + TextServer {
     fn handling_packets(&mut self, packet: Packet);
 }
@@ -40,7 +41,8 @@ impl ContentServer {
             fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
         }
     }
-    /// Inizializza un nuovo ContentServer con directory temporanee isolate.
+
+    /// Creates a new `ContentServer` with isolated temporary directories.
     pub fn new(
         id: NodeId,
         type_host: NodeType,
@@ -80,7 +82,7 @@ impl ContentServer {
         })
     }
 
-
+    /// Starts the main loop of the ContentServer.
     pub fn run(&mut self){
         self.initiate_flood();
         self.send_logging("Starting Content Server...".into());
@@ -99,13 +101,15 @@ impl ContentServer {
         }
     }
 
+    /// Processes incoming packets according to their type.
     fn handling_packets(&mut self, packet: Packet) {
+        use PacketType::*;
         match packet.clone().pack_type {
-            PacketType::Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            PacketType::Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
-            PacketType::FloodResponse(_) => self.process_flood_response(packet),
-            PacketType::FloodRequest(r) => self.process_flood_request(r, packet),
-            PacketType::MsgFragment(fragment) => {
+            Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
+            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
+            FloodResponse(_) => self.process_flood_response(packet),
+            FloodRequest(r) => self.process_flood_request(r, packet),
+            MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
                         Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
@@ -121,19 +125,22 @@ impl ContentServer {
         }
     }
 
+    /// Delegates execution based on the `ClientNetCommand` received from the client.
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
+        use ClientNetCommand::*;
         match cmd {
-            ClientNetCommand::ServerType => self.send_server_type(source),
-            ClientNetCommand::FilesList(id) => self.handle_files_list(id, source),
-            ClientNetCommand::File(id, file_id) => self.handle_file_request(id, file_id, source),
-            ClientNetCommand::MediaList(id) => self.handle_media_list(id, source),
-            ClientNetCommand::Media(id, media_id) => self.handle_media_request(id, media_id, source),
-            ClientNetCommand::NewMedia(id, file_id, image) => self.handle_new_media(id, file_id, image, source),
-            ClientNetCommand::NewFile(id, file_id, data) => self.handle_new_file(id, file_id, data, source),
+            ServerType => self.send_server_type(source),
+            FilesList(id) => self.handle_files_list(id, source),
+            File(id, file_id) => self.handle_file_request(id, file_id, source),
+            MediaList(id) => self.handle_media_list(id, source),
+            Media(id, media_id) => self.handle_media_request(id, media_id, source),
+            NewMedia(id, file_id, image) => self.handle_new_media(id, file_id, image, source),
+            NewFile(id, file_id, data) => self.handle_new_file(id, file_id, data, source),
             _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
         }
     }
 
+    /// Sends the type of the server back to the client.
     fn send_server_type(&mut self, source: NodeId) {
         match self.servertype() {
             Ok(server_type) => {
@@ -144,6 +151,7 @@ impl ContentServer {
         }
     }
 
+    /// Responds to a request for the list of text files.
     fn handle_files_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
             self.file_map = self.scan_text_files(&self.private_files_dir);
@@ -156,9 +164,9 @@ impl ContentServer {
         }
     }
 
+    /// Responds with the requested file contents.
     fn handle_file_request(&mut self, receiver_id: NodeId, file_id: String, source: NodeId) {
-        if receiver_id != self.info.host.id {
-            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        if !self.is_right_receiver(receiver_id) {
             return;
         }
         match self.file_map.get(&file_id) {
@@ -176,6 +184,7 @@ impl ContentServer {
         }
     }
 
+    /// Responds to a request for the list of media files.
     fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
             self.media_map = self.scan_media_files(&self.private_files_dir);
@@ -188,9 +197,9 @@ impl ContentServer {
         }
     }
 
+    /// Responds with the requested media file (image).
     fn handle_media_request(&mut self, receiver_id: NodeId, media_id: String, source: NodeId) {
-        if receiver_id != self.info.host.id {
-            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        if !self.is_right_receiver(receiver_id) {
             return;
         }
         match self.media_map.get(&media_id) {
@@ -208,9 +217,9 @@ impl ContentServer {
         }
     }
 
+    /// Handles a new media file upload from a client.
     pub fn handle_new_media(&mut self, receiver_id: NodeId, file_id: String, image: Image, source: NodeId) {
-        if receiver_id != self.info.host.id {
-            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        if !self.is_right_receiver(receiver_id) {
             return;
         }
 
@@ -232,7 +241,6 @@ impl ContentServer {
                 }
             }
             Some("txt") | Some("md") | Some("json") | Some("toml") | Some("pdf") => {
-                // Invoca handle_new_file passando l'immagine convertita in byte
                 self.send_logging(format!(
                     "Detected text file extension '{}', delegating to handle_new_file.",
                     ext_opt.unwrap()
@@ -248,10 +256,9 @@ impl ContentServer {
         }
     }
 
-
+    /// Handles a new text or image file upload from a client.
     pub fn handle_new_file(&mut self, receiver_id: NodeId, file_id: String, data: Vec<u8>, source: NodeId) {
-        if receiver_id != self.info.host.id {
-            self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
+        if !self.is_right_receiver(receiver_id) {
             return;
         }
 
@@ -261,7 +268,6 @@ impl ContentServer {
             .map(|s| s.to_lowercase());
 
         match ext_opt.as_deref() {
-            // Se è immagine ⇒ reindirizza
             Some("png") | Some("jpg") | Some("jpeg") => {
                 self.send_logging(format!(
                     "Detected image extension '{}', delegating to handle_new_media.",
@@ -282,8 +288,6 @@ impl ContentServer {
                     }
                 }
             }
-
-            // Se è testo o PDF ⇒ salva
             Some("txt") | Some("md") | Some("json") | Some("toml") | Some("pdf") => {
                 let path = self.private_files_dir.join(
                     Path::new(&file_id)
@@ -295,21 +299,22 @@ impl ContentServer {
                     Err(e) => self.send_logging(format!("Error writing file {}: {}", path.display(), e)),
                 }
             }
-
-            // Altro ⇒ ignora con log
             Some(ext) => {
                 self.send_logging(format!(
                     "Unsupported file extension '{}', skipping save.",
                     ext
                 ));
             }
-
             None => {
                 self.send_logging("No extension found in file_id, skipping save.".to_string());
             }
         }
     }
 
+    /// Checks whether the packet is intended for this server.
+    fn is_right_receiver(&self, receiver: NodeId) -> bool {
+        self.info.host.id == receiver
+    }
 }
 
 impl MediaServer for ContentServer {}
