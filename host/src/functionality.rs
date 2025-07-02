@@ -7,7 +7,6 @@ use crate::{Host, HostEvent, Message, SendingCodes};
 use crate::flood::FloodControl;
 use crate::logging::{LogControl, LogType, LogModule};
 use crate::session::SentSessionData;
-use crate::host;
 
 /// Core functionality for sending, fragmenting, and retransmitting packets.
 pub trait Functionality {

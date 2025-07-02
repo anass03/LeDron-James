@@ -48,9 +48,9 @@ pub enum LogModule{
     FLOOD, NETWORK, SESSION, PACKET, FRAGMENT, ACK, NACK, CHAT, MEDIA, FILE,
 }
 pub struct LogEntry{
-    log_type: LogType,
-    module: LogModule,
-    message: String,
+    pub log_type: LogType,
+    pub module: LogModule,
+    pub message: String,
 }
 impl std::fmt::Display for LogModule {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
