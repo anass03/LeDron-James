@@ -12,6 +12,7 @@ use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, S
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
+use host::logging::LogEntry;
 use image::ImageReader;
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
@@ -19,6 +20,7 @@ use host::ServerTypes::*;
 use petgraph::visit::Topo;
 use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
+use host::logging::LogType as HostLogType;
 use server::MediaServerError;
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::topology_algorithm::vectors::Vector;
@@ -955,24 +957,18 @@ impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
-            DroneEvent::PacketSent(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
+            DroneEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
                 Ok(())
-                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
-            DroneEvent::PacketDropped(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
+            DroneEvent::PacketDropped(_packet) => {
                 Ok(())
-                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::ControllerShortcut(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
+                let receiver_id = match packet.routing_header.hops.last() {
+                    Some(receiver_id) => receiver_id,
+                    None => return Err((LogType::ERROR, "No routing header found for controller shortcut".to_string())),
+                };
                 match self.controller_shortcut(*receiver_id, packet) {
                     Ok(()) => Ok(()),
                     Err(e) => Err((LogType::ERROR, e)),
@@ -1609,8 +1605,15 @@ impl SimulationControllerData {
         Ok(())
     }
 
-    pub fn handle_log_event(&mut self, log: String) {
-        self.logs.push_log(LogType::INFO, log.as_str())
+    pub fn handle_log_event(&mut self, log: LogEntry) {
+        let log_type = match log.log_type {
+            HostLogType::WARN => LogType::WARN,
+            HostLogType::ERROR => LogType::ERROR,
+            HostLogType::INFO => LogType::INFO,
+            HostLogType::DEBUG => LogType::DEBUG,
+            HostLogType::FATAL => LogType::FATAL,
+        };
+        self.logs.push_log(log_type, log.message.as_str());
     }
 
     pub fn handle_rx_renderer(&mut self){
@@ -1673,13 +1676,3 @@ fn open_image(path: &str) {
         Command::new("xdg-open").arg(path).spawn().ok();
     }
 }
-
-/*fn handle_packet (_packet: &Packet) {
-    match packet.clone().pack_type {
-        PacketType::MsgFragment(fragment) => {}
-        PacketType::Ack(ack) => {}
-        PacketType::Nack(nack) => {}
-        PacketType::FloodRequest(flood_request) => {}
-        PacketType::FloodResponse(flood_response) => {}
-    }
-}*/

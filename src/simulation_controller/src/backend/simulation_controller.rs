@@ -1,10 +1,8 @@
-use crossbeam_channel::{unbounded, Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use std::collections::HashMap;
 use std::fmt::Display;
 use client::ClientCommand;
 use std::collections::HashSet;
-use std::thread;
-use std::time::{Duration, Instant};
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -13,7 +11,8 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, WorkerCommand, WorkerResponse, Statistics};
+use host::logging::LogEntry;
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
@@ -42,7 +41,7 @@ pub struct SimulationControllerData {
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
-    pub log_receiver: Receiver<String>,
+    pub log_receiver: Receiver<LogEntry>,
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
 
@@ -64,7 +63,7 @@ impl SimulationControllerData {
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
-        log_receiver: Receiver<String>,
+        log_receiver: Receiver<LogEntry>,
     ) -> Self
     {
         let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
