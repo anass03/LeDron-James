@@ -52,7 +52,7 @@ impl GenServer {
         server_type: ServerTypes,
         log_sender: Sender<String>,
     ) -> Self {
-        assert!((1..=2).contains(&connected_drone_ids.len()), "Server must connect to 1 or 2 drones");
+        assert!(connected_drone_ids.len() >= 2, "Server must be connected to at least 2 drones");
         let host = Host::new(id, type_host, controller_send, packet_recv, packet_send, log_sender);
         Self { host, controller_recv, server_type }
     }
@@ -64,7 +64,7 @@ impl GenServerBehavior for GenServer {
         match cmd {
             HostCommand::AddSender(id, sender) => {
                 if self.host.packet_send.contains_key(&id) {
-                    self.send_logging("Channel already present!".to_string());
+                    // self.send_logging("Channel already present!".to_string());
                 } else if self.host.packet_send.len() >= 2 {
                     self.send_logging("Cannot add more than 2 channels.".to_string());
                 } else {
@@ -75,7 +75,7 @@ impl GenServerBehavior for GenServer {
                     self.host.network.nodes.entry(id)
                         .or_insert_with(|| (NodeType::Drone, Vec::new()))
                         .1.push(Edge { to: self.host.id, weight: 0.0 });
-                    self.send_logging("Sender added successfully.".to_string());
+                    // self.send_logging("Sender added successfully.".to_string());
                 }
             }
             HostCommand::RemoveSender(id) => {
@@ -86,7 +86,7 @@ impl GenServerBehavior for GenServer {
                     if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
                         edges.retain(|e| e.to != self.host.id);
                     }
-                    self.send_logging("Sender removed successfully.".to_string());
+                    // self.send_logging("Sender removed successfully.".to_string());
                 } else {
                     self.send_logging("Sender not found.".to_string());
                 }
@@ -94,7 +94,7 @@ impl GenServerBehavior for GenServer {
         }
     }
 
-    /// Returns the type of the server (Text/Media/Communication).
+    /// Returns the type of the server (Content/Chat).
     fn servertype(&mut self) -> Result<ServerTypes, String> {
         match self.host.type_host {
             NodeType::Server => Ok(self.server_type.clone()),
