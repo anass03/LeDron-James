@@ -270,6 +270,9 @@ impl FloodControl for Host {
             if entry.0 == NodeType::Drone {
                 self.network.drone_pdr.entry(nid).or_insert(0.0);
             }
+            if ty == NodeType::Server && !self.network.servers.contains(&nid){
+                self.network.servers.insert(nid);
+            }
         }
 
         // record edges
