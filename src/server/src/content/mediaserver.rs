@@ -45,7 +45,7 @@ pub trait MediaServer {
     /// Scans public and private directories for image files.
     fn scan_media_files(&self, private_images_dir: &Path) -> HashMap<String, PathBuf> {
         let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
-
+  
         [&public_dir, private_images_dir]
             .iter()
             .flat_map(|dir| fs::read_dir(dir).into_iter().flatten())

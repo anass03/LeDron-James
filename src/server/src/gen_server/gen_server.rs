@@ -3,10 +3,13 @@ use std::error::Error;
 use std::io::Cursor;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
-use delegate::delegate;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
-use host::{HostCommand, Message, Host, Functionality, ServerTypes, RecSessionData, HostEvent, Edge, ServerToClient, generate_unique_session_id, ContentID};
+use host::{HostCommand, Message, Host, ServerTypes, HostEvent, ServerToClient, ContentID};
+use host::{functionality::Functionality};
+use host::logging::{LogControl, LogEntry, LogModule, LogType};
+use host::network::{Edge};
+use host::session::{RecSessionData,generate_unique_session_id};
 use zstd::{decode_all, encode_all};
 
 /// Generic Server structure used to implement Content or Communication servers.
@@ -29,16 +32,6 @@ pub trait GenServerBehavior {
 }
 
 impl GenServer {
-    delegate! {
-        to self.host {
-            /// Builds and sends message fragments to a given destination.
-            pub fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, _on_fragment_sent: F) -> Result<(), String>
-            where F: FnMut(usize);
-
-            /// Sends a log message to the controller.
-            pub fn send_logging(&self, message: String);
-        }
-    }
 
     /// Constructs a new `GenServer` instance.
     pub fn new(
@@ -50,7 +43,7 @@ impl GenServer {
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         server_type: ServerTypes,
-        log_sender: Sender<String>,
+        log_sender: Sender<LogEntry>,
     ) -> Self {
         assert!(connected_drone_ids.len() >= 2, "Server must be connected to at least 2 drones");
         let host = Host::new(id, type_host, controller_send, packet_recv, packet_send, log_sender);
@@ -66,7 +59,7 @@ impl GenServerBehavior for GenServer {
                 if self.host.packet_send.contains_key(&id) {
                     // self.send_logging("Channel already present!".to_string());
                 } else if self.host.packet_send.len() >= 2 {
-                    self.send_logging("Cannot add more than 2 channels.".to_string());
+                    self.host.send_logging(LogType::WARN,LogModule::PACKET,"Cannot add more than 2 channels.".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
                     self.host.network.nodes.entry(self.host.id)
@@ -88,7 +81,7 @@ impl GenServerBehavior for GenServer {
                     }
                     // self.send_logging("Sender removed successfully.".to_string());
                 } else {
-                    self.send_logging("Sender not found.".to_string());
+                    self.host.send_logging(LogType::WARN,LogModule::PACKET,"Sender not found.".to_string());
                 }
             }
         }
@@ -116,7 +109,7 @@ impl GenServerBehavior for GenServer {
         });
 
         if idx >= session.buffer.len() {
-            self.send_logging(format!("Fragment index {} out of bounds (max {})", idx, total));
+            self.host.send_logging(LogType::WARN,LogModule::FRAGMENT,format!("Fragment index {} out of bounds (max {})", idx, total));
             return None;
         }
 
@@ -134,7 +127,8 @@ impl GenServerBehavior for GenServer {
             .filter(|&&nid| matches!(self.host.network.nodes.get(&nid).map(|(ty, _)| ty), Some(NodeType::Drone)))
             .copied()
             .collect();
-        self.host.network.pdr_helper(&drone_hops);
+        self.host.network.pdr_helper(&drone_hops, &self.host.log_sender);
+
 
         if session.pending == 0 {
             let data = session.buffer.iter()
@@ -147,7 +141,7 @@ impl GenServerBehavior for GenServer {
             match self.decompress_anything(&data) {
                 Ok(decompressed_data) => Some(decompressed_data),
                 Err(e) => {
-                    self.send_logging(format!("Failed to decompress fragments: {}", e));
+                    self.host.send_logging(LogType::ERROR,LogModule::FRAGMENT,format!("Failed to decompress fragments: {}", e));
                     None
                 }
             }
@@ -173,11 +167,11 @@ impl GenServerBehavior for GenServer {
                 let total = (msg.content.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
                 self.send_download(destination, total, content_type, id);
             }
-            if let Err(e) = self.build_msg_fragment(destination, msg, |_| {}) {
-                self.send_logging(format!("Failed to send response to {}: {}", destination, e));
+            if let Err(e) = self.host.build_msg_fragment(destination, msg, |_| {}) {
+                self.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to send response to {}: {}", destination, e));
             }
         } else {
-            self.send_logging("prepare_message returned None".to_string());
+            self.host.send_logging(LogType::ERROR,LogModule::PACKET,"prepare_message returned None".to_string());
         }
     }
 

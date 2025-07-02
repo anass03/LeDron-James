@@ -7,6 +7,7 @@ edition = "2021"
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
 image = "0.25.5"
 host = { git = "https://github.com/anass03/LeDron-James", branch = "client", package = "host" }
+#host = { path = "../host"}
 crossbeam-channel = "0.5.13"
 delegate = "0.13.1"
 serde_json = "1.0.133"
