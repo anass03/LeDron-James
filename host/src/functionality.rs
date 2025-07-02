@@ -1,16 +1,13 @@
 use std::collections::HashSet;
 use std::time::{Instant};
-
 use crossbeam_channel::{Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{
-    Ack, Fragment, Nack, NackType, NodeType, Packet, FRAGMENT_DSIZE,
-};
-
+use wg_2024::packet::{Ack, Fragment, Nack, NackType, NodeType, Packet, FRAGMENT_DSIZE};
 use crate::{Host, HostEvent, Message, SendingCodes};
 use crate::flood::FloodControl;
 use crate::logging::{LogControl, LogType, LogModule};
 use crate::session::SentSessionData;
+use crate::host;
 
 /// Core functionality for sending, fragmenting, and retransmitting packets.
 pub trait Functionality {
@@ -136,7 +133,7 @@ impl Functionality for Host {
                 )
             })
             .collect();
-        self.network.pdr_helper(&drone_hops, self);
+        self.network.pdr_helper(&drone_hops, &self.log_sender);
 
         self.send_logging(
             LogType::INFO,
@@ -236,7 +233,7 @@ impl Functionality for Host {
                     format!("Retransmitting dropped fragment {}", nack.fragment_index),
                 );
                 self.send_fragment(session_id, frag.clone());
-                self.network.pdr_from_nack(generator, self);
+                self.network.pdr_from_nack(generator, &self.log_sender);
             }
             NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
                 self.send_logging(

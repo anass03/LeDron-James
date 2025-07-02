@@ -2,8 +2,7 @@ use rand::prelude::ThreadRng;
 use rand::Rng;
 use wg_2024::network::SourceRoutingHeader;
 use wg_2024::packet::{FloodRequest, NodeType, Packet, PacketType};
-
-use crate::functionality::{FloodControl, Functionality};
+use crate::functionality::{Functionality};
 use crate::Host;
 use crate::network::Edge;
 use crate::session::generate_unique_session_id;
@@ -136,25 +135,22 @@ impl FloodControl for Host {
                 format!("Responding to duplicate: next_hop={}", next),
             );
             let _ = self.send_packet(resp, None);
-            return;
+            return
         }
 
         // first time seeing this flood
         seen.push(flood_id);
 
         // determine incoming neighbor
-        let from = req
-            .path_trace
-            .last()
-            .map(|&(nid, _)| nid)
-            .unwrap_or_else(|| {
-                self.send_logging(
-                    LogType::ERROR,
-                    LogModule::FLOOD,
-                    "Empty path_trace in FloodRequest, dropping".to_string(),
-                );
-                return;
-            });
+        let from = if let Some(&(nid, _)) = req.path_trace.last() {
+            nid
+        } else {
+            self.send_logging(
+                LogType::ERROR, LogModule::FLOOD,
+                "Empty path_trace in FloodRequest, dropping".into(),
+            );
+            return;
+        };
 
         self.send_logging(
             LogType::DEBUG,
@@ -303,7 +299,7 @@ impl FloodControl for Host {
         }
 
         // optionally recalc PDR immediately
-        self.network.recalc_pdr(&*self);
+        self.network.recalc_pdr(&self.log_sender);
     }
 }
 

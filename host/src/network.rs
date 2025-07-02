@@ -1,10 +1,8 @@
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-
 use ordered_float::OrderedFloat;
 use wg_2024::network::NodeId;
 use wg_2024::packet::NodeType;
-
 use crate::logging::{LogControl, LogType, LogModule};
 
 const ALPHA: f64 = 0.01; // smoothing factor for EWMA

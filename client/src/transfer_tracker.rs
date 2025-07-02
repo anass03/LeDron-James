@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam_channel::Sender;
 use host::{ContentID, HostEvent};
+use host::logging::LogEntry;
 
 #[derive(Clone)]
 pub struct TransferTracker {
@@ -24,7 +25,7 @@ impl TransferTracker {
         }
     }
 
-    pub fn get_closure(&self, id: ContentID, ctrl: Sender<HostEvent>, logger: Sender<String>) -> impl FnMut(usize) + Send + 'static {
+    pub fn get_closure(&self, id: ContentID, ctrl: Sender<HostEvent>) -> impl FnMut(usize) + Send + 'static {
         let map = self.uploads.clone();
         move |chunk_len: usize| {
             let mut remove = false;
@@ -41,7 +42,6 @@ impl TransferTracker {
                     }
                 }
                 Err(_) => {
-                    let _ = logger.send(format!("[TransferTracker] Failed to lock uploads map during get_closure for {:?}", id));
                     return;
                 }
             };
@@ -50,14 +50,11 @@ impl TransferTracker {
             if let Some((current, total)) = percent_opt {
                 let percent = (current as f32 / total as f32) * 100.0;
                 let _ = ctrl.send(HostEvent::UploadingInfo(id.clone(), percent));
-                let _ = logger.send(format!("Upload progress: {:?} - {:.1}%", id, percent));
             }
 
             if remove {
                 if let Ok(mut uploads) = map.lock() {
                     uploads.remove(&id);
-                } else {
-                    let _ = logger.send(format!("[TransferTracker] Failed to remove {:?} after completion", id));
                 }
             }
         }
