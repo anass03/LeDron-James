@@ -957,24 +957,18 @@ impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
-            DroneEvent::PacketSent(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
+            DroneEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
                 Ok(())
-                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
-            DroneEvent::PacketDropped(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                //handle_packet(&packet);
-                let _session_id = packet.session_id;
+            DroneEvent::PacketDropped(_packet) => {
                 Ok(())
-                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::ControllerShortcut(packet) => {
-                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
-                let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
+                let receiver_id = match packet.routing_header.hops.last() {
+                    Some(receiver_id) => receiver_id,
+                    None => return Err((LogType::ERROR, "No routing header found for controller shortcut".to_string())),
+                };
                 match self.controller_shortcut(*receiver_id, packet) {
                     Ok(()) => Ok(()),
                     Err(e) => Err((LogType::ERROR, e)),
@@ -1311,7 +1305,7 @@ impl SimulationControllerData {
             None => return Err(String::from("Failed to get Media ID")),
         };
         debug!(target: "main", "Sending New Media Request from Client {sender_client_id} to Server {server_id}");
-        let command = Net(NewMedia(0, media_id, image));
+        let command = Net(NewMedia(server_id, media_id, image));
         self.send_client_command(sender_client_id, command)
     }
 
@@ -1345,9 +1339,9 @@ impl SimulationControllerData {
                 Err(e) => {self.logs.push_sc_log(e.0, e.1);},
             }
         }
-        while let Ok(log) = self.log_receiver.try_recv() {
+        /*while let Ok(log) = self.log_receiver.try_recv() {
             self.handle_log_event(log);
-        }
+        }*/
         while let Ok(event) = self.drone_event_receiver.try_recv() {
             match self.handle_drone_event(event) {
                 Ok(()) => {},

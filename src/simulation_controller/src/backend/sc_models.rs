@@ -115,7 +115,7 @@ pub enum RendererCommand{
     Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((Sender<ResizeRequest>,ServerId, MediaId, Image))
 }
 pub enum RendererResponse{
-    Outcome((LogType,String)), Encoded((ServerId,MediaId, ThreadProtocol))
+    Encoded((ServerId,MediaId, ThreadProtocol))
 }
 
 pub struct NetCache{
