@@ -1,5 +1,5 @@
+use log::{debug, error, info, warn};
 use crate::Host;
-use tracing::{error, warn, info, debug, trace};
 
 /// Log levels corresponding to tracing macros
 #[derive(Debug, Copy, Clone)]
