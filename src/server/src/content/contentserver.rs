@@ -2,8 +2,8 @@ use std::{collections::HashMap, fs, path::{Path, PathBuf}, time::Duration};
 use tempfile::TempDir;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
-use wg_2024::packet::{Fragment, NodeType, Packet, PacketType};
-use crate::{GenServer, GenServerBehavior, MediaServer, TextServer};
+use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
+use crate::{delegate_to_host_mut, delegate_to_host_ref, GenServer, MediaServer, TextServer};
 use host::{ServerToClient, ServerTypes, HostCommand, HostEvent, Image, ClientNetCommand};
 use host::functionality::Functionality;
 use delegate::delegate;
@@ -22,12 +22,17 @@ pub struct ContentServer {
     media_map: HashMap<String, PathBuf>,
 }
 
-/// Trait extension for handling packets in a content server.
-pub trait ContentServerBehavior: MediaServer + TextServer {
-    fn handling_packets(&mut self, packet: Packet);
-}
-
 impl ContentServer {
+    delegate_to_host_ref!(info => {
+        pub fn send_logging(&self, log_type: LogType, module: LogModule, msg: String);
+    });
+    delegate_to_host_mut!(info => {
+        fn initiate_flood(&mut self);
+        fn handle_ack(&mut self, ack: Ack, hops: &[NodeId], session_id: u64);
+        fn handle_nack(&mut self, nack: Nack, generator: NodeId, session_id: u64);
+        fn process_flood_request(&mut self, flood_request: FloodRequest, packet: Packet);
+        fn process_flood_response(&mut self, packet: Packet);
+    });
     delegate! {
         to self.info {
             fn send_response(&mut self, response: ServerToClient, destination: NodeId);
@@ -79,17 +84,17 @@ impl ContentServer {
 
     /// Starts the main loop of the ContentServer.
     pub fn run(&mut self){
-        self.info.host.initiate_flood();
-        self.info.host.send_logging(LogType::INFO,LogModule::MEDIA,"Starting Content Server...".into());
+        self.initiate_flood();
+        self.send_logging(LogType::INFO,LogModule::MEDIA,"Starting Content Server...".into());
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => match cmd {
                     Ok(c) => self.handle_sim_command(c),
-                    Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Command error: {e}")),
+                    Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Command error: {e}")),
                 },
                 recv(self.info.host.packet_recv) -> pkt => match pkt {
                     Ok(p) => self.handling_packets(p),
-                    Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Packet error: {e}")),
+                    Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Packet error: {e}")),
                 },
                 default(Duration::from_millis(3)) => {}
             }
@@ -100,21 +105,21 @@ impl ContentServer {
     fn handling_packets(&mut self, packet: Packet) {
         use PacketType::*;
         match packet.clone().pack_type {
-            Nack(nack) => self.info.host.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            Ack(ack) => self.info.host.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
-            FloodResponse(_) => self.info.host.process_flood_response(packet),
-            FloodRequest(r) => self.info.host.process_flood_request(r, packet),
+            Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
+            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
+            FloodResponse(_) => self.process_flood_response(packet),
+            FloodRequest(r) => self.process_flood_request(r, packet),
             MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
                         Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
                         Err(e) => {
-                            self.info.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to parse ClientNetCommand: {}", e));
+                            self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to parse ClientNetCommand: {}", e));
                             self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0]);
                         }
                     }
                 } else {
-                    self.info.host.send_logging(LogType::WARN,LogModule::PACKET,"The packet is not complete; server is waiting.".to_string());
+                    self.send_logging(LogType::WARN,LogModule::PACKET,"The packet is not complete; server is waiting.".to_string());
                 }
             }
         }
@@ -142,7 +147,7 @@ impl ContentServer {
                 //self.send_logging("Sending server type".to_string());
                 self.send_response(ServerToClient::ServerType(server_type), source);
             }
-            Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Error in getting ServerType: {}", e)),
+            Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Error in getting ServerType: {}", e)),
         }
     }
 
@@ -172,7 +177,7 @@ impl ContentServer {
                 }
                 Err(e) => {
                     self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                    self.info.host.send_logging(LogType::ERROR,LogModule::FILE,format!("Error converting file: {}", e));
+                    self.send_logging(LogType::ERROR,LogModule::FILE,format!("Error converting file: {}", e));
                 }
             },
             None => self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source),
@@ -183,7 +188,7 @@ impl ContentServer {
     fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
             self.media_map = self.scan_media_files(&self.private_images_dir);
-            self.info.host.send_logging(LogType::INFO,LogModule::MEDIA,format!(" media map , {:?}" , self.media_map.clone()));
+            self.send_logging(LogType::INFO,LogModule::MEDIA,format!(" media map , {:?}" , self.media_map.clone()));
             self.media = self.media_map.keys().cloned().collect();
             self.media.sort();
             //self.send_logging("Checking media IDs".to_string());
@@ -206,7 +211,7 @@ impl ContentServer {
                 }
                 Err(e) => {
                     self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
-                    self.info.host.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error processing image: {}", e));
+                    self.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error processing image: {}", e));
                 }
             },
             None => self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source),
@@ -233,9 +238,9 @@ impl ContentServer {
                 );
                 match Self::save_image_to(&path, &image) {
                     Ok(_) => {
-                        self.info.host.send_logging(LogType::INFO,LogModule::MEDIA,format!("Media saved in {}", path.display()))
+                        self.send_logging(LogType::INFO,LogModule::MEDIA,format!("Media saved in {}", path.display()))
                     },
-                    Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error writing media {}: {}", path.display(), e)),
+                    Err(e) => self.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error writing media {}: {}", path.display(), e)),
                 }
             }
             Some("txt") | Some("md") | Some("json") | Some("toml") | Some("pdf") => {
@@ -243,10 +248,10 @@ impl ContentServer {
                 self.handle_new_file(receiver_id, file_id, image.data.clone(), source);
             }
             Some(ext) => {
-                self.info.host.send_logging(LogType::ERROR,LogModule::FILE,format!("Unsupported file extension '{}', skipping save.", ext));
+                self.send_logging(LogType::ERROR,LogModule::FILE,format!("Unsupported file extension '{}', skipping save.", ext));
             }
             None => {
-                self.info.host.send_logging(LogType::ERROR,LogModule::FILE,"No extension found in file_id, skipping save.".to_string());
+                self.send_logging(LogType::ERROR,LogModule::FILE,"No extension found in file_id, skipping save.".to_string());
             }
         }
     }
@@ -275,7 +280,7 @@ impl ContentServer {
                         self.handle_new_media(receiver_id, file_id, image, source);
                     }
                     Err(e) => {
-                        self.info.host.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error decoding image data: {}", e));
+                        self.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error decoding image data: {}", e));
                         self.send_response(ServerToClient::ErrNotFound(self.info.host.id), source);
                     }
                 }
@@ -290,17 +295,17 @@ impl ContentServer {
                     Ok(_) => {
                         //self.send_logging(format!("File saved in {}", path.display())),
                     }
-                    Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::FILE,format!("Error writing file {}: {}", path.display(), e)),
+                    Err(e) => self.send_logging(LogType::ERROR,LogModule::FILE,format!("Error writing file {}: {}", path.display(), e)),
                 }
             }
             Some(ext) => {
-                self.info.host.send_logging(LogType::ERROR,LogModule::FILE,format!(
+                self.send_logging(LogType::ERROR,LogModule::FILE,format!(
                     "Unsupported file extension '{}', skipping save.",
                     ext
                 ));
             }
             None => {
-                self.info.host.send_logging(LogType::ERROR,LogModule::FILE,"No extension found in file_id, skipping save.".to_string());
+                self.send_logging(LogType::ERROR,LogModule::FILE,"No extension found in file_id, skipping save.".to_string());
             }
         }
     }

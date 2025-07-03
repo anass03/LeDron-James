@@ -5,12 +5,13 @@ use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
-use host::{HostCommand, Message, Host, ServerTypes, HostEvent, ServerToClient, ContentID};
+use host::{HostCommand, Message, Host, ServerTypes, HostEvent, ServerToClient, ContentID, SendingCodes};
 use host::{functionality::Functionality};
 use host::logging::{LogControl, LogEntry, LogModule, LogType};
 use host::network::{Edge};
 use host::session::{RecSessionData,generate_unique_session_id};
 use zstd::{decode_all, encode_all};
+use crate::delegate_genserver_host_ref;
 
 /// Generic Server structure used to implement Content or Communication servers.
 pub struct GenServer {
@@ -32,6 +33,11 @@ pub trait GenServerBehavior {
 }
 
 impl GenServer {
+    delegate_genserver_host_ref! {
+        pub fn send_logging(&self, log_type: LogType, module: LogModule, msg: String);
+        fn send_packet(&self, packet: Packet, channel: Option<&Sender<Packet>>) -> SendingCodes;
+        fn build_packet_ack(&self, packet: Packet, fragment_index: Option<u64>) -> Packet;
+    }
 
     /// Constructs a new `GenServer` instance.
     pub fn new(
@@ -49,17 +55,14 @@ impl GenServer {
         let host = Host::new(id, type_host, controller_send, packet_recv, packet_send, log_sender);
         Self { host, controller_recv, server_type }
     }
-}
-
-impl GenServerBehavior for GenServer {
     /// Handles commands from the Simulation Controller.
-    fn handle_sim_command(&mut self, cmd: HostCommand) {
+    pub fn handle_sim_command(&mut self, cmd: HostCommand) {
         match cmd {
             HostCommand::AddSender(id, sender) => {
                 if self.host.packet_send.contains_key(&id) {
                     // self.send_logging("Channel already present!".to_string());
                 } else if self.host.packet_send.len() >= 2 {
-                    self.host.send_logging(LogType::WARN,LogModule::PACKET,"Cannot add more than 2 channels.".to_string());
+                    self.send_logging(LogType::WARN,LogModule::PACKET,"Cannot add more than 2 channels.".to_string());
                 } else {
                     self.host.packet_send.insert(id, sender);
                     self.host.network.nodes.entry(self.host.id)
@@ -81,14 +84,14 @@ impl GenServerBehavior for GenServer {
                     }
                     // self.send_logging("Sender removed successfully.".to_string());
                 } else {
-                    self.host.send_logging(LogType::WARN,LogModule::PACKET,"Sender not found.".to_string());
+                    self.send_logging(LogType::WARN,LogModule::PACKET,"Sender not found.".to_string());
                 }
             }
         }
     }
 
     /// Returns the type of the server (Content/Chat).
-    fn servertype(&mut self) -> Result<ServerTypes, String> {
+    pub fn servertype(&mut self) -> Result<ServerTypes, String> {
         match self.host.type_host {
             NodeType::Server => Ok(self.server_type.clone()),
             _ => Err(format!("Invalid node type for {}", self.host.id))
@@ -96,7 +99,7 @@ impl GenServerBehavior for GenServer {
     }
 
     /// Handles a received message fragment.
-    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
+    pub fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>> {
         let session_id = packet.session_id;
         let idx = fragment.fragment_index as usize;
         let total = fragment.total_n_fragments as usize;
@@ -109,7 +112,7 @@ impl GenServerBehavior for GenServer {
         });
 
         if idx >= session.buffer.len() {
-            self.host.send_logging(LogType::WARN,LogModule::FRAGMENT,format!("Fragment index {} out of bounds (max {})", idx, total));
+            self.send_logging(LogType::WARN,LogModule::FRAGMENT,format!("Fragment index {} out of bounds (max {})", idx, total));
             return None;
         }
 
@@ -119,9 +122,9 @@ impl GenServerBehavior for GenServer {
             session.pending = session.pending.saturating_sub(1);
         }
 
-        let mut ack = self.host.build_packet_ack(packet.clone(), Some(idx as u64));
+        let mut ack = self.build_packet_ack(packet.clone(), Some(idx as u64));
         ack.routing_header.hop_index += 1;
-        let _ = self.host.send_packet(ack, None);
+        let _ = self.send_packet(ack, None);
 
         let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
             .filter(|&&nid| matches!(self.host.network.nodes.get(&nid).map(|(ty, _)| ty), Some(NodeType::Drone)))
@@ -141,7 +144,7 @@ impl GenServerBehavior for GenServer {
             match self.decompress_anything(&data) {
                 Ok(decompressed_data) => Some(decompressed_data),
                 Err(e) => {
-                    self.host.send_logging(LogType::ERROR,LogModule::FRAGMENT,format!("Failed to decompress fragments: {}", e));
+                    self.send_logging(LogType::ERROR,LogModule::FRAGMENT,format!("Failed to decompress fragments: {}", e));
                     None
                 }
             }
@@ -161,16 +164,16 @@ impl GenServerBehavior for GenServer {
     }
 
     /// Sends a high-level response to a client.
-    fn send_response(&mut self, response: ServerToClient, destination: NodeId) { 
+    pub(crate) fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         if let Some((msg, meta,total)) = self.prepare_message(&response) {
             if let Some((content_type, id)) = meta {
                 self.send_download(destination, total, content_type, id);
             }
             if let Err(e) = self.host.build_msg_fragment(destination, msg, |_| {}) {
-                self.host.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to send response to {}: {}", destination, e));
+                self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to send response to {}: {}", destination, e));
             }
         } else {
-            self.host.send_logging(LogType::ERROR,LogModule::PACKET,"prepare_message returned None".to_string());
+            self.send_logging(LogType::ERROR,LogModule::PACKET,"prepare_message returned None".to_string());
         }
     }
 
