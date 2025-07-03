@@ -20,18 +20,6 @@ pub struct GenServer {
     pub server_type: ServerTypes,
 }
 
-/// Defines the behavior required for a generic server.
-pub trait GenServerBehavior {
-    fn handle_sim_command(&mut self, cmd: HostCommand);
-    fn servertype(&mut self) -> Result<ServerTypes, String>;
-    fn handle_msg_fragment(&mut self, packet: Packet, fragment: Fragment) -> Option<Vec<u8>>;
-    fn decompress_anything(&self, compressed: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn compress_anything(&self, data: &[u8]) -> Result<Vec<u8>, Box<dyn Error>>;
-    fn send_response(&mut self, response: ServerToClient, destination: NodeId);
-    fn send_download(&mut self, destination: NodeId, total: usize, content: ContentType, id: String);
-    fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>)>;
-}
-
 impl GenServer {
     delegate_genserver_host_ref! {
         pub fn send_logging(&self, log_type: LogType, module: LogModule, msg: String);
