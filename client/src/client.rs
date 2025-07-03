@@ -105,6 +105,10 @@ impl Client {
 
                     //sending info on network speed
                     let (up, down) = self.net_metrics.update();
+                    self.host.send_logging(
+                            LogType::DEBUG, LogModule::NETWORK,
+                            format!("✅ Reporting net speed: {:?}", (up, down))
+                        );
                     if let Err(e) = self.host.controller_send.send(HostEvent::NetSpeed(up, down)) {
                         self.host.send_logging(
                             LogType::ERROR, LogModule::NETWORK,
@@ -745,7 +749,10 @@ impl Client {
                 let percent = (received as f32 / total as f32) * 100.0;
 
                 let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(content_id.clone(), percent));
-
+                self.host.send_logging(
+                    LogType::DEBUG, LogModule::SESSION,
+                    format!("💥 Downloading info: {:?}", percent),
+                );
                 // Rimuovi se completato
                 if received == total {
                     self.pending_fragments.remove(&content_id);
