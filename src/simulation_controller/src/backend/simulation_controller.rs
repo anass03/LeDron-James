@@ -43,6 +43,7 @@ pub struct SimulationControllerData {
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
 
+    //pub host_log_state: HashMap<NodeId, TuiWidgetState>,
 
     pub chat_cache: ChatCache,
     pub net_cache: NetCache,

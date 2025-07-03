@@ -134,7 +134,7 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
             return render_net_options(app, area, buf, net_page_data, selected_node)
         }
         ClientPopup::DataPage(data_page_data) => {
-            render_cl_sr_data_options(app, area, buf);
+            render_cl_sr_data_options(app, area, buf, *selected_node);
         }
         ClientPopup::SettingsPage(_) => {
             render_sett_options(app,area,buf)

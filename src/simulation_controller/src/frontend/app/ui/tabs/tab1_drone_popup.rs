@@ -74,7 +74,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
 fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &DronePopup, selected_node: &NodeId){
     match drone_popup{
         DronePopup::DataPage(datapage) => {
-            render_cl_sr_data_options(app, area, buf)
+            render_cl_sr_data_options(app, area, buf, *selected_node)
         }
         DronePopup::SettingsPage(setpage) => {
             render_settings_page(app, area, buf, *selected_node)

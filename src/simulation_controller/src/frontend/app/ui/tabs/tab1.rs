@@ -240,11 +240,12 @@ pub(super) mod data_rendering{
     use ratatui::style::{Style, Stylize};
     use ratatui::widgets::{Block, BorderType, Borders, Widget};
     use tui_logger::TuiLoggerWidget;
+    use wg_2024::network::NodeId;
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::{process_log_paragraph, MAIN_BLOCK_BORDERS};
 
     // For Client & Server
-    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer){
+    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
         let [stats_area, filtered_logging_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -316,6 +317,7 @@ pub(super) mod data_rendering{
         let inner_log_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
 
+
         TuiLoggerWidget::default()
             .style_error(Style::default().fg(Color::Red))
             .style_warn(Style::default().fg(Color::Yellow))
@@ -329,7 +331,6 @@ pub(super) mod data_rendering{
             .output_line(false)
             .state(&app.cache.main_log_state)
             .render(inner_log_block, buf);
-
     }
     // Download / upload
     // Cpu utilize [?]
