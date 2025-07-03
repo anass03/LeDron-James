@@ -11,7 +11,6 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
-use host::logging::LogEntry;
 use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
@@ -41,7 +40,6 @@ pub struct SimulationControllerData {
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
-    pub log_receiver: Receiver<LogEntry>,
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
 
@@ -63,7 +61,6 @@ impl SimulationControllerData {
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
-        log_receiver: Receiver<LogEntry>,
     ) -> Self
     {
         let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
@@ -112,7 +109,6 @@ impl SimulationControllerData {
             drone_event_receiver,
             host_event_receiver,
             packet_sender,
-            log_receiver,
             running_network,
             logs: Logs::default(),
             stats: Statistics::default(),

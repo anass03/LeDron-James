@@ -457,7 +457,7 @@ checksum = "4bfbf56724aa9eca8afa4fcfadeb479e722935bb2a0900c2d37e0cc477af0688"
 [[package]]
 name = "client"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#323132add8774cb6ca551d5972fe51a966278360"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#40f800868d5dcac05c6939188b82877ae9f823df"
 dependencies = [
  "crossbeam-channel",
  "host",
@@ -1187,7 +1187,7 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 [[package]]
 name = "host"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=client#323132add8774cb6ca551d5972fe51a966278360"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=client#40f800868d5dcac05c6939188b82877ae9f823df"
 dependencies = [
  "crossbeam-channel",
  "image",
@@ -2430,7 +2430,7 @@ dependencies = [
 [[package]]
 name = "server"
 version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James.git?branch=server#9cb5959aa832d5d8383540c1969a1bab74d25b58"
+source = "git+https://github.com/anass03/LeDron-James.git?branch=server#817469a1ac8be76c484bc42fbb60ebb27406c01f"
 dependencies = [
  "chrono",
  "crossbeam-channel",
@@ -2440,7 +2440,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.12",
  "toml",
  "wg_2024",
  "zstd",

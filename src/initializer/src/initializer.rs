@@ -93,7 +93,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     let mut drone_types = HashMap::new();
 
     /// - Initializing the drones
-    let (log_sender, log_receiver) = unbounded();
     for drone in config.drone.iter() {
 
         // creating the actual drone channel for commands
@@ -112,7 +111,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-        //let log_send = log_sender.clone();
         let mut i = random_range(0..10);
         /// - spawning the thread of the drone and collecting the handle in a vector
         match i {
@@ -305,7 +303,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .iter()
             .map(|&id| (id, packet_senders[&id].clone()))
             .collect();
-        let log_send = log_sender.clone();
         /// - spawning the thread of the client and collecting the handle in a vector
         handles.insert(client.id, thread::spawn(move || {
             let mut client = LeClient::new(
@@ -315,7 +312,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 controller_client_recv,
                 packet_recv,
                 packet_send,
-                log_send
             );
             /// - running the client
             client.run();
@@ -344,7 +340,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .map(|&id| (id, packet_senders[&id].clone()))
             .collect();
 
-        let log_send = log_sender.clone();
         let handle = match server_type {
             ServerType::Chat => thread::spawn(move || {
                 let mut server = LeChatServer::new(
@@ -355,7 +350,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                     controller_server_recv,
                     packet_recv,
                     packet_send,
-                    log_send
                 );
                 server.run();
             }),
@@ -368,7 +362,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 controller_server_recv,
                 packet_recv,
                 packet_send,
-                log_send
                 ) {
                     Ok(mut server) => server.run(),
                     Err(e) => {
@@ -393,7 +386,6 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
         drone_event_recv,
         host_event_recv,
         packet_senders,
-        log_receiver
     );
 
     Ok((controller, handles))

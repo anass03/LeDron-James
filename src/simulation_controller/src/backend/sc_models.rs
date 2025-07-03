@@ -313,62 +313,10 @@ impl Display for DroneType {
 }
 
 //-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
-/*
-#[derive(Debug)]
-pub(crate) enum AsyncCommand {
-    // Drone commands
-    Crash(NodeId),
-    SetPDR(NodeId, f32),
-    AddSender(NodeId, NodeId),
-    RemoveSender(NodeId, NodeId),
-
-    // Client commands
-    RequestServerType(ClientId),
-    RequestFilesList(ClientId, ServerId),
-    RequestFile(ClientId, ServerId, FileId),
-    RequestMediaList(ClientId, ServerId),
-    RequestMedia(ClientId, ServerId, MediaId),
-    RequestRegistrationToChat(ClientId, ServerId),
-    RequestClientList(ClientId, ServerId),
-    MessageFor(ClientId, ClientId, ServerId, String),
-    MediaFor(ClientId, ClientId, ServerId, String), // path as string
-    FileFor(ClientId, ClientId, ServerId, String),  // path as string
-    NewMedia(ClientId, ServerId, String),           // path as string
-    NewFile(ClientId, ServerId, String),            // path as string
-}
-
-#[derive(Default)]
-pub(crate) struct SharedAsyncData {
-    // Messaggi di log dal thread asincrono
-    pub(crate) async_logs: Vec<(LogType, String)>,
-
-    // Statistiche sui comandi processati
-    pub(crate) processed_commands: u64,
-    pub(crate) failed_commands: u64,
-
-    // Flag per indicare se il thread asincrono è attivo
-    pub(crate) is_processing: bool,
-}
-
-// Wrapper leggero che mantiene la stessa interfaccia del SimulationControllerData originale
-pub struct AsyncSimulationController {
-    // Il vero SimulationControllerData rimane nel thread principale
-    pub data: SimulationControllerData,
-
-    // Canale per inviare comandi al thread asincrono
-    pub(crate) command_sender: crossbeam_channel::Sender<AsyncCommand>,
-
-    // Canale condiviso per aggiornamenti dai comandi asincroni
-    pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
-}
-
-// Processore asincrono separato
-pub(crate) struct AsyncProcessor {
-    pub(crate) receiver: crossbeam_channel::Receiver<AsyncCommand>,
-    pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
-
-    // Copia dei canali necessari per i comandi
-    pub(crate) drone_command_senders: HashMap<NodeId, crossbeam_channel::Sender<DroneCommand>>,
-    pub(crate) client_command_senders: HashMap<NodeId, crossbeam_channel::Sender<ClientCommand>>,
-    pub(crate) server_command_senders: HashMap<NodeId, crossbeam_channel::Sender<HostCommand>>,
+/*pub(crate) struct SimulationHelper {
+    pub(crate) net_info:
 }*/
+
+pub(crate) enum CommandSH {
+
+}

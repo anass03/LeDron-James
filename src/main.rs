@@ -36,7 +36,6 @@ fn main() -> std::io::Result<()> {
         drone_event_receiver: unbounded().1,
         host_event_receiver: unbounded().1,
         packet_sender: Default::default(),
-        log_receiver: unbounded().1,
         logs: Logs::default(),
         stats: Statistics::default(),
         topology_algorithm_data: TopologyAlgorithm::default(),
