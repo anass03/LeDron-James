@@ -1,4 +1,5 @@
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use tui_logger::TuiWidgetEvent;
 use crate::frontend::app::models::main_types::AppMode;
 use super::super::App;
 use super::super::ui;
@@ -8,14 +9,13 @@ impl App<'_>{
             match key.code{
                 KeyCode::Esc => {
                     self.app_mode = AppMode::Normal;
+                    self.cache.main_log_state.transition(TuiWidgetEvent::EscapeKey)
                 },
                 KeyCode::Up => {
-                    if self.simulation_controller_data.logs.log_scroll_offset > 1{
-                        self.simulation_controller_data.logs.log_scroll_offset -= 2;
-                    }
+                    self.cache.main_log_state.transition(TuiWidgetEvent::PrevPageKey)
                 }
                 KeyCode::Down => {
-                    self.simulation_controller_data.logs.log_scroll_offset += 2;
+                    self.cache.main_log_state.transition(TuiWidgetEvent::NextPageKey)
                 }
                 _ => {()}
             }

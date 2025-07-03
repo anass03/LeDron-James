@@ -43,7 +43,7 @@ pub(in crate::frontend::app) struct Cache<'a> {
     pub cursor: u8, // Cursor to know which menu on-tab is selected.
     pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
     pub counter: u8, // Counting cycles, used to update colors in TUI
-    pub log_state: TuiWidgetState,
+    pub main_log_state: TuiWidgetState,
 
     pub text_buffer: TextBuffer<'a>,
     pub file_explorer: FileExplorer,
@@ -168,9 +168,10 @@ impl<'a> Cache<'a> {
                 (colors.len(),colors)
             },
             counter: 0,
-            log_state: TuiWidgetState::default()
-                .set_default_display_level(LevelFilter::Off)
-                .set_level_for_target("main", LevelFilter::max()),
+            main_log_state: TuiWidgetState::default()
+                .set_default_display_level(LevelFilter::max()),
+            //.set_level_for_target("main", LevelFilter::max()),
+
         }
     }
     pub(in crate::frontend::app) fn update_counter(&mut self) {
