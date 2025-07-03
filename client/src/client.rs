@@ -513,7 +513,7 @@ impl Client {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
-                                format!("Incoming content {:?}: {} fragments", content_id, total_fragments),
+                                format!("✅💥✅💥 Incoming content {:?}: {} fragments 💥✅💥✅", content_id, total_fragments),
                             );
                         }
                         ClientList(client_id, server_id,clients) => {
