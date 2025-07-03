@@ -132,12 +132,7 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
 
     match app.selected_tab{
         SelectedTab::Overview => {
-            match tab0::render_tab0(app, inner_block, buf).clone(){
-                None => (),
-                Some(log_area) => {
-                    tab0::render_mutable_tab0(app,log_area,buf)
-                }
-            }
+            tab0::render_tab0(app, inner_block, buf)
         },
         SelectedTab::Topology => {
             match tab1::render_tab1(app, inner_block, buf){

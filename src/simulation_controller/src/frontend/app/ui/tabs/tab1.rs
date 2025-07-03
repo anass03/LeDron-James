@@ -239,6 +239,7 @@ pub(super) mod data_rendering{
     use ratatui::prelude::Color;
     use ratatui::style::{Style, Stylize};
     use ratatui::widgets::{Block, BorderType, Borders, Widget};
+    use tui_logger::TuiLoggerWidget;
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::{process_log_paragraph, MAIN_BLOCK_BORDERS};
 
@@ -312,8 +313,22 @@ pub(super) mod data_rendering{
                 }
             ));
 
-        let inner_logging_block = logging_block.inner(filtered_logging_area);
+        let inner_log_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
+
+        TuiLoggerWidget::default()
+            .style_error(Style::default().fg(Color::Red))
+            .style_warn(Style::default().fg(Color::Yellow))
+            .style_info(Style::default().fg(Color::White))
+            .style_debug(Style::default().fg(Color::Green))
+            .style_trace(Style::default().fg(Color::Magenta))
+            .output_separator(' ')
+            .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
+            .output_target(false)
+            .output_file(false)
+            .output_line(false)
+            .state(&app.cache.main_log_state)
+            .render(inner_log_block, buf);
 
     }
     // Download / upload

@@ -827,7 +827,7 @@ impl SimulationControllerData {
     }
 
     pub fn controller_shortcut(&mut self, client_id: ClientId, packet: Packet) -> Result<(), String> {
-        debug!(target: "main", "Sending Controller Shortcut to Client {client_id}");
+        debug!(target: "main", "[LEDRON-CLI] Sending Controller Shortcut to Client {client_id}");
         let command = ControllerShortcut(packet);
         self.send_client_command(client_id, command)
     }

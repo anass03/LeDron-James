@@ -264,7 +264,6 @@ impl Widget for &mut App<'_>{
         use ratatui::layout::Constraint::{Length, Min};
         use ui::tabs::{render_top,render_inner,render_footer};
 
-
         let app_colored_area = Block::default()
             .bg(BG_COLOR);
         let inner_colored = app_colored_area.inner(area);

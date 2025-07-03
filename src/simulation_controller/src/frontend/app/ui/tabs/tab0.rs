@@ -7,7 +7,7 @@ use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
 
 /// Renders Overview tab-page
-pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer)->Option<Rect>{
+pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
     let [graph_area,log_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -37,10 +37,6 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer)->Option<Rect>
         _ => panic!("OVERFLOW CHART SELECTION!")
     }
 
-    Some(log_area)
-}
-
-pub(super) fn render_mutable_tab0(app:&mut App, area: Rect, buf : &mut Buffer){
     let log_block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(
@@ -51,8 +47,8 @@ pub(super) fn render_mutable_tab0(app:&mut App, area: Rect, buf : &mut Buffer){
             }
         ))
         .border_type(BorderType::Rounded);
-    let inner_log_block = log_block.inner(area);
-    log_block.render(area, buf);
+    let inner_log_block = log_block.inner(log_area);
+    log_block.render(log_area, buf);
 
     TuiLoggerWidget::default()
         .style_error(Style::default().fg(Color::Red))
@@ -65,7 +61,8 @@ pub(super) fn render_mutable_tab0(app:&mut App, area: Rect, buf : &mut Buffer){
         .output_target(false)
         .output_file(false)
         .output_line(false)
-        .state(&mut app.cache.log_state)
+        .state(&app.cache.main_log_state)
         .render(inner_log_block, buf);
+
 }
 
