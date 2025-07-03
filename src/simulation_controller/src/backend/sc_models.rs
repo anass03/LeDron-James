@@ -356,7 +356,7 @@ pub struct AsyncSimulationController {
     pub data: SimulationControllerData,
 
     // Canale per inviare comandi al thread asincrono
-    pub(crate) command_sender: mpsc::Sender<AsyncCommand>,
+    pub(crate) command_sender: crossbeam_channel::Sender<AsyncCommand>,
 
     // Canale condiviso per aggiornamenti dai comandi asincroni
     pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
@@ -364,11 +364,11 @@ pub struct AsyncSimulationController {
 
 // Processore asincrono separato
 pub(crate) struct AsyncProcessor {
-    pub(crate) receiver: mpsc::Receiver<AsyncCommand>,
+    pub(crate) receiver: crossbeam_channel::Receiver<AsyncCommand>,
     pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
 
     // Copia dei canali necessari per i comandi
-    pub(crate) drone_command_senders: HashMap<NodeId, mpsc::Sender<DroneCommand>>,
-    pub(crate) client_command_senders: HashMap<NodeId, mpsc::Sender<ClientCommand>>,
-    pub(crate) server_command_senders: HashMap<NodeId, mpsc::Sender<HostCommand>>,
+    pub(crate) drone_command_senders: HashMap<NodeId, crossbeam_channel::Sender<DroneCommand>>,
+    pub(crate) client_command_senders: HashMap<NodeId, crossbeam_channel::Sender<ClientCommand>>,
+    pub(crate) server_command_senders: HashMap<NodeId, crossbeam_channel::Sender<HostCommand>>,
 }

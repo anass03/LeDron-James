@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{mpsc, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use client::ClientCommand;
+use crossbeam_channel::unbounded;
 use host::{ClientId, FileId, HostCommand, MediaId, ServerId};
 use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
@@ -12,11 +13,11 @@ use crate::backend::simulation_controller::SimulationControllerData;
 
 impl AsyncSimulationController {
     pub fn new(simulation_data: SimulationControllerData) -> Self {
-        let (tx, rx) = mpsc::channel::<AsyncCommand>();
+        let (tx, rx) = unbounded::<AsyncCommand>();
         let shared_data = Arc::new(Mutex::new(SharedAsyncData::default()));
         let shared_data_clone = Arc::clone(&shared_data);
 
-        // Crea il processore asincrono
+        // Creating asynchronous processor
         thread::spawn(move || {
             AsyncProcessor::new(rx, shared_data_clone).run();
         });
@@ -28,16 +29,16 @@ impl AsyncSimulationController {
         }
     }
 
-    // Tick per processare aggiornamenti dal thread asincrono
+    // Tick for processing continuously
     pub fn tick(&mut self) {
-        // Processa i dati condivisi
+        // Process shared data
         if let Ok(mut shared) = self.shared_data.try_lock() {
-            // Trasferisci i log dal thread asincrono
+            // Transfer logs from thread
             for (log_type, message) in shared.async_logs.drain(..) {
                 self.data.logs.push_sc_log(log_type, message);
             }
 
-            // Aggiorna statistiche se necessario
+            // Update stats
             if shared.failed_commands > 0 {
                 self.data.logs.push_sc_log(
                     LogType::WARN,
@@ -47,13 +48,10 @@ impl AsyncSimulationController {
             }
         }
 
-        // Processa eventi sincronamente
+        // Process events synchronously
         self.data.handle_channels();
         self.data.handle_rx_renderer();
     }
-
-    // METODI SINCRONI - per operazioni che devono essere immediate
-    // Questi accedono direttamente ai dati senza passare per il thread asincrono
 
     pub fn handle_channels(&mut self) {
         self.data.handle_channels();
@@ -63,11 +61,7 @@ impl AsyncSimulationController {
         self.data.handle_rx_renderer();
     }
 
-    // METODI ASINCRONI - per operazioni che possono essere ritardate
-    // Questi inviano comandi al thread asincrono e ritornano immediatamente
-
     pub fn crash(&self, drone_id: NodeId) -> Result<(), String> {
-        // Invia comando e ritorna immediatamente - NON BLOCCA
         self.command_sender.send(AsyncCommand::Crash(drone_id))
             .map_err(|_| "Failed to send crash command".to_string())
     }
@@ -153,7 +147,7 @@ impl AsyncSimulationController {
 }
 
 impl AsyncProcessor {
-    fn new(receiver: mpsc::Receiver<AsyncCommand>, shared_data: Arc<Mutex<SharedAsyncData>>) -> Self {
+    fn new(receiver: crossbeam_channel::Receiver<AsyncCommand>, shared_data: Arc<Mutex<SharedAsyncData>>) -> Self {
         Self {
             receiver,
             shared_data,
@@ -164,15 +158,15 @@ impl AsyncProcessor {
     }
 
     fn run(mut self) {
-        // Marca come attivo
+        // Processor is active
         if let Ok(mut shared) = self.shared_data.lock() {
             shared.is_processing = true;
         }
 
         self.log(LogType::INFO, "Async processor started".to_string());
 
-        // Main loop del processore
-        while let Ok(command) = self.receiver.recv() {
+        // Main loop
+        while let Ok(command) = self.receiver.try_recv() {
             let start_time = std::time::Instant::now();
 
             match self.process_command(command) {
@@ -192,7 +186,7 @@ impl AsyncProcessor {
 
         self.log(LogType::INFO, "Async processor stopped".to_string());
 
-        // Marca come inattivo
+        // Processor is not active
         if let Ok(mut shared) = self.shared_data.lock() {
             shared.is_processing = false;
         }
@@ -203,7 +197,6 @@ impl AsyncProcessor {
             AsyncCommand::Crash(drone_id) => {
                 self.log(LogType::DEBUG, format!("Processing crash for drone {}", drone_id));
 
-                // Trova il sender per questo drone
                 if let Some(sender) = self.drone_command_senders.get(&drone_id) {
                     sender.send(DroneCommand::Crash)
                         .map_err(|e| format!("Failed to send crash command: {}", e))?;
@@ -315,10 +308,15 @@ impl AsyncProcessor {
                 }
             }
 
-            // Implementa altri comandi secondo necessità...
-            _ => {
-                self.log(LogType::WARN, "Command not fully implemented yet".to_string());
+            AsyncCommand::AddSender(first, second) => {
             }
+            AsyncCommand::RemoveSender(_, _) => {}
+            AsyncCommand::RequestFile(_, _, _) => {}
+            AsyncCommand::RequestRegistrationToChat(_, _) => {}
+            AsyncCommand::MediaFor(_, _, _, _) => {}
+            AsyncCommand::FileFor(_, _, _, _) => {}
+            AsyncCommand::NewMedia(_, _, _) => {}
+            AsyncCommand::NewFile(_, _, _) => {}
         }
 
         Ok(())
@@ -326,7 +324,7 @@ impl AsyncProcessor {
 
     fn log(&self, log_type: LogType, message: String) {
         if let Ok(mut shared) = self.shared_data.lock() {
-            shared.async_logs.push((log_type, format!("[AsyncProcessor] {}", message)));
+            shared.async_logs.push((log_type, format!("[AsyncProcessor] - {}", message)));
         }
     }
 
@@ -342,11 +340,10 @@ impl AsyncProcessor {
         }
     }
 
-    // Metodo per inizializzare i sender - DA IMPLEMENTARE
     pub fn initialize_senders(&mut self,
-                              drone_senders: HashMap<NodeId, mpsc::Sender<DroneCommand>>,
-                              client_senders: HashMap<NodeId, mpsc::Sender<ClientCommand>>,
-                              server_senders: HashMap<NodeId, mpsc::Sender<HostCommand>>) {
+                              drone_senders: HashMap<NodeId, crossbeam_channel::Sender<DroneCommand>>,
+                              client_senders: HashMap<NodeId, crossbeam_channel::Sender<ClientCommand>>,
+                              server_senders: HashMap<NodeId, crossbeam_channel::Sender<HostCommand>>) {
 
         self.drone_command_senders = drone_senders;
         self.client_command_senders = client_senders;
