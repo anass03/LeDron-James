@@ -14,12 +14,15 @@ toml = "0.8.19"
 crossbeam-channel = "0.5.13"
 initializer = { path = "src/initializer" }
 ratatui = "0.29.0"
+tui-logger = "0.17.3"
+
 
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}
 host = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "host"}
 server = { git = "https://github.com/anass03/LeDron-James.git", branch = "server"}
 
 simulation_controller = { path = "src/simulation_controller" }
+log = "0.4.27"
 
 # Specify local libraries in the project
 [workspace]

@@ -4,8 +4,25 @@ use simulation_controller::backend::simulation_controller::SimulationControllerD
 use simulation_controller::backend::sc_models::{ChatCache, LogType, Logs, NetCache, Statistics};
 use initializer::initializer::initialize;
 use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use tui_logger::*;
+use log::*;
 
 fn main() -> std::io::Result<()> {
+    // 1) inizializza tui-logger
+    _ = init_logger(LevelFilter::Trace);
+    _ = set_default_level(LevelFilter::Trace);
+
+    // 2) (opzionale) file di log su disco
+    let mut path = std::env::temp_dir();
+    path.push("myapp.log");
+    let file_opts = TuiLoggerFile::new(path.to_str().unwrap())
+        .output_level(Some(TuiLoggerLevelOutput::Abbreviated))
+        .output_file(false)
+        .output_separator(':');
+    set_log_file(file_opts);
+
+    debug!(target:"main", "Logger inizializzato");
+
     let mut thread_handles = HashMap::new();
     let mut simulation_controller_data = SimulationControllerData {
         drones: vec![],

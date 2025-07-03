@@ -2,9 +2,11 @@ use std::sync::mpsc::{Receiver, Sender};
 use client::Client;
 use host::{ClientId, MediaId, ServerId};
 use image::math::Rect;
+use log::LevelFilter;
 use ratatui::Frame;
 use ratatui_explorer::{FileExplorer, Theme};
 use ratatui_image::thread::ResizeRequest;
+use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
 use crate::frontend::app::models::general_types::TextBuffer;
@@ -41,6 +43,7 @@ pub(in crate::frontend::app) struct Cache<'a> {
     pub cursor: u8, // Cursor to know which menu on-tab is selected.
     pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
     pub counter: u8, // Counting cycles, used to update colors in TUI
+    pub log_state: TuiWidgetState,
 
     pub text_buffer: TextBuffer<'a>,
     pub file_explorer: FileExplorer,
@@ -165,6 +168,9 @@ impl<'a> Cache<'a> {
                 (colors.len(),colors)
             },
             counter: 0,
+            log_state: TuiWidgetState::default()
+                .set_default_display_level(LevelFilter::Off)
+                .set_level_for_target("main", LevelFilter::max()),
         }
     }
     pub(in crate::frontend::app) fn update_counter(&mut self) {

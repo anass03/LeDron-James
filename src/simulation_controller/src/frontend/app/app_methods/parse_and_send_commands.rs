@@ -4,6 +4,7 @@ use host::{ClientId, FileId, MediaId, ServerId};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::LogType;
 use crate::frontend::app::App;
+use log::*;
 
 /*
 Each method here is just temporary:
@@ -30,7 +31,7 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.remove_sender(id, n as u8){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             }
             Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
@@ -41,10 +42,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.set_pdr(id, n){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             }
-            Err(str) => {self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)}
+            Err(str) => {error!(target: "main", "{}", str)}
         }
     }
 
@@ -56,7 +57,7 @@ impl App<'_>{
             Ok((n,s_id, str)) => {
                 match self.simulation_controller_data.message_for(id, n as u8, s_id as u8, str){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             }
             Err(_) => {}
@@ -79,10 +80,10 @@ impl App<'_>{
             self.clean_topology_inputs_buffer();
             match self.simulation_controller_data.message_for(client_sender, client_receiver, server_receiver, second_string){
                 Ok(_) => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent message".to_string())
+                    info!(target: "main", "Successfully sent message");
                 },
                 Err(str) => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str)
+                    error!(target: "main", "{}", str);
                 }
             }
         }
@@ -117,10 +118,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.request_files_list(id, n as ServerId){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             },
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {error!(target: "main", "{}", str)}
         }
     }
     pub(super) fn request_media_list(&mut self, id:NodeId){
@@ -128,10 +129,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.request_media_list(id, n as ServerId){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             },
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {error!(target: "main", "{}", str)}
         }
     }
     pub(super) fn request_reg_to_chat(&mut self, id:NodeId){
@@ -139,10 +140,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.request_registration_to_chat(id, n as ServerId){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             },
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {error!(target: "main", "{}", str)}
         }
     }
     pub(super) fn request_client_list(&mut self, id:NodeId){
@@ -150,10 +151,10 @@ impl App<'_>{
             Ok(n) => {
                 match self.simulation_controller_data.request_client_list(id, n as ServerId){
                     Ok(_) => {},
-                    Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+                    Err(str) => {error!(target: "main", "{}", str)}
                 }
             },
-            Err(str) => {self.simulation_controller_data.logs.push_log(LogType::ERROR, str.as_str())}
+            Err(str) => {error!(target: "main", "{}", str)}
         }
     }
 

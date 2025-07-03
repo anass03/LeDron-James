@@ -2,9 +2,10 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
@@ -12,13 +13,17 @@ use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, S
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
-use host::logging::LogEntry;
-use image::ImageReader;
+use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, Rgba};
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, RendererCommand};
+use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
+use petgraph::visit::Topo;
+use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
-use host::logging::LogType as HostLogType;
+use server::MediaServerError;
+use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
+use crate::frontend::app::topology_algorithm::vectors::Vector;
+use log::*;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -305,7 +310,7 @@ fn dfs(
             }
             Err(e) => return Err(e)
         }
-        self.logs.push_sc_log(LogType::DEBUG, format!("Trying to Crash Drone: {drone_id}"));
+        debug!(target: "main", "Trying to Crash Drone: {drone_id}");
         let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
@@ -364,7 +369,7 @@ fn dfs(
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
                     Ok(()) => {
-                        self.logs.push_sc_log(LogType::INFO, format!("Changing Drone {drone_id} PDR to: {valid_pdr}"));
+                        info!(target: "main", "Changing Drone {drone_id} PDR to: {valid_pdr}");
                         Ok(()) },
                     Err(e) => Err(e.to_string()),
                 }
@@ -417,7 +422,7 @@ fn dfs(
                                 //trying to send command forward
                                 match forward_drone_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -437,7 +442,7 @@ fn dfs(
                                 //trying to send command forward
                                 match forward_client_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -457,7 +462,7 @@ fn dfs(
                                 //trying to send command forward
                                 match forward_server_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -510,7 +515,7 @@ fn dfs(
                         //trying to send command forward
                         match forward_drone_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -530,7 +535,7 @@ fn dfs(
                         //trying to send command forward
                         match forward_client_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -550,7 +555,7 @@ fn dfs(
                         //trying to send command forward
                         match forward_server_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -652,7 +657,7 @@ impl SimulationControllerData {
         for drone in self.drones.iter() {
             network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
         }
-        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", network_map));
+        debug!(target: "main", "{:?}", network_map);
         network_map
     }
     fn is_graph_connected_excluding(
@@ -881,7 +886,7 @@ impl SimulationControllerData {
             }
             Err(e) => return Err(e)
         }
-        self.logs.push_sc_log(LogType::DEBUG, format!("Trying to Crash Drone: {drone_id}"));
+        debug!(target: "main", "Trying to Crash Drone: {drone_id}");
         let command = DroneCommand::Crash;
         match self.drone_command_sender.get(&drone_id) {
             Some(drone_command_sender) => {
@@ -940,7 +945,7 @@ impl SimulationControllerData {
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
                     Ok(()) => {
-                        self.logs.push_sc_log(LogType::INFO, format!("Changing Drone {drone_id} PDR to: {valid_pdr}"));
+                        info!(target: "main", "Changing Drone {drone_id} PDR to: {valid_pdr}");
                         Ok(()) },
                     Err(e) => Err(e.to_string()),
                 }
@@ -952,18 +957,24 @@ impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
-            DroneEvent::PacketSent(_packet) => {
+            DroneEvent::PacketSent(packet) => {
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
                 self.stats.received_packet();
                 Ok(())
+                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Sent packet [ Origin: {sender_id}, Session ID: {session_id} ]", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
-            DroneEvent::PacketDropped(_packet) => {
+            DroneEvent::PacketDropped(packet) => {
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                //handle_packet(&packet);
+                let _session_id = packet.session_id;
                 Ok(())
+                //self.logs.push_sc_log(LogType::INFO, format!("Drone ID {:?} - Dropped packet [ Origin: {sender_id}, Session ID: {session_id}", packet.routing_header.hops[packet.routing_header.hop_index - 1]).as_str());
             },
             DroneEvent::ControllerShortcut(packet) => {
-                let receiver_id = match packet.routing_header.hops.last() {
-                    Some(receiver_id) => receiver_id,
-                    None => return Err((LogType::ERROR, "No routing header found for controller shortcut".to_string())),
-                };
+                //let _sender_id = packet.routing_header.hops[packet.routing_header.hop_index - 1 ];
+                let receiver_id = packet.routing_header.hops.get(packet.routing_header.hops.len() - 1).unwrap();
                 match self.controller_shortcut(*receiver_id, packet) {
                     Ok(()) => Ok(()),
                     Err(e) => Err((LogType::ERROR, e)),
@@ -987,7 +998,7 @@ impl SimulationControllerData {
                                 //trying to send command forward
                                 match forward_drone_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -1007,7 +1018,7 @@ impl SimulationControllerData {
                                 //trying to send command forward
                                 match forward_client_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -1027,7 +1038,7 @@ impl SimulationControllerData {
                                 //trying to send command forward
                                 match forward_server_command_sender.send(forward_command) {
                                     Ok(()) => {
-                                        self.logs.push_sc_log(LogType::DEBUG, format!("Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                                     },
                                     Err(e) => return Err(e.to_string()),
                                 }
@@ -1080,7 +1091,7 @@ impl SimulationControllerData {
                         //trying to send command forward
                         match forward_drone_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -1100,7 +1111,7 @@ impl SimulationControllerData {
                         //trying to send command forward
                         match forward_client_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -1120,7 +1131,7 @@ impl SimulationControllerData {
                         //trying to send command forward
                         match forward_server_command_sender.send(forward_command) {
                             Ok(()) => {
-                                self.logs.push_sc_log(LogType::DEBUG, format!("Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type()));
+                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
                             },
                             Err(e) => return Err(e.to_string()),
                         }
@@ -1176,36 +1187,36 @@ impl SimulationControllerData {
 
     pub fn request_server_type(&mut self, client_id: ClientId) -> Result<(), String> {
         let command = Net(ServerType);
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Server Type Request to Client {client_id}"));
+        debug!(target: "main", "Sending Server Type Request to Client {client_id}");
         self.send_client_command(client_id, command)
     }
 
     pub fn request_files_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending File List Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending File List Request to Client {client_id} for Server {server_id}");
         let command = Net(FilesList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_file(&mut self, client_id: ClientId, server_id: ServerId, file_id: FileId) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending File {file_id} Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending File {file_id} Request to Client {client_id} for Server {server_id}");
         let command = Net(File(server_id, file_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_media_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Media List Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending Media List Request to Client {client_id} for Server {server_id}");
         let command = Net(MediaList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_media(&mut self, client_id: ClientId, server_id: ServerId, media_id: MediaId) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Media {media_id} Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending Media {media_id} Request to Client {client_id} for Server {server_id}");
         let command = Net(Media(server_id, media_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_registration_to_chat(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Registration to Chat Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending Registration to Chat Request to Client {client_id} for Server {server_id}");
         let command = Net(RegistrationToChat(server_id));
         self.send_client_command(client_id, command)
     }
@@ -1221,17 +1232,17 @@ impl SimulationControllerData {
         };
         if should_register {
             if let Err(e) = self.request_registration_to_chat(client_id, server_id) {
-                self.logs.push_sc_log(LogType::DEBUG, format!("Failed to register client: {}", e));
+                debug!(target: "main", "Failed to register client: {}", e);
             }
         }
 
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Client List Request to Client {client_id} for Server {server_id}"));
+        debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
         let command = Net(ClientList(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn message_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, message: String) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Message For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
+        debug!(target: "main", "Sending Message For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}");
         let command = Net(MessageFor(receiver_client_id, server_id, message));
         self.send_client_command(sender_client_id, command)
     }
@@ -1257,7 +1268,7 @@ impl SimulationControllerData {
             Some(media_id) => media_id,
             None => return Err(String::from("Failed to get Media ID")),
         };
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Media For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
+        debug!(target: "main", "Sending Media For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}");
         let command = Net(MediaFor(receiver_client_id, server_id, media_id, image));
         self.send_client_command(sender_client_id, command)
 
@@ -1272,7 +1283,7 @@ impl SimulationControllerData {
             Some(file_id) => file_id,
            None => return Err(String::from("Failed to get File ID")),
         };
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending File For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}"));
+        debug!(target: "main", "Sending File For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}");
         let command = Net(FileFor(receiver_client_id, server_id, file_id, file));
         self.send_client_command(sender_client_id, command)
 
@@ -1299,8 +1310,8 @@ impl SimulationControllerData {
             Some(media_id) => media_id,
             None => return Err(String::from("Failed to get Media ID")),
         };
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending New Media Request from Client {sender_client_id} to Server {server_id}"));
-        let command = Net(NewMedia(server_id, media_id, image));
+        debug!(target: "main", "Sending New Media Request from Client {sender_client_id} to Server {server_id}");
+        let command = Net(NewMedia(0, media_id, image));
         self.send_client_command(sender_client_id, command)
     }
 
@@ -1313,14 +1324,14 @@ impl SimulationControllerData {
             Some(file_id) => file_id,
             None => return Err(String::from("Failed to get File ID")),
         };
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending NewFile Request from Client {sender_client_id} to Server {server_id}"));
+        debug!(target: "main", "Sending NewFile Request from Client {sender_client_id} to Server {server_id}");
         let command = Net(NewFile(server_id, file_id, file));
         self.send_client_command(sender_client_id, command)
 
     }
 
     pub fn controller_shortcut(&mut self, client_id: ClientId, packet: Packet) -> Result<(), String> {
-        self.logs.push_sc_log(LogType::DEBUG, format!("Sending Controller Shortcut to Client {client_id}"));
+        debug!(target: "main", "Sending Controller Shortcut to Client {client_id}");
         let command = ControllerShortcut(packet);
         self.send_client_command(client_id, command)
     }
@@ -1364,7 +1375,7 @@ impl SimulationControllerData {
                         .known_content_servers
                         .insert(client_id, content_servers.clone());
                 }
-                self.logs.push_sc_log(LogType::INFO, format!("Servers discovered: {servers:?}"));
+                info!(target: "main", "Servers discovered: {servers:?}");
             },
             HostEvent::ChatUpdate(server_id, string) => {
                 let chat: Chat = serde_json::from_str(&string)
@@ -1426,7 +1437,7 @@ impl SimulationControllerData {
         match server_to_client {
             ServerToClient::ServerType(server_type)
             => {
-                self.logs.push_sc_log(LogType::INFO, format!("Server type: {:?}", server_type)) },
+                info!(target: "main", "Server type: {:?}", server_type) },
             ServerToClient::FilesList(client_id, server_id, file_list)
             => {
                 self.net_cache
@@ -1434,7 +1445,7 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, file_list.clone());
-                self.logs.push_sc_log(LogType::INFO, format!("Files list from Server {server_id} received: {file_list:?}")) },
+                info!(target: "main", "Files list from Server {server_id} received: {file_list:?}") },
             ServerToClient::File(server_id, file_id, file)
             => {
 
@@ -1500,7 +1511,7 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, media_list.clone());
-                self.logs.push_sc_log(LogType::INFO, format!("Media list from Server {server_id} received: {:?}", media_list)) },
+                info!(target: "main", "Media list from Server {server_id} received: {:?}", media_list) },
             ServerToClient::Media(server_id, media_id, image)
             => {
                 let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
@@ -1524,7 +1535,7 @@ impl SimulationControllerData {
                                 }
                             },
                             None => {
-                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                                error!(target: "main", "No tx_to_render sender found");
                             }
                         }
 
@@ -1576,9 +1587,9 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, contacts);
-                self.logs.push_sc_log(LogType::INFO, format!("Client list from CatServer {server_id} received: {:?}", client_list)) },
+                info!(target: "main", "Client list from CatServer {server_id} received: {:?}", client_list) },
             ServerToClient::MessageFrom(server_id, client_id, message)
-            => self.logs.push_sc_log(LogType::INFO, format!("Message from Client {client_id} received through Server {server_id}: {message}")),
+            => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
             ServerToClient::FileFrom(server_id, client_id,..)
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
@@ -1600,15 +1611,8 @@ impl SimulationControllerData {
         Ok(())
     }
 
-    pub fn handle_log_event(&mut self, log: LogEntry) {
-        let log_type = match log.log_type {
-            HostLogType::WARN => LogType::WARN,
-            HostLogType::ERROR => LogType::ERROR,
-            HostLogType::INFO => LogType::INFO,
-            HostLogType::DEBUG => LogType::DEBUG,
-            HostLogType::FATAL => LogType::FATAL,
-        };
-        self.logs.push_log(log_type, log.message.as_str());
+    pub fn handle_log_event(&mut self, log: String) {
+        self.logs.push_log(LogType::INFO, log.as_str())
     }
 
     pub fn handle_rx_renderer(&mut self){
@@ -1617,11 +1621,8 @@ impl SimulationControllerData {
             Some(channel) => {
                 while let Ok(event) = channel.try_recv() {
                     match event{
-                        RendererResponse::Outcome((logtype,log)) => {
-                            self.logs.push_log(logtype,log.as_str());
-                        }
                         RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            self.logs.push_sc_log(LogType::ERROR,"Received encoded Response".to_string());
+                            error!(target: "main", "Received encoded Response");
                             match self.net_cache.downloaded_medias.get_mut(&enc_server) {
                                 None => {
 
@@ -1671,3 +1672,13 @@ fn open_image(path: &str) {
         Command::new("xdg-open").arg(path).spawn().ok();
     }
 }
+
+/*fn handle_packet (_packet: &Packet) {
+    match packet.clone().pack_type {
+        PacketType::MsgFragment(fragment) => {}
+        PacketType::Ack(ack) => {}
+        PacketType::Nack(nack) => {}
+        PacketType::FloodRequest(flood_request) => {}
+        PacketType::FloodResponse(flood_response) => {}
+    }
+}*/

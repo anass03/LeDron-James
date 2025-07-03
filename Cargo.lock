@@ -22,12 +22,14 @@ dependencies = [
  "crossbeam-channel",
  "host",
  "initializer",
+ "log",
  "ratatui",
  "serde",
  "serde_json",
  "server",
  "simulation_controller",
  "toml",
+ "tui-logger",
  "wg_2024",
 ]
 
