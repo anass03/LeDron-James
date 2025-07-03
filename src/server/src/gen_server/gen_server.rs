@@ -117,7 +117,7 @@ impl GenServer {
             .filter(|&&nid| matches!(self.host.network.nodes.get(&nid).map(|(ty, _)| ty), Some(NodeType::Drone)))
             .copied()
             .collect();
-        self.host.network.pdr_helper(&drone_hops, &self.host.log_sender);
+        self.host.network.pdr_helper(&drone_hops);
 
 
         if session.pending == 0 {
