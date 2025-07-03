@@ -236,6 +236,7 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
 pub(super) mod data_rendering{
     use ratatui::buffer::Buffer;
     use ratatui::layout::{Direction, Layout, Rect, Constraint};
+    use ratatui::prelude::Color;
     use ratatui::style::{Style, Stylize};
     use ratatui::widgets::{Block, BorderType, Borders, Widget};
     use crate::frontend::app::App;
@@ -314,7 +315,6 @@ pub(super) mod data_rendering{
         let inner_logging_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
 
-        process_log_paragraph(app).render(inner_logging_block, buf);
     }
     // Download / upload
     // Cpu utilize [?]
