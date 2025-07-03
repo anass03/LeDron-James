@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use host::{ClientId, FileId, Image, MediaId, ServerId};
+use host::{ClientId, FileId, HostCommand, Image, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -9,10 +9,12 @@ use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use client::ClientCommand;
 use crossbeam_channel::{Sender as Sender_c, Receiver as Receiver_c};
+use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::FileRendererUpdate::Redraw;
 use crate::backend::simulation_controller::SimulationControllerData;
@@ -50,14 +52,14 @@ impl Logs{
         // Write all logs to a text file
         /*        match log_type{
                     LogType::ERROR | LogType::FATAL => {*/
-        if let Ok(mut file) = std::fs::OpenOptions::new()
+        /*if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
             .open("logs.txt")
         {
             let _ = writeln!(file, "{}", text);
-        }
+        }*/
         /*            },
                     _ => {}
                 }*/
@@ -74,14 +76,14 @@ impl Logs{
         // Write all logs to a text file
 /*        match log_type{
             LogType::ERROR | LogType::FATAL => {*/
-                if let Ok(mut file) = std::fs::OpenOptions::new()
+                /*if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .write(true)
                     .append(true)
                     .open("logs.txt")
                 {
                     let _ = writeln!(file, "{}", text);
-                }
+                }*/
 /*            },
             _ => {}
         }*/
@@ -312,27 +314,15 @@ impl Display for DroneType {
 
 //-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
 
-/// Worker thread helper - handles heavy operations
-pub(crate) struct WorkerHelper{
-    pub(crate) simulation_data: Arc<Mutex<SimulationControllerData>>,
-    pub(crate) command_receiver: crossbeam_channel::Receiver<WorkerCommand>,
-    pub(crate) response_sender: crossbeam_channel::Sender<WorkerResponse>,
-    pub(crate) log_sender: crossbeam_channel::Sender<(LogType, String)>,
-    pub(crate) is_running: bool,
-}
+#[derive(Debug)]
+pub(crate) enum AsyncCommand {
+    // Drone commands
+    Crash(NodeId),
+    SetPDR(NodeId, f32),
+    AddSender(NodeId, NodeId),
+    RemoveSender(NodeId, NodeId),
 
-/// Commands that can be sent to the Simulation Controller
-#[derive(Debug, Clone)]
-pub enum WorkerCommand {
-    // Drone operations
-    CrashDrone(NodeId),
-    SetDronePDR(NodeId, f32),
-
-    // Network operations
-    AddConnection(NodeId, NodeId),
-    RemoveConnection(NodeId, NodeId),
-
-    // Client operations
+    // Client commands
     RequestServerType(ClientId),
     RequestFilesList(ClientId, ServerId),
     RequestFile(ClientId, ServerId, FileId),
@@ -341,38 +331,44 @@ pub enum WorkerCommand {
     RequestRegistrationToChat(ClientId, ServerId),
     RequestClientList(ClientId, ServerId),
     MessageFor(ClientId, ClientId, ServerId, String),
-    MediaFor(ClientId, ClientId, ServerId, String), // path
-    FileFor(ClientId, ClientId, ServerId, String),  // path
-    NewMedia(ClientId, ServerId, String),           // path
-    NewFile(ClientId, ServerId, String),            // path
-
-    // Control operations
-    Execute,
-    Shutdown,
+    MediaFor(ClientId, ClientId, ServerId, String), // path as string
+    FileFor(ClientId, ClientId, ServerId, String),  // path as string
+    NewMedia(ClientId, ServerId, String),           // path as string
+    NewFile(ClientId, ServerId, String),            // path as string
 }
 
-/// Responses from the simulation controller
-#[derive(Debug, Clone)]
-pub enum WorkerResponse {
-    Success,
-    Error(String),
-    Processed,
+#[derive(Default)]
+pub(crate) struct SharedAsyncData {
+    // Messaggi di log dal thread asincrono
+    pub(crate) async_logs: Vec<(LogType, String)>,
+
+    // Statistiche sui comandi processati
+    pub(crate) processed_commands: u64,
+    pub(crate) failed_commands: u64,
+
+    // Flag per indicare se il thread asincrono è attivo
+    pub(crate) is_processing: bool,
 }
 
-pub struct SimulationHelper {
-    //data shared with frontend
-    pub(crate) simulation_data: Arc<Mutex<SimulationControllerData>>,
+// Wrapper leggero che mantiene la stessa interfaccia del SimulationControllerData originale
+pub struct AsyncSimulationController {
+    // Il vero SimulationControllerData rimane nel thread principale
+    pub data: SimulationControllerData,
 
-    //worker thread channels
-    pub(crate) worker_command_sender: Sender_c<WorkerCommand>,
-    pub(crate) worker_response_receiver: Receiver_c<WorkerResponse>,
+    // Canale per inviare comandi al thread asincrono
+    pub(crate) command_sender: mpsc::Sender<AsyncCommand>,
 
-    //worker thread handle
-    pub(crate) worker_handle: Option<JoinHandle<()>>,
-
-    //log channel
-    pub(crate) log_receiver: Receiver_c<(LogType, String)>,
-
-    pub(crate) is_running: bool,
+    // Canale condiviso per aggiornamenti dai comandi asincroni
+    pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
 }
 
+// Processore asincrono separato
+pub(crate) struct AsyncProcessor {
+    pub(crate) receiver: mpsc::Receiver<AsyncCommand>,
+    pub(crate) shared_data: Arc<Mutex<SharedAsyncData>>,
+
+    // Copia dei canali necessari per i comandi
+    pub(crate) drone_command_senders: HashMap<NodeId, mpsc::Sender<DroneCommand>>,
+    pub(crate) client_command_senders: HashMap<NodeId, mpsc::Sender<ClientCommand>>,
+    pub(crate) server_command_senders: HashMap<NodeId, mpsc::Sender<HostCommand>>,
+}

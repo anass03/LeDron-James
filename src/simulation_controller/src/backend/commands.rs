@@ -15,15 +15,10 @@ use host::ClientNetCommand::*;
 use host::logging::LogEntry;
 use image::ImageReader;
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
-use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
+use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, RendererCommand};
 use host::ServerTypes::*;
-use petgraph::visit::Topo;
-use ratatui_image::thread::ResizeRequest;
 use server::chat2::Chat;
 use host::logging::LogType as HostLogType;
-use server::MediaServerError;
-use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
-use crate::frontend::app::topology_algorithm::vectors::Vector;
 
 #[derive(Default, Clone, Copy)]
 enum NodeType {
@@ -1305,7 +1300,7 @@ impl SimulationControllerData {
             None => return Err(String::from("Failed to get Media ID")),
         };
         self.logs.push_sc_log(LogType::DEBUG, format!("Sending New Media Request from Client {sender_client_id} to Server {server_id}"));
-        let command = Net(NewMedia(0, media_id, image));
+        let command = Net(NewMedia(server_id, media_id, image));
         self.send_client_command(sender_client_id, command)
     }
 
