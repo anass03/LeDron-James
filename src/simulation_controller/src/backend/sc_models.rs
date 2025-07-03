@@ -45,14 +45,14 @@ impl Logs{
         // Write all logs to a text file
         /*        match log_type{
                     LogType::ERROR | LogType::FATAL => {*/
-        if let Ok(mut file) = std::fs::OpenOptions::new()
+/*        if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .write(true)
             .append(true)
             .open("logs.txt")
         {
             let _ = writeln!(file, "{}", text);
-        }
+        }*/
         /*            },
                     _ => {}
                 }*/
@@ -69,14 +69,14 @@ impl Logs{
         // Write all logs to a text file
 /*        match log_type{
             LogType::ERROR | LogType::FATAL => {*/
-                if let Ok(mut file) = std::fs::OpenOptions::new()
+/*                if let Ok(mut file) = std::fs::OpenOptions::new()
                     .create(true)
                     .write(true)
                     .append(true)
                     .open("logs.txt")
                 {
                     let _ = writeln!(file, "{}", text);
-                }
+                }*/
 /*            },
             _ => {}
         }*/
@@ -108,7 +108,7 @@ pub enum RendererCommand{
     Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((Sender<ResizeRequest>,ServerId, MediaId, Image))
 }
 pub enum RendererResponse{
-    Outcome((LogType,String)), Encoded((ServerId,MediaId, ThreadProtocol))
+    Encoded((ServerId,MediaId, ThreadProtocol))
 }
 
 pub struct NetCache{

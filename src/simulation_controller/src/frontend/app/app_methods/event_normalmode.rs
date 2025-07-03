@@ -3,6 +3,7 @@ use crate::backend::sc_models::LogType;
 use super::super::App;
 use super::super::ui;
 use std::io::Write;
+use log::*;
 impl App<'_>{
     pub(crate) fn handle_event_normalmode(&mut self, key: KeyEvent){
         if key.kind == KeyEventKind::Press {
@@ -14,7 +15,7 @@ impl App<'_>{
                     self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
                 },
                 "o" => {
-                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Links: {:?}\n{:?}", self.simulation_controller_data.topology_algorithm_data.map_links, self.simulation_controller_data.topology_algorithm_data.map))
+                    info!(target: "main", "Links: {:?}\n{:?}", self.simulation_controller_data.topology_algorithm_data.map_links, self.simulation_controller_data.topology_algorithm_data.map)
                 }
                 "q" => self.stay = false,
                 "i" => {

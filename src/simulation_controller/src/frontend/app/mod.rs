@@ -19,6 +19,7 @@ use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
 use image::{DynamicImage, ImageBuffer, Rgba};
+use log::{error, info};
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
@@ -304,19 +305,19 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
                                     match tx_rsp.send(RendererResponse::Encoded((server_id,media_id,return_item))){
                                         Ok(_) => {
-                                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, "[RENDERER] - Correctly sent an Encoded response".to_string())));
+                                            info!("[RENDERER] - Successfully sent an Encoded response");
                                         }
                                         Err(str) => {
                                         }
                                     }
                                 }
                                 Err(err) => {
-                                    let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]", err.to_string()))));
+                                    error!(target: "main", "{}", format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]",err.to_string()));
                                 }
                             }
                         }else{
                             // Error
-                            let _ = tx_rsp.send(RendererResponse::Outcome((LogType::ERROR, format!("[RENDERER] - Error rendering the data buffer to image-buffer"))));
+                            error!(target: "main", "[RENDERER] - Error rendering the data buffer to image-buffer");
                         }
                     },
                 }
