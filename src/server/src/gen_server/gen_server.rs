@@ -162,9 +162,8 @@ impl GenServerBehavior for GenServer {
 
     /// Sends a high-level response to a client.
     fn send_response(&mut self, response: ServerToClient, destination: NodeId) { 
-        if let Some((msg, meta)) = self.prepare_message(&response) {
+        if let Some((msg, meta,total)) = self.prepare_message(&response) {
             if let Some((content_type, id)) = meta {
-                let total = (msg.content.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
                 self.send_download(destination, total, content_type, id);
             }
             if let Err(e) = self.host.build_msg_fragment(destination, msg, |_| {}) {
@@ -185,8 +184,9 @@ impl GenServerBehavior for GenServer {
     }
 
     /// Prepares a message for transmission, optionally extracting content metadata.
-    fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>)> {
+    fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>, usize)> {
         let data = serde_json::to_vec(response).ok()?;
+        let total = (data.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
         let compressed = self.compress_anything(&data).ok()?;
         let msg = Message {
             session_id: generate_unique_session_id(),
@@ -201,7 +201,7 @@ impl GenServerBehavior for GenServer {
             _ => None,
         };
 
-        Some((msg, meta))
+        Some((msg, meta,total))
     }
 }
 
