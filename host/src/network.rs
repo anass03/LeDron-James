@@ -43,11 +43,11 @@ impl Network {
     /// # Logging
     /// - DEBUG at start and end of recalculation.
     pub fn recalc_pdr<L: LogControl>(&mut self, logger: &L) {
-        logger.send_logging(
-            LogType::DEBUG,
-            LogModule::NETWORK,
-            "Starting PDR weights recalculation for drone edges".to_string(),
-        );
+        // logger.send_logging(
+        //     LogType::DEBUG,
+        //     LogModule::NETWORK,
+        //     "Starting PDR weights recalculation for drone edges".to_string(),
+        // );
 
         for (&drone_id, &pdr) in &self.drone_pdr {
             if let Some((ty, edges)) = self.nodes.get_mut(&drone_id) {
@@ -56,14 +56,14 @@ impl Network {
                     for edge in edges.iter_mut() {
                         edge.weight = clamped;
                     }
-                    logger.send_logging(
-                        LogType::DEBUG,
-                        LogModule::NETWORK,
-                        format!(
-                            "  • Drone {}: set outgoing edge weight to {:.3}",
-                            drone_id, clamped
-                        ),
-                    );
+                    // logger.send_logging(
+                    //     LogType::DEBUG,
+                    //     LogModule::NETWORK,
+                    //     format!(
+                    //         "  • Drone {}: set outgoing edge weight to {:.3}",
+                    //         drone_id, clamped
+                    //     ),
+                    // );
                 }
             }
         }
@@ -86,14 +86,14 @@ impl Network {
             let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
             let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
             *old = new_pdr.clamp(0.0, 1.0);
-            logger.send_logging(
-                LogType::DEBUG,
-                LogModule::NETWORK,
-                format!(
-                    "PDR helper: drone {} updated from {:.3} to {:.3}",
-                    drone_id, *old, new_pdr
-                ),
-            );
+            // logger.send_logging(
+            //     LogType::DEBUG,
+            //     LogModule::NETWORK,
+            //     format!(
+            //         "PDR helper: drone {} updated from {:.3} to {:.3}",
+            //         drone_id, *old, new_pdr
+            //     ),
+            // );
         }
         // Recompute edge weights with updated PDRs
         self.recalc_pdr(logger);
@@ -109,11 +109,11 @@ impl Network {
         let old = self.drone_pdr.entry(node_id).or_insert(0.0);
         let new_pdr = ALPHA * 1.0 + (1.0 - ALPHA) * *old;
         *old = new_pdr.clamp(0.0, 1.0);
-        logger.send_logging(
-            LogType::INFO,
-            LogModule::NETWORK,
-            format!("PDR penalized for drone {} to {:.3} after NACK", node_id, new_pdr),
-        );
+        // logger.send_logging(
+        //     LogType::INFO,
+        //     LogModule::NETWORK,
+        //     format!("PDR penalized for drone {} to {:.3} after NACK", node_id, new_pdr),
+        // );
         self.recalc_pdr(logger);
     }
 
