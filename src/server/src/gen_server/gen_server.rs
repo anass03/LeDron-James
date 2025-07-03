@@ -7,7 +7,7 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
 use host::{HostCommand, Message, Host, ServerTypes, HostEvent, ServerToClient, ContentID, SendingCodes};
 use host::{functionality::Functionality};
-use host::logging::{LogControl, LogEntry, LogModule, LogType};
+use host::logging::{LogControl, LogModule, LogType};
 use host::network::{Edge};
 use host::session::{RecSessionData,generate_unique_session_id};
 use zstd::{decode_all, encode_all};
@@ -37,10 +37,9 @@ impl GenServer {
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
         server_type: ServerTypes,
-        log_sender: Sender<LogEntry>,
     ) -> Self {
         assert!(connected_drone_ids.len() >= 2, "Server must be connected to at least 2 drones");
-        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send, log_sender);
+        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send);
         Self { host, controller_recv, server_type }
     }
     /// Handles commands from the Simulation Controller.
@@ -152,7 +151,7 @@ impl GenServer {
     }
 
     /// Sends a high-level response to a client.
-    pub(crate) fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
+    pub fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         if let Some((msg, meta,total)) = self.prepare_message(&response) {
             if let Some((content_type, id)) = meta {
                 self.send_download(destination, total, content_type, id);

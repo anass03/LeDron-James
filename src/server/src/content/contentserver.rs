@@ -8,7 +8,7 @@ use host::{ServerToClient, ServerTypes, HostCommand, HostEvent, Image, ClientNet
 use host::functionality::Functionality;
 use delegate::delegate;
 use host::flood::FloodControl;
-use host::logging::{LogControl, LogEntry, LogModule, LogType};
+use host::logging::{LogControl, LogModule, LogType};
 
 /// A content server that integrates both text and media server capabilities.
 pub struct ContentServer {
@@ -51,7 +51,6 @@ impl ContentServer {
         controller_recv: Receiver<HostCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
-        log_sender: Sender<LogEntry>,
     ) -> Result<Self, std::io::Error> {
         let private_dir = TempDir::new()?;
         let private_files_dir = private_dir.path().join("files");
@@ -70,7 +69,6 @@ impl ContentServer {
                 packet_recv,
                 packet_send,
                 ServerTypes::Content,
-                log_sender,
             ),
             private_dir,
             private_files_dir,

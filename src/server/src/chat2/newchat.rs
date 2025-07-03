@@ -8,7 +8,7 @@ use std::str::FromStr;
 use std::time::Duration;
 use chrono::Local;
 use host::flood::FloodControl;
-use host::logging::{LogControl, LogEntry, LogModule, LogType};
+use host::logging::{LogControl, LogModule, LogType};
 use toml::value::Datetime;
 use serde::{Deserialize, Serialize};
 use wg_2024::network::NodeId;
@@ -51,7 +51,6 @@ impl ChatServer2 {
         controller_recv: Receiver<HostCommand>,
         packet_recv: Receiver<Packet>,
         packet_send: HashMap<NodeId, Sender<Packet>>,
-        log_sender: Sender<LogEntry>,
     ) -> Self {
         Self {
             info: GenServer::new(
@@ -63,7 +62,6 @@ impl ChatServer2 {
                 packet_recv,
                 packet_send,
                 ServerTypes::Chat,
-                log_sender,
             ),
             client_list: Vec::new(),
             chats: Vec::new(),
