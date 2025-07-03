@@ -32,20 +32,32 @@ pub trait MediaServer {
 
     /// Saves the given image to disk at the specified path.
     fn save_image_to<P: AsRef<Path>>(path: P, image: &Image) -> Result<(), MediaServerError> {
-        save_buffer(
-            path,
-            &image.data,
-            image.width,
-            image.height,
-            ColorType::Rgba8,
-        )?;
+        let ext = path.as_ref().extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+
+        match ext.as_str() {
+            "jpg" | "jpeg" => {
+                // JPEG: remove alpha
+                let rgb_data: Vec<u8> = image
+                    .data
+                    .chunks(4)
+                    .flat_map(|chunk| chunk[..3].to_vec())
+                    .collect();
+
+                save_buffer(path, &rgb_data, image.width, image.height, ColorType::Rgb8)?;
+            },
+            _ => {
+                // Default: save as RGBA
+                save_buffer(path, &image.data, image.width, image.height, ColorType::Rgba8)?;
+            }
+        }
         Ok(())
     }
+
 
     /// Scans public and private directories for image files.
     fn scan_media_files(&self, private_images_dir: &Path) -> HashMap<String, PathBuf> {
         let public_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/content/images");
-  
+
         [&public_dir, private_images_dir]
             .iter()
             .flat_map(|dir| fs::read_dir(dir).into_iter().flatten())

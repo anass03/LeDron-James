@@ -182,7 +182,8 @@ impl ContentServer {
     /// Responds to a request for the list of media files.
     fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
-            self.media_map = self.scan_media_files(&self.private_files_dir);
+            self.media_map = self.scan_media_files(&self.private_images_dir);
+            self.info.host.send_logging(LogType::INFO,LogModule::MEDIA,format!(" media map , {:?}" , self.media_map.clone()));
             self.media = self.media_map.keys().cloned().collect();
             self.media.sort();
             //self.send_logging("Checking media IDs".to_string());
@@ -232,7 +233,7 @@ impl ContentServer {
                 );
                 match Self::save_image_to(&path, &image) {
                     Ok(_) => {
-                        // self.send_logging(format!("Media saved in {}", path.display()))
+                        self.info.host.send_logging(LogType::INFO,LogModule::MEDIA,format!("Media saved in {}", path.display()))
                     },
                     Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error writing media {}: {}", path.display(), e)),
                 }
@@ -287,7 +288,7 @@ impl ContentServer {
                 );
                 match Self::save_text_file(&path, &data) {
                     Ok(_) => {
-                        //self.send_logging(format!("File saved in {}", path.display())),   
+                        //self.send_logging(format!("File saved in {}", path.display())),
                     }
                     Err(e) => self.info.host.send_logging(LogType::ERROR,LogModule::FILE,format!("Error writing file {}: {}", path.display(), e)),
                 }
