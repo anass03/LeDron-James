@@ -42,13 +42,7 @@ impl Network {
     ///
     /// # Logging
     /// - DEBUG at start and end of recalculation.
-    pub fn recalc_pdr<L: LogControl>(&mut self, logger: &L) {
-        // logger.send_logging(
-        //     LogType::DEBUG,
-        //     LogModule::NETWORK,
-        //     "Starting PDR weights recalculation for drone edges".to_string(),
-        // );
-
+    pub fn recalc_pdr(&mut self) {
         for (&drone_id, &pdr) in &self.drone_pdr {
             if let Some((ty, edges)) = self.nodes.get_mut(&drone_id) {
                 if *ty == NodeType::Drone {
@@ -56,23 +50,9 @@ impl Network {
                     for edge in edges.iter_mut() {
                         edge.weight = clamped;
                     }
-                    // logger.send_logging(
-                    //     LogType::DEBUG,
-                    //     LogModule::NETWORK,
-                    //     format!(
-                    //         "  • Drone {}: set outgoing edge weight to {:.3}",
-                    //         drone_id, clamped
-                    //     ),
-                    // );
                 }
             }
         }
-
-        logger.send_logging(
-            LogType::INFO,
-            LogModule::NETWORK,
-            "Completed PDR weights recalculation".to_string(),
-        );
     }
 
     /// Updates the PDR estimate for each drone in `hops` after a successful forward.
@@ -81,22 +61,14 @@ impl Network {
     ///
     /// # Logging
     /// - DEBUG for each updated drone.
-    pub fn pdr_helper<L: LogControl>(&mut self, hops: &[NodeId], logger: &L) {
+    pub fn pdr_helper(&mut self, hops: &[NodeId]) {
         for &drone_id in hops {
             let old = self.drone_pdr.entry(drone_id).or_insert(0.0);
             let new_pdr = ALPHA * 0.0 + (1.0 - ALPHA) * *old;
             *old = new_pdr.clamp(0.0, 1.0);
-            // logger.send_logging(
-            //     LogType::DEBUG,
-            //     LogModule::NETWORK,
-            //     format!(
-            //         "PDR helper: drone {} updated from {:.3} to {:.3}",
-            //         drone_id, *old, new_pdr
-            //     ),
-            // );
         }
         // Recompute edge weights with updated PDRs
-        self.recalc_pdr(logger);
+        self.recalc_pdr();
     }
 
     /// Penalizes the PDR estimate for `node_id` after receiving a NACK drop.
@@ -105,16 +77,127 @@ impl Network {
     ///
     /// # Logging
     /// - INFO when penalizing a drone link.
-    pub fn pdr_from_nack<L: LogControl>(&mut self, node_id: NodeId, logger: &L) {
+    // fn process_flood_response(&mut self, mut pkt: Packet) {
+    //         // 1) Estraggo il FloodResponse e l’header di routing
+    //         let (response, routing_header) = match &mut pkt.pack_type {
+    //             PacketType::FloodResponse(resp) => (resp, &mut pkt.routing_header),
+    //             _ => {
+    //                 // Non dovrebbe succedere: sto chiamando questa funzione
+    //                 // solo per FloodResponse. Se capita, esco subito.
+    //                 return;
+    //             }
+    //         };
+    //
+    //         let host_id = self.id;
+    //         let flood_id = response.flood_id;
+    //
+    //         // 2) Controllo che path_trace non sia vuoto
+    //         if response.path_trace.is_empty() {
+    //             self.send_logging(format!("FloodResponse senza path_trace – host={}", host_id));
+    //             return;
+    //         }
+    //         self.send_logging(format!("👌👌👌 path trace da controllare, {:?}", response.path_trace));
+    //         // 3) The last element in path_trace is the initiator
+    //         let (initiator, _) = response.path_trace.first().unwrap();
+    //
+    //         // 4) If I'm not the initiator, forward the response back along the path
+    //         if *initiator != host_id {
+    //             routing_header.hop_index += 1;
+    //             if routing_header.hop_index < routing_header.hops.len() {
+    //                 let next_hop = routing_header.hops[routing_header.hop_index];
+    //                 self.send_logging(format!(
+    //                     "Forwarding FloodResponse: host={} flood_id={} -> next_hop={}",
+    //                     host_id,
+    //                     response.flood_id,
+    //                     next_hop
+    //                 ));
+    //                 let _ = self.send_packet(pkt.clone(), None);
+    //             } else {
+    //                 self.send_logging(format!(
+    //                     "Invalid hop_index in FloodResponse: host={} hop_index={} len={}",
+    //                     host_id,
+    //                     routing_header.hop_index,
+    //                     routing_header.hops.len()
+    //                 ));
+    //             }
+    //             return;
+    //         }
+    //
+    //         // ◁ Se arrivo qui, “sono” l’iniziatore (e flood_id ∈ flood_cache[self.id]):
+    //         //    posso far partire la logica che registra i nodi e gli archi
+    //         self.send_logging(format!(
+    //             "Handling FloodResponse per me host={} flood_id={} path={:?}",
+    //             host_id,
+    //             flood_id,
+    //             response
+    //                 .path_trace
+    //                 .iter()
+    //                 .map(|(nid, ty)| format!("{:?}({})", ty, nid))
+    //                 .collect::<Vec<_>>()
+    //                 .join(" -> ")
+    //         ));
+    //
+    //         let path = &response.path_trace;
+    //         if path.len() < 2 {
+    //             self.send_logging(format!(
+    //                 "FloodResponse path troppo corto, host={} len={}",
+    //                 host_id,
+    //                 path.len()
+    //             ));
+    //             return;
+    //         }
+    //
+    //         // 5) Registro tutti i nodi nella mia adjacency-list
+    //         for &(node_id, node_type) in path {
+    //             let entry = self
+    //                 .network
+    //                 .nodes
+    //                 .entry(node_id)
+    //                 .or_insert_with(|| (node_type, Vec::new()));
+    //             // inizializzo pdr se è drone
+    //             if entry.0 == NodeType::Drone {
+    //                 self.network.drone_pdr.entry(node_id).or_insert(0.0);
+    //             }
+    //             // se è server, lo aggiungo all’insieme
+    //             if entry.0 == NodeType::Server {
+    //                 self.network.servers.insert(node_id);
+    //             }
+    //         }
+    //
+    //         // 6) Registro gli archi tra nodi consecutivi
+    //         for window in path.windows(2) {
+    //             let (curr_id, _) = window[0];
+    //             let (next_id, _) = window[1];
+    //             // aggiungo arco curr_id → next_id
+    //             if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
+    //                 if !edges.iter().any(|e| e.to == next_id) {
+    //                     edges.push(Edge { to: next_id, weight: 0.0 });
+    //                     self.send_logging(format!(
+    //                         "Recorded adjacency edge host={} da {} a {}",
+    //                         host_id, curr_id, next_id
+    //                     ));
+    //                 }
+    //             }
+    //             // aggiungo anche l’arco inverso next_id → curr_id
+    //             if let Some((_, inv_edges)) = self.network.nodes.get_mut(&next_id) {
+    //                 if !inv_edges.iter().any(|e| e.to == curr_id) {
+    //                     inv_edges.push(Edge { to: curr_id, weight: 0.0 });
+    //                     self.send_logging(format!(
+    //                         "Recorded adjacency edge host={} da {} a {}",
+    //                         host_id, next_id, curr_id
+    //                     ));
+    //                 }
+    //             }
+    //         }
+    //
+    //         // 7) (Opzionale) Ricalcolo subito i PDR
+    //         self.network.recalc_pdr();
+    //     }
+    pub fn pdr_from_nack(&mut self, node_id: NodeId) {
         let old = self.drone_pdr.entry(node_id).or_insert(0.0);
         let new_pdr = ALPHA * 1.0 + (1.0 - ALPHA) * *old;
         *old = new_pdr.clamp(0.0, 1.0);
-        // logger.send_logging(
-        //     LogType::INFO,
-        //     LogModule::NETWORK,
-        //     format!("PDR penalized for drone {} to {:.3} after NACK", node_id, new_pdr),
-        // );
-        self.recalc_pdr(logger);
+        self.recalc_pdr();
     }
 
     /// Finds the path from `start` to `destination` that maximizes delivery probability,
@@ -125,11 +208,10 @@ impl Network {
     /// # Logging
     /// - INFO when a valid route is found.
     /// - WARN if no route exists.
-    pub fn find_best_route<L: LogControl>(
+    pub fn find_best_route(
         &self,
         start: NodeId,
         destination: NodeId,
-        logger: &L,
     ) -> Option<Vec<NodeId>> {
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
@@ -150,20 +232,22 @@ impl Network {
                     let v = edge.to;
                     // If not start or destination, v must be a drone node
                     if v != start && v != destination {
-                        if let Some((NodeType::Drone, _)) = self.nodes.get(&v) {
-                            // ok
-                        } else {
-                            continue;
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, _pdr)) => {  }
+                            _ => continue,  // salta host o altri tipi intermedi
                         }
                     }
-                    let pdr_v = *self.drone_pdr.get(&v).unwrap_or(&0.0);
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
                     let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
                     }
                     let cost = -reliability.ln();
                     let next_cost = cost_u + cost;
-                    if next_cost < *dist.get(&v).unwrap_or(&f64::INFINITY) {
+                    if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
                         pq.push(Reverse((OrderedFloat(next_cost), v)));
@@ -173,11 +257,6 @@ impl Network {
         }
 
         if !dist.contains_key(&destination) {
-            logger.send_logging(
-                LogType::WARN,
-                LogModule::NETWORK,
-                format!("No route found from {} to {}", start, destination),
-            );
             return None;
         }
 
@@ -191,11 +270,6 @@ impl Network {
         path.push(start);
         path.reverse();
 
-        logger.send_logging(
-            LogType::INFO,
-            LogModule::NETWORK,
-            format!("Route {} → {} found: {:?}", start, destination, path),
-        );
         Some(path)
     }
 
@@ -204,12 +278,11 @@ impl Network {
     /// # Logging
     /// - INFO when an alternative route is found.
     /// - WARN if no route exists under the exclusion constraints.
-    pub fn find_best_route_excluding<L: LogControl>(
+    pub fn find_best_route_excluding(
         &self,
         start: NodeId,
         destination: NodeId,
         banned_nodes: &HashSet<NodeId>,
-        logger: &L,
     ) -> Option<Vec<NodeId>> {
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
@@ -232,13 +305,15 @@ impl Network {
                         continue;
                     }
                     if v != start && v != destination {
-                        if let Some((NodeType::Drone, _)) = self.nodes.get(&v) {
-                            // ok
-                        } else {
-                            continue;
+                        match self.nodes.get(&v) {
+                            Some((NodeType::Drone, _pdr)) => {  }
+                            _ => continue,  // salta host o altri tipi intermedi
                         }
                     }
-                    let pdr_v = *self.drone_pdr.get(&v).unwrap_or(&0.0);
+                    let pdr_v = self.drone_pdr
+                        .get(&v)
+                        .copied()
+                        .unwrap_or(0.0);
                     let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
@@ -255,14 +330,6 @@ impl Network {
         }
 
         if !dist.contains_key(&destination) {
-            logger.send_logging(
-                LogType::WARN,
-                LogModule::NETWORK,
-                format!(
-                    "No route found from {} to {} excluding {:?}",
-                    start, destination, banned_nodes
-                ),
-            );
             return None;
         }
 
@@ -276,14 +343,6 @@ impl Network {
         path.push(start);
         path.reverse();
 
-        logger.send_logging(
-            LogType::INFO,
-            LogModule::NETWORK,
-            format!(
-                "Alternative route {} → {} excluding {:?}: {:?}",
-                start, destination, banned_nodes, path
-            ),
-        );
         Some(path)
     }
 }

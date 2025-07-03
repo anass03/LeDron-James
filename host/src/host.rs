@@ -5,10 +5,7 @@ use std::collections::{HashMap};
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use rand::Rng;
-use rand::rngs::ThreadRng;
 use serde::{Deserialize, Serialize};
-use crate::logging::{LogEntry, LogType};
 use crate::network::{Network};
 use crate::session::{RecSessionData, SentSessionData};
 
@@ -31,7 +28,6 @@ pub struct Host{
     pub network: Network,
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
-    pub log_sender: Sender<LogEntry>,
     /// quanto vogliamo aspettare tra un flood e il successivo
     pub(crate) nack_flood_backoff: Duration,
     /// timestamp dell’ultimo flood scatenato da un NACK
@@ -43,8 +39,7 @@ impl Host{
                type_host:NodeType,
                controller_send:Sender<HostEvent>,
                packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>,
-               log_sender: Sender<LogEntry>) -> Host {
+               packet_send:HashMap<NodeId, Sender<Packet>>) -> Host {
         let host = Self {
             id,
             type_host,
@@ -55,7 +50,6 @@ impl Host{
             network: Network::new(),
             received_fragments: Arc::new(Mutex::new(HashMap::new())),
             sent_fragments: Arc::new(Mutex::new(HashMap::new())),
-            log_sender,
             nack_flood_backoff: Duration::from_secs(5),
             last_nack_flood: Instant::now() - Duration::from_secs(5),
         };

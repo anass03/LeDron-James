@@ -15,7 +15,7 @@ use crate::transfer_tracker::TransferTracker;
 use crate::network_metrics::NetMetrics;
 use host::flood::FloodControl;
 use host::functionality::Functionality;
-use host::logging::{LogControl, LogEntry, LogModule, LogType};
+use host::logging::{LogControl, LogModule, LogType};
 
 /// Top‐level client wrapping a Host.
 ///
@@ -49,10 +49,9 @@ impl Client {
                controller_send:Sender<HostEvent>,
                controller_recv:Receiver<ClientCommand>,
                packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>,
-               log_sender: Sender<LogEntry>) ->Self{
+               packet_send:HashMap<NodeId, Sender<Packet>>) ->Self{
 
-        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send, log_sender);
+        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send);
         Self{
             host,
             controller_recv,
@@ -795,7 +794,7 @@ impl Client {
             )
             .copied()
             .collect();
-        self.host.network.pdr_helper(&drone_hops, &self.host.log_sender);
+        self.host.network.pdr_helper(&drone_hops);
 
         // se finito, reassembly e rimozione
         if session.pending == 0 {

@@ -3,8 +3,6 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam_channel::Sender;
 use host::{ContentID, HostEvent};
-use host::logging::LogEntry;
-
 #[derive(Clone)]
 pub struct TransferTracker {
     pub uploads: Arc<Mutex<HashMap<ContentID, (usize, Arc<AtomicUsize>)>>>,

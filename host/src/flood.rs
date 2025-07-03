@@ -265,44 +265,44 @@ impl FloodControl for Host {
         );
 
         // register nodes and PDR entries
-        for &(nid, ty) in &resp.path_trace {
-            let entry = self.network.nodes.entry(nid).or_insert_with(|| (ty, Vec::new()));
+        for &(node_id, node_type) in &resp.path_trace {
+            let entry = self.network.nodes.entry(node_id).or_insert_with(|| (node_type, Vec::new()));
             if entry.0 == NodeType::Drone {
-                self.network.drone_pdr.entry(nid).or_insert(0.0);
+                self.network.drone_pdr.entry(node_id).or_insert(0.0);
             }
-            if ty == NodeType::Server && !self.network.servers.contains(&nid){
-                self.network.servers.insert(nid);
+            if entry.0 == NodeType::Server {
+                self.network.servers.insert(node_id);
             }
         }
 
         // record edges
         for window in resp.path_trace.windows(2) {
-            let (a, _) = window[0];
-            let (b, _) = window[1];
-            if let Some((_, edges)) = self.network.nodes.get_mut(&a) {
-                if !edges.iter().any(|e| e.to == b) {
-                    edges.push(Edge { to: b, weight: 0.0 });
+            let (curr_id, _) = window[0];
+            let (next_id, _) = window[1];
+            if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
+                if !edges.iter().any(|e| e.to == next_id) {
+                    edges.push(Edge { to: next_id, weight: 0.0 });
                     self.send_logging(
                         LogType::DEBUG,
                         LogModule::FLOOD,
-                        format!("Recorded edge {} -> {}", a, b),
+                        format!("Recorded edge {} -> {}", curr_id, next_id),
                     );
                 }
             }
-            if let Some((_, edges)) = self.network.nodes.get_mut(&b) {
-                if !edges.iter().any(|e| e.to == a) {
-                    edges.push(Edge { to: a, weight: 0.0 });
+            if let Some((_, edges)) = self.network.nodes.get_mut(&next_id) {
+                if !edges.iter().any(|e| e.to == curr_id) {
+                    edges.push(Edge { to: curr_id, weight: 0.0 });
                     self.send_logging(
                         LogType::DEBUG,
                         LogModule::FLOOD,
-                        format!("Recorded edge {} -> {}", b, a),
+                        format!("Recorded edge {} -> {}", next_id, curr_id),
                     );
                 }
             }
         }
 
         // optionally recalc PDR immediately
-        self.network.recalc_pdr(&self.log_sender);
+        self.network.recalc_pdr();
     }
 }
 

@@ -132,7 +132,7 @@ impl Functionality for Host {
                 )
             })
             .collect();
-        self.network.pdr_helper(&drone_hops, &self.log_sender);
+        self.network.pdr_helper(&drone_hops);
 
         self.send_logging(
             LogType::INFO,
@@ -148,7 +148,7 @@ impl Functionality for Host {
             let mut sent = self.sent_fragments.lock().unwrap();
             if let Some(sess) = sent.get_mut(&session_id) {
                 let dest = sess.destination;
-                if let Some(new_route) = self.network.find_best_route(self.id, dest, self) {
+                if let Some(new_route) = self.network.find_best_route(self.id, dest) {
                     sess.route = new_route.clone();
                     sess.last_activity = Instant::now();
                     self.send_logging(
@@ -232,7 +232,7 @@ impl Functionality for Host {
                     format!("Retransmitting dropped fragment {}", nack.fragment_index),
                 );
                 self.send_fragment(session_id, frag.clone());
-                self.network.pdr_from_nack(generator, &self.log_sender);
+                self.network.pdr_from_nack(generator);
             }
             NackType::ErrorInRouting(bad) | NackType::UnexpectedRecipient(bad) => {
                 self.send_logging(
@@ -245,7 +245,7 @@ impl Functionality for Host {
                     return;
                 }
                 banned.insert(bad);
-                if let Some(new_route) = self.network.find_best_route_excluding(self.id, dest, &banned, self) {
+                if let Some(new_route) = self.network.find_best_route_excluding(self.id, dest, &banned) {
                     self.send_logging(
                         LogType::INFO,
                         LogModule::NACK,
@@ -300,7 +300,7 @@ impl Functionality for Host {
         // Find best route
         let route = self
             .network
-            .find_best_route(self.id, destination, self)
+            .find_best_route(self.id, destination)
             .ok_or_else(|| {
                 let err = format!("No route to {}", destination);
                 self.send_logging(

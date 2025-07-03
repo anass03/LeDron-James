@@ -1,59 +1,44 @@
-use crossbeam_channel::Sender;
 use crate::Host;
-use tracing::{info, warn, error, debug, trace};
-use crate::network::Network;
+use tracing::{error, warn, info, debug, trace};
 
-pub trait LogControl {
-    fn send_logging(&self, log_type: LogType, log_module: LogModule, message: String);
+/// Log levels corresponding to tracing macros
+#[derive(Debug, Copy, Clone)]
+pub enum LogType {
+    WARN, ERROR, INFO, DEBUG
 }
-impl LogControl for Host {
-    fn send_logging(&self, log_type: LogType, log_module: LogModule, message: String) {
-        // Messaggio strutturato
-        let role = self.type_host;
-        let log_msg = format!("[{:?}] ID {} - {}", role, self.id, &message);
 
-        // Logging con tracing
-        match log_type {
-            LogType::INFO => info!(module = %log_module, id = self.id, role = ?role, "{}", message),
-            LogType::WARN => warn!(module = %log_module, id = self.id, role = ?role, "{}", message),
-            LogType::ERROR => error!(module = %log_module, id = self.id, role = ?role, "{}", message),
-            LogType::DEBUG => debug!(module = %log_module, id = self.id, role = ?role, "{}", message),
-            LogType::FATAL => error!(target: "fatal", module = %log_module, id = self.id, role = ?role, "{}", message),
-        }
-
-        // LogEntry per il Simulation Controller
-        let log_entry = LogEntry {
-            log_type,
-            module: log_module,
-            message: log_msg,
-        };
-
-        if let Err(err) = self.log_sender.send(log_entry) {
-            eprintln!("Failed to forward logging to controller: {}", err);
-        }
-    }
-}
-impl LogControl for Sender<LogEntry> {
-    fn send_logging(&self, log_type: LogType, log_module: LogModule, message: String) {
-        // we don’t need the tracing here–just forward to the controller
-        let log_entry = LogEntry { log_type, module: log_module, message };
-        let _ = self.send(log_entry);
-    }
-}
-pub enum LogType{
-    WARN, ERROR, INFO, DEBUG, FATAL
-}
-#[derive(Debug)]
-pub enum LogModule{
+/// Application modules
+#[derive(Debug, Copy, Clone)]
+pub enum LogModule {
     FLOOD, NETWORK, SESSION, PACKET, FRAGMENT, ACK, NACK, CHAT, MEDIA, FILE,
 }
-pub struct LogEntry{
-    pub log_type: LogType,
-    pub module: LogModule,
-    pub message: String,
-}
+
 impl std::fmt::Display for LogModule {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Use Debug so output matches the variant name
         write!(f, "{:?}", self)
+    }
+}
+
+/// Trait for emitting logs
+pub trait LogControl {
+    /// Sends a log with the given level, module, and message.
+    fn send_logging(&self, level: LogType, module: LogModule, msg: String);
+}
+
+/// Implement LogControl for Host, forwarding to tracing macros
+impl LogControl for Host {
+    fn send_logging(&self, level: LogType, module: LogModule, msg: String) {
+        // Build the target string, e.g., "42_Client" or "10_Drone"
+        let target = format!("{}_{:?}", self.id, self.type_host);
+        // Format message as "[Module] message"
+        let formatted = format!("[{}] {}", module, msg);
+
+        match level {
+            LogType::ERROR => error!("{} - {}", target, formatted),
+            LogType::WARN  => warn!("{} - {}", target, formatted),
+            LogType::INFO  => info!("{} - {}", target, formatted),
+            LogType::DEBUG => debug!("{} - {}", target, formatted),
+        }
     }
 }
