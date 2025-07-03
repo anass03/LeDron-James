@@ -11,6 +11,8 @@ use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
+use log::LevelFilter;
+use tui_logger::TuiWidgetState;
 use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
@@ -43,7 +45,7 @@ pub struct SimulationControllerData {
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
 
-    //pub host_log_state: HashMap<NodeId, TuiWidgetState>,
+    pub host_log_state: HashMap<NodeId, (String, TuiWidgetState)>,
 
     pub chat_cache: ChatCache,
     pub net_cache: NetCache,
@@ -65,6 +67,7 @@ impl SimulationControllerData {
     ) -> Self
     {
         let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
+        let mut host_log_state: HashMap<NodeId, (String, TuiWidgetState)> = HashMap::new();
 
         let mut drones = vec![];
         for drone in config.drone {
@@ -75,16 +78,21 @@ impl SimulationControllerData {
 
         let mut clients = vec![];
         for client in config.client {
+            let client_id = client.id.clone();
             let connected_ids = client.connected_drone_ids.clone();
-            running_network.insert(NetNode::Client(client.id), connected_ids);
+            running_network.insert(NetNode::Client(client_id), connected_ids);
             clients.push(client);
+            host_log_state.insert(client_id, (format!("{client_id}_client"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{client_id}_client").as_str(), LevelFilter::max())));
         }
 
         let mut servers = vec![];
         for server in config.server {
+            let server_id = server.id.clone();
             let connected_ids = server.connected_drone_ids.clone();
-            running_network.insert(NetNode::Server(server.id), connected_ids);
+            running_network.insert(NetNode::Server(server_id), connected_ids);
             servers.push(server);
+            host_log_state.insert(server_id, (format!("{server_id}_server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_server").as_str(), LevelFilter::max())));
+
         }
 
 
@@ -114,6 +122,8 @@ impl SimulationControllerData {
             logs: Logs::default(),
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
+
+            host_log_state,
 
             chat_cache: ChatCache::default(),
             net_cache: NetCache::default(),
