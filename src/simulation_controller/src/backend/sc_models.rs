@@ -313,7 +313,7 @@ impl Display for DroneType {
 }
 
 //-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
-
+/*
 #[derive(Debug)]
 pub(crate) enum AsyncCommand {
     // Drone commands
@@ -371,4 +371,4 @@ pub(crate) struct AsyncProcessor {
     pub(crate) drone_command_senders: HashMap<NodeId, crossbeam_channel::Sender<DroneCommand>>,
     pub(crate) client_command_senders: HashMap<NodeId, crossbeam_channel::Sender<ClientCommand>>,
     pub(crate) server_command_senders: HashMap<NodeId, crossbeam_channel::Sender<HostCommand>>,
-}
+}*/

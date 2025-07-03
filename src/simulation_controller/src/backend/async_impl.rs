@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+/*use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -351,4 +351,4 @@ impl AsyncProcessor {
 
         self.log(LogType::INFO, "Initialized command senders".to_string());
     }
-}
+}*/
