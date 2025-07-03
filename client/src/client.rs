@@ -5,7 +5,7 @@ use std::collections::{HashMap};
 use std::error::Error;
 use std::sync::atomic::{Ordering};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, ClientNetCommand, ContentID, FileId, MediaId, Image};
+use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, ClientNetCommand, ContentID, FileId, MediaId, Image, ServerId};
 use host::network::Edge;
 use host::ServerTypes::{Content, Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer, Sending};
@@ -29,6 +29,8 @@ pub struct Client {
     net_metrics: NetMetrics,
     tracker: TransferTracker,
     pub(crate) pending_fragments: HashMap<ContentID, (usize, usize)>, // ContentID → (totali, ricevuti finora)
+    known_file_data:  HashMap<(ServerId, FileId), Vec<u8>>,
+    known_media_data: HashMap<(ServerId, MediaId), Image>,
 }
 impl Client {
     /// Creates a new `Client`.
@@ -59,6 +61,8 @@ impl Client {
             net_metrics: NetMetrics::new(),
             tracker: TransferTracker::new(),
             pending_fragments: HashMap::new(),
+            known_file_data:  HashMap::new(),
+            known_media_data: HashMap::new(),
         }
     }
 
@@ -224,7 +228,7 @@ impl Client {
     ///
     /// `Some((server_id, message))` if the server was valid and fragmentation started;
     /// otherwise `None`.
-    pub fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, option: Option<Box<dyn FnMut(usize) + Send + 'static>>) -> Option<(NodeId, Message)>{
+    pub fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, option: Option<Box<dyn FnMut(usize) + Send + 'static>>)->Option<(ServerId,Message)>{
         self.host.send_logging(
             LogType::INFO, LogModule::SESSION,
             format!("Preparing {} request", label),
@@ -332,8 +336,14 @@ impl Client {
                         self.send_net_cmd(Content, sid, ClientNetCommand::FilesList(sid), "FilesList", None);
                     }
                     ClientNetCommand::File(sid, id) => {
-                        let label = format!("File({})", id);
-                        self.send_net_cmd(Content, sid, ClientNetCommand::File(sid, id), &label, None);
+                        if let Some(cached) = self.known_file_data.get(&(sid, id.clone())) {
+                            let _ = self.host.controller_send.send(HostEvent::PacketReconstructed(
+                                File(sid, id.clone(), cached.clone())
+                            ));
+                        } else {
+                            let label = format!("File({})", id);
+                            self.send_net_cmd(Content, sid, ClientNetCommand::File(sid, id.clone()), &label, None);
+                        }
                     }
                     ClientNetCommand::NewFile(sid, id, data) => {
                         self.add_new_file(sid, id, data);
@@ -342,8 +352,14 @@ impl Client {
                         self.send_net_cmd(Content, sid, ClientNetCommand::MediaList(sid), "MediaList", None);
                     }
                     ClientNetCommand::Media(sid, id) => {
-                        let label = format!("Media({})", id);
-                        self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id), &label, None);
+                        if let Some(cached) = self.known_media_data.get(&(sid, id.clone())) {
+                            let _ = self.host.controller_send.send(HostEvent::PacketReconstructed(
+                                Media(sid, id.clone(), cached.clone())
+                            ));
+                        } else {
+                            let label = format!("Media({})", id);
+                            self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id.clone()), &label, None);
+                        }
                     }
                     ClientNetCommand::NewMedia(sid, id, img) => {
                        self.add_new_media(sid, id, img);
@@ -513,7 +529,7 @@ impl Client {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
-                                format!("✅💥✅💥 Incoming content {:?}: {} fragments 💥✅💥✅", content_id, total_fragments),
+                                format!("Incoming content {:?}: {} fragments", content_id, total_fragments),
                             );
                         }
                         ClientList(client_id, server_id,clients) => {
@@ -565,6 +581,7 @@ impl Client {
                                 LogModule::FILE,
                                 format!("Received file `{}` ({} bytes) from server `{}`", file_id, data.len(), server_id),
                             );
+                            self.known_file_data.insert((server_id, file_id.clone()), data.clone());
                             send_reconstructed(File(server_id, file_id, data))?;
                         }
 
@@ -582,6 +599,7 @@ impl Client {
                                 LogModule::MEDIA,
                                 format!("Received media `{}` ({} bytes) from server `{}`", media_id, media.data.len(), server_id),
                             );
+                            self.known_media_data.insert((server_id, media_id.clone()), media.clone());
                             send_reconstructed(Media(server_id, media_id, media))?;
                         }
 
@@ -797,31 +815,48 @@ impl Client {
         None
     }
 
+    /// Helper to send a command with progress tracking
+    fn send_with_progress(&mut self, srv_type: ServerTypes, server_id: NodeId, content_id: ContentID, cmd: ClientNetCommand, label: &str, ) {
+        // 1) Serialize
+        let raw = match serde_json::to_vec(&cmd) {
+            Ok(buf) => buf,
+            Err(e) => {
+                self.host.send_logging(LogType::ERROR, LogModule::SESSION, format!("Serialization failed: {}", e));
+                return;
+            }
+        };
+
+        // 2) Compress
+        let payload = match compress_data(&raw) {
+            Ok(c)  => c,
+            Err(_) => raw.clone(),
+        };
+
+        // 3) Start tracker with correct total size
+        self.tracker.start(content_id.clone(), payload.len());
+
+        // 4) Build the closure to update progress
+        let mut on_fragment_sent = self.tracker
+            .get_closure(content_id.clone(), self.host.controller_send.clone());
+        let cb = Box::new(move |chunk_len: usize| on_fragment_sent(chunk_len));
+
+        // 5) Delegate to send_net_cmd
+        self.send_net_cmd(srv_type, server_id, cmd, label, Some(cb));
+    }
     /// Adds a new file to specified content server.
     fn add_new_file(&mut self, sid: NodeId, id: FileId, data: Vec<u8>) {
         let label = format!("Adding new file({}) for server {}", id, sid);
         let content_id = ContentID::File(id.clone());
-        self.tracker.start(content_id.clone(), data.len());
-        let closure = self.tracker.get_closure(
-            content_id,
-            self.host.controller_send.clone(),
-        );
-        let boxed = Box::new(closure);
-        self.send_net_cmd(Content, sid, ClientNetCommand::NewFile(sid, id, data.clone()), &label, Some(boxed));
+        let cmd = ClientNetCommand::NewFile(sid, id.clone(), data.clone());
+        self.send_with_progress(Content, sid, content_id, cmd, &label);
     }
 
     /// Adds a new media to a specified content server.
     fn add_new_media(&mut self, sid: NodeId, id: MediaId, img: Image) {
         let label = format!("Adding new media({}) for server {}", id, sid);
         let content_id = ContentID::Media(id.clone());
-
-        self.tracker.start(content_id.clone(), img.data.len());
-        let closure = self.tracker.get_closure(
-            content_id,
-            self.host.controller_send.clone(),
-        );
-        let boxed = Box::new(closure);
-        self.send_net_cmd(Content, sid, ClientNetCommand::NewMedia(sid, id.clone(), img.clone()), &label, Some(boxed));
+        let cmd = ClientNetCommand::NewMedia(sid, id.clone(), img.clone());
+        self.send_with_progress(Content, sid, content_id, cmd, &label);
     }
 
     /// Forwards a chat message to another client.
@@ -834,27 +869,16 @@ impl Client {
     fn handle_file_for(&mut self, cid: NodeId, sid: NodeId, fid: FileId, data: Vec<u8>) {
         let label = format!("FileFor({})", cid);
         let content_id = ContentID::File(fid.clone());
-        self.tracker.start(content_id.clone(), data.len());
-        let closure = self.tracker.get_closure(
-            content_id,
-            self.host.controller_send.clone(),
-        );
-        let boxed = Box::new(closure);
-        self.send_net_cmd(Chat, sid, ClientNetCommand::FileFor(cid, sid, fid, data.clone()), &label, Some(boxed));
+        let cmd = ClientNetCommand::NewFile(sid, fid.clone(), data.clone());
+        self.send_with_progress(Chat, sid, content_id, cmd, &label);
     }
 
     /// Forwards a file via chat.
     fn handle_media_for(&mut self, cid: NodeId, sid: NodeId, mid: MediaId, img: Image) {
         let label = format!("MediaFor({})", cid);
         let content_id = ContentID::Media(mid.clone());
-
-        self.tracker.start(content_id.clone(), img.data.len());
-        let closure = self.tracker.get_closure(
-            content_id,
-            self.host.controller_send.clone(),
-        );
-        let boxed = Box::new(closure);
-        self.send_net_cmd(Chat, sid, ClientNetCommand::MediaFor(cid, sid, mid.clone(), img.clone()), &label, Some(boxed));
+        let cmd = ClientNetCommand::NewMedia(sid, mid.clone(), img.clone());
+        self.send_with_progress(Chat, sid, content_id, cmd, &label);
     }
 }
 pub enum ClientCommand {
