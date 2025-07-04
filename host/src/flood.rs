@@ -19,7 +19,6 @@ pub trait FloodControl {
     /// Handles an incoming flood response packet.
     fn process_flood_response(&mut self, packet: Packet);
 }
-
 impl FloodControl for Host {
     /// Clears previous state and sends a FloodRequest to all neighbors.
     ///
