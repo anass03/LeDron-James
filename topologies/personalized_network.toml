@@ -1,0 +1,60 @@
+#Personalized topology
+
+[[drone]]
+id = 1
+connected_node_ids = [2, 3, 10]
+pdr = 0.41
+
+[[drone]]
+id = 2
+connected_node_ids = [1, 4, 10, 13]
+pdr = 0.76
+
+[[drone]]
+id = 3
+connected_node_ids = [1, 5, 12, 13]
+pdr = 0.27
+
+[[drone]]
+id = 4
+connected_node_ids = [2, 6, 12]
+pdr = 0.53
+
+[[drone]]
+id = 5
+connected_node_ids = [3, 7, 11]
+pdr = 0.68
+
+[[drone]]
+id = 6
+connected_node_ids = [4, 8, 11]
+pdr = 0.09
+
+[[drone]]
+id = 7
+connected_node_ids = [5, 9]
+pdr = 0.34
+
+[[client]]
+id = 8
+connected_drone_ids = [6]
+
+[[client]]
+id = 9
+connected_drone_ids = [7]
+
+[[client]]
+id = 10
+connected_drone_ids = [1, 2]
+
+[[server]]
+id = 11
+connected_drone_ids = [5, 6]
+
+[[server]]
+id = 12
+connected_drone_ids = [3, 4]
+
+[[server]]
+id = 13
+connected_drone_ids = [2, 3]

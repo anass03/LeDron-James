@@ -1,0 +1,18 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
+image = "0.25.5"
+host = { git = "https://github.com/anass03/LeDron-James", branch = "client", package = "host" }
+crossbeam-channel = "0.5.13"
+delegate = "0.13.1"
+serde_json = "1.0.133"
+serde = { version = "1.0.219", features = ["derive"] }
+zstd = "0.13.3"
+chrono = "0.4.41"
+toml = "0.8.19"
+tempfile = "3.20.0"
+thiserror = "2.0.12"
