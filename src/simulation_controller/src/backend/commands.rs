@@ -891,7 +891,17 @@ impl SimulationControllerData {
                 };
 
                 let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
-                    Some(map) => map,
+                    Some(map) => {
+                        match map.get(&media_id) {
+                            Some((_, net_cache_media)) => {
+                                match net_cache_media {
+                                    NetCacheMedia::Downloading(_) => {map}
+                                    _ => return Ok(())
+                                }
+                            }
+                            None => return Err((LogType::ERROR, format!("Media ID {media_id} not found in downloaded_medias")))
+                        }
+                    },
                     None => {
                         return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
                     }
@@ -1107,10 +1117,6 @@ impl SimulationControllerData {
             => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
         }
         Ok(())
-    }
-
-    pub fn handle_log_event(&mut self, log: String) {
-        self.logs.push_log(LogType::INFO, log.as_str())
     }
 
     pub fn handle_rx_renderer(&mut self){

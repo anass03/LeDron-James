@@ -27,7 +27,6 @@ log = "0.4.27"
 # Specify local libraries in the project
 [workspace]
 members = [
-    "src/drone",
     "src/initializer", "src/initializer_utils",
     "src/simulation_controller"
 ]

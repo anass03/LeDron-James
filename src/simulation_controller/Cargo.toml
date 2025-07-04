@@ -27,7 +27,6 @@ wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}
 LeDron_James = { git = "https://github.com/anass03/LeDron_James.git",default-features = false}
 
-drone = { path = "../drone"}
 initializer_utils = { path = "../initializer_utils" } # FIX TO ERROR CYCLIC PACKAGE DEPENDENCY
 
 client = { git = "https://github.com/anass03/LeDron-James.git", branch = "client", package = "client"}

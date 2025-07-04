@@ -14,7 +14,6 @@ rand = "0.9.1"
 
 simulation_controller = { path = "../simulation_controller"}
 initializer_utils = {path = "../initializer_utils"}
-drone = { path = "../drone"}
 rolling_drone = { git = "https://github.com/giorebecchi/RollingDrone.git"}
 lockheedrustin-drone = { git = "https://github.com/Lockheed-Rustin/drone.git"}
 bagel_bomber = { git = "https://github.com/daw-dev/bagel-bomber.git" }

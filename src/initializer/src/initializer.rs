@@ -5,7 +5,6 @@ use std::thread::JoinHandle;
 use wg_2024::drone::Drone;
 use wg_2024::network::NodeId;
 use wg_2024::packet::{NodeType, Packet};
-//use drone::Drone as LeDron;
 use rolling_drone::RollingDrone;
 use lockheedrustin_drone::LockheedRustin;
 use bagel_bomber::BagelBomber;
