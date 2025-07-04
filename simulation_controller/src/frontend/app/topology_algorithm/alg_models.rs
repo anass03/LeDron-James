@@ -1,7 +1,6 @@
 use std::collections::HashMap;
-use ratatui::crossterm::terminal::DisableLineWrap;
 use wg_2024::network::NodeId;
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::sc_models::NetNode;
 use crate::frontend::app::topology_algorithm::vectors::Vector;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]

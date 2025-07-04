@@ -12,7 +12,7 @@ use std::ops::Add;
 use ratatui::style::{Styled, Stylize};
 use ratatui::text::ToSpan;
 use crate::backend::sc_models::DroneType;
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};

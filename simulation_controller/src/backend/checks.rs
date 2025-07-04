@@ -1,8 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use log::debug;
 use wg_2024::network::NodeId;
-use crate::backend::sc_models::{LogType, NetworkState, NodeMap};
-use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
+use crate::backend::sc_models::{NetNode, LogType, NetworkState, NodeMap};
+use crate::backend::simulation_controller::SimulationControllerData;
+
 
 fn dfs(
     current: NodeId,

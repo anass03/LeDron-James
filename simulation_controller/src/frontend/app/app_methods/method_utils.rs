@@ -2,24 +2,13 @@
 In this module you will find general not-essential methods.
 */
 use std::fs::File;
-use std::{fs, io};
-use std::io::{BufRead, BufReader, Write};
+use std::io;
+use std::io::{BufRead, Write};
 use std::path::Path;
-use std::sync::mpsc::{Receiver, Sender};
-use std::thread::Thread;
 use log::LevelFilter;
-use ratatui::text::Text;
-use ratatui_image::thread::ResizeRequest;
-use rodio::{Decoder, OutputStream, Sink};
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
-use wg_2024::network::NodeId;
-use initializer_utils::utils::parse_and_check_config;
 use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand};
-use crate::backend::simulation_controller::NetNode;
-use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyStatus};
-use crate::frontend::app::topology_algorithm::vectors::Vector;
-use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 
 

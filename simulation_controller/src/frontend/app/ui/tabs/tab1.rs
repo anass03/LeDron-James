@@ -12,7 +12,7 @@ use ratatui::style::{Color, Style, Stylize};
 use ratatui::widgets;
 use ratatui::widgets::{Block, BorderType, Borders, Widget};
 use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine,};
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::sc_models::NetNode;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub(crate) fn centered_popup_area(area: Rect) -> Rect {

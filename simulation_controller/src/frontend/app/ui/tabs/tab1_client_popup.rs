@@ -7,7 +7,7 @@ use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Map}
 use std::ops::Add;
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
 use ratatui::text::{Line, Text, ToSpan};
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{ClientPopup, PopupSelection};
 use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;

@@ -1,6 +1,5 @@
-use ratatui::layout::Rect;
 use wg_2024::network::NodeId;
-use crate::backend::simulation_controller::NetNode;
+use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::topology_algorithm::vectors::{
     generate_force_vec,

@@ -1,10 +1,9 @@
 use std::collections::HashMap;
-use ratatui::layout::Rect;
 use wg_2024::network::NodeId;
-use crate::backend::sc_models::LogType;
-use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
+use crate::backend::sc_models::{NetNode, LogType};
+use crate::backend::simulation_controller::SimulationControllerData;
 use crate::frontend::app::App;
-use crate::frontend::app::topology_algorithm::vectors::{generate_force_vec, Vector};
+use crate::frontend::app::topology_algorithm::vectors::Vector;
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
 
 impl App<'_>{
