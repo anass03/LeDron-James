@@ -12,9 +12,5 @@ crossbeam-channel = "0.5.13"
 server = { path = "src/server" }
 [workspace]
 members = [
-    "src/client",
-    "src/drone",
-    "src/initializer",
     "src/server",
-    "src/simulation_controller",
 ]
