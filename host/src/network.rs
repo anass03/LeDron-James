@@ -118,7 +118,7 @@ impl Network {
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
                             Some((NodeType::Drone, _pdr)) => {  }
-                            _ => continue,  // salta host o altri tipi intermedi
+                            _ => continue,  // jumps host or other intermediates nodes
                         }
                     }
                     let pdr_v = self.drone_pdr
@@ -191,7 +191,7 @@ impl Network {
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
                             Some((NodeType::Drone, _pdr)) => {  }
-                            _ => continue,  // salta host o altri tipi intermedi
+                            _ => continue,  // jumps host or other intermediates nodes
                         }
                     }
                     let pdr_v = self.drone_pdr
@@ -204,7 +204,7 @@ impl Network {
                     }
                     let cost = -reliability.ln();
                     let next_cost = cost_u + cost;
-                    if next_cost < *dist.get(&v).unwrap_or(&f64::INFINITY) {
+                    if dist.get(&v).map_or(true, |&old| next_cost < old){
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
                         pq.push(Reverse((OrderedFloat(next_cost), v)));

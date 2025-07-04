@@ -1,5 +1,29 @@
+[package]
+name = "LeDron-James"
+version = "0.1.0"
+edition = "2021"
+
+
+[net]
+git-fetch-with-cli = true
+
+[dependencies]
+wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git"}
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
+toml = "0.8.20"
+crossbeam-channel = "0.5.13"
+ratatui = "0.29.0"
+tui-logger = "0.17.3"
+log = "0.4.27"
+
+client = { path = "client"}
+host = { path = "host"}
+server = { path = "server"}
+initializer = { path = "initializer" }
+simulation_controller = { path = "simulation_controller" }
 
 [workspace]
-members = [ "host", "client", ]
+members = [ "host", "client", "simulation_controller", "initializer", "initializer_utils","server" ]
 
 resolver = "2"
