@@ -9,11 +9,12 @@ pub(super) mod chart_rendering{
     use crate::frontend::app::models::tab0_types::ChartsData;
 
     // Chart showing messages dropped each n secs.
-    pub(crate) fn render_sparkline_1(chdata:&ChartsData,mut block:Block,area:Rect, buf:&mut Buffer){
+    pub(crate) fn render_sparkline_1(chdata: &mut ChartsData, mut block:Block, area:Rect, buf:&mut Buffer){
+        chdata.dropped_packets_chart_width = area.width as usize;
         Sparkline::default()
             .style(Style::default().fg(Color::White))
             .block(block)
-            .data(&chdata.sentmessages)
+            .data(&chdata.droppedmessages)
             .render(area,buf);
     }
 

@@ -8,7 +8,7 @@ use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
 
 /// Renders Overview tab-page
-pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
+pub(super) fn render_tab0(app: &mut App, area: Rect, buf : &mut Buffer){
     let [left_area,right_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -44,7 +44,7 @@ pub(super) fn render_tab0(app:&App, area: Rect, buf : &mut Buffer){
                 MAIN_BLOCK_BORDERS
             }
         ));
-    chart_rendering::render_sparkline_1(&app.cache.tab0_data.charts_data,chart1_block,graph1,buf);
+    chart_rendering::render_sparkline_1(&mut app.cache.tab0_data.charts_data,chart1_block,graph1,buf);
 
     let mut chart2_block = Block::default()
         .title(" Sent Messages ")

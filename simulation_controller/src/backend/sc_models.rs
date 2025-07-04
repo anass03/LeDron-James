@@ -34,6 +34,7 @@ pub struct Logs{
 
 pub struct Statistics{
     pub total_packet_exchanged: usize,
+    pub total_packet_dropped: usize,
     pub total_active_connections: usize,
     pub network_reliability: u8,
 }
@@ -102,13 +103,13 @@ impl Statistics{
     pub fn default()->Self{
         Self{
             total_packet_exchanged: 0,
+            total_packet_dropped: 0,
             total_active_connections: 0,
             network_reliability: 0,
         }
     }
-    pub fn received_packet(&mut self){
-        self.total_packet_exchanged += 1;
-    }
+    pub fn received_packet(&mut self) { self.total_packet_exchanged += 1; }
+    pub fn dropped_packet(&mut self) { self.total_packet_dropped += 1; }
 }
 
 pub enum RendererCommand{

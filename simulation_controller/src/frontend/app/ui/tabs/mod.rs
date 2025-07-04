@@ -221,8 +221,13 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
     let style = Style::default().fg(Color::White).add_modifier(Modifier::ITALIC);
 
     let packets = Paragraph::new(format!("Total packets exchanged: {}",app.simulation_controller_data.stats.total_packet_exchanged)).style(style).alignment(Alignment::Center);
-    let conns = Paragraph::new("Total active connections: 12").style(style).alignment(Alignment::Center);
-    let net = Paragraph::new("Network reliability: 95%").style(style).alignment(Alignment::Center);
+    let conns = Paragraph::new(format!("Total active connections: {}", app.simulation_controller_data.stats.total_active_connections)).style(style).alignment(Alignment::Center);
+    let mut net;
+    if app.simulation_controller_data.stats.total_packet_exchanged < 1000 {
+        net = Paragraph::new("Network reliability: Calculating ...").style(style).alignment(Alignment::Center)
+    } else {
+    net = Paragraph::new(format!("Network reliability: {}%", app.simulation_controller_data.stats.network_reliability)).style(style).alignment(Alignment::Center)
+    };
 
     packets.render(columns[0], buf);
     conns.render(columns[1], buf);

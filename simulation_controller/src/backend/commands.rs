@@ -27,9 +27,6 @@ use crate::frontend::app::topology_algorithm::vectors::Vector;
 use log::*;
 
 impl SimulationControllerData {
-    // Build network state once and reuse
-
-
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
         match self.cannot_crash(drone_id) {

@@ -1,3 +1,5 @@
+use crate::frontend::app::App;
+
 /// Tab n.00 data
 pub(in crate::frontend::app) struct Tab0{
     pub selected_chart: usize,
@@ -27,17 +29,41 @@ impl Tab0 {
 
 pub(in crate::frontend::app) struct ChartsData{ // Each CONST sec data, NOT TOTAL
     pub droppedmessages: Vec<u64>, // We will show max n gauges
+    pub dropped_cache: usize,
     pub sentmessages: Vec<u64>,
+    pub dropped_packets_chart_width: usize,
 }
 
 impl ChartsData {
     fn default()->Self{
         Self{
             droppedmessages:Vec::new(),
+            dropped_cache:0,
             sentmessages:Vec::new(),
+            dropped_packets_chart_width:0
         }
     }
-    fn plusdroppedmessages(){}
+    pub(crate) fn update_dropped_per_tick(&mut self, current_dropped: usize, width: usize){
+        /*let diff = current_dropped.saturating_sub(self.dropped_cache) as u64;
+        self.dropped_cache = current_dropped;
+        self.droppedmessages.push(diff);
+        if self.droppedmessages.len() > 100 {
+            self.droppedmessages.remove(0); // keep fixed size
+        }*/
+        let diff = if current_dropped != self.dropped_cache {
+            let difference = current_dropped.saturating_sub(self.dropped_cache) as u64;
+            self.dropped_cache = current_dropped;
+            difference
+        } else {
+            0 // Add zero when no change to keep chart moving
+        };
+
+        self.droppedmessages.push(diff);
+        if self.droppedmessages.len() > width { // Smaller fixed size
+            self.droppedmessages.remove(0);
+        }
+
+    }
     fn plussentmessages(){}
     fn reset(){}
 }
