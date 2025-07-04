@@ -5,16 +5,17 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use crossbeam_channel::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, ContentID, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
+use host::{ClientId, ClientNetCommand, ContentID, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
 use image::{DynamicImage, ImageBuffer, ImageReader, RgbImage, Rgba};
-use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
+use crate::backend::simulation_controller::SimulationControllerData;
+use crate::backend::sc_models::{NetNode, NodeCommand, NodeType};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
 use petgraph::visit::Topo;
@@ -25,358 +26,9 @@ use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, Topolo
 use crate::frontend::app::topology_algorithm::vectors::Vector;
 use log::*;
 
-#[derive(Default, Clone, Copy)]
-enum NodeType {
-    #[default]
-    Drone,
-    Client,
-    Server,
-}
-impl Display for NodeType {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NodeType::Drone => f.write_str("Drone"),
-            NodeType::Client => f.write_str("Client"),
-            NodeType::Server => f.write_str("Server"),
-        }
-    }
-}
-impl NetNode {
-    pub fn id(&self) -> &NodeId {
-        match self {
-            NetNode::Drone(id) => id,
-            NetNode::Client(id) => id,
-            NetNode::Server(id) => id,
-        }
-    }
-
-    fn from(sim: & SimulationControllerData, node_id: NodeId) -> Option<NetNode> {
-        for drone in sim.drones.iter() {
-            if drone.id == node_id {
-                return Some(NetNode::Drone(node_id));
-            }
-        }
-        for client in sim.clients.iter() {
-            if client.id == node_id {
-                return Some(NetNode::Client(node_id));
-            }
-        }
-        for server in sim.servers.iter() {
-            if server.id == node_id {
-                return Some(NetNode::Server(node_id));
-            }
-        }
-        None
-    }
-
-    fn node_type(&self) -> NodeType {
-        match self {
-            NetNode::Drone(_) => NodeType::Drone,
-            NetNode::Client(_) => NodeType::Client,
-            NetNode::Server(_) => NodeType::Server,
-        }
-    }
-}
-type NodeMap = HashMap<NetNode, Vec<NodeId>>;
-
-fn dfs(
-    current: NodeId,
-    graph: &HashMap<NodeId, Vec<NodeId>>,
-    exclude: Option<NodeId>,
-    visited: &mut HashSet<NodeId>,
-)
-{
-    if Some(current) == exclude {return}
-    visited.insert(current);
-    if let Some(neighbors) = graph.get(&current) {
-        for &neighbor in neighbors {
-            if !visited.contains(&neighbor) && Some(neighbor) != exclude {
-                dfs(neighbor, graph, exclude, visited);
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-enum NetworkOperation {
-    CrashDrone(NodeId),
-    RemoveConnection(NetNode, NetNode),
-    AddConnection(NetNode, NetNode),
-}
-// Struct to cache network state and avoid rebuilding maps
-struct NetworkState {
-    node_map: NodeMap,
-    drone_graph: HashMap<NodeId, Vec<NodeId>>,
-    host_ids: HashSet<NodeId>,
-}
-
 impl SimulationControllerData {
     // Build network state once and reuse
-    fn build_network_state(&self) -> NetworkState {
-        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
-        let mut host_ids = HashSet::new();
 
-        // Build network map and collect host IDs in one pass
-        for client in &self.clients {
-            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
-            host_ids.insert(client.id);
-        }
-        for server in &self.servers {
-            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
-            host_ids.insert(server.id);
-        }
-        for drone in &self.drones {
-            network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
-        }
-
-        // Build drone-only graph (excluding hosts)
-        let mut drone_graph: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
-        for (node, neighbors) in &network_map {
-            if let NetNode::Drone(drone_id) = node {
-                let drone_neighbors: Vec<NodeId> = neighbors
-                    .iter()
-                    .filter(|id| !host_ids.contains(id))
-                    .cloned()
-                    .collect();
-                drone_graph.insert(*drone_id, drone_neighbors);
-            }
-        }
-
-        NetworkState {
-            node_map: network_map,
-            drone_graph,
-            host_ids,
-        }
-    }
-    fn build_network_map(&mut self) -> NodeMap {
-        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
-        for client in self.clients.iter() {
-            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
-        }
-        for server in self.servers.iter() {
-            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
-        }
-        for drone in self.drones.iter() {
-            network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
-        }
-        debug!(target: "main", "{:?}", network_map);
-        network_map
-    }
-    fn is_graph_connected_excluding(
-        &self,
-        graph: &HashMap<NodeId, Vec<NodeId>>,
-        exclude_node: Option<NodeId>,
-    ) -> bool
-    {
-        if graph.is_empty() {
-            return true;
-        }
-
-        // Find first non-excluded node as starting point - match original logic
-        let start_node = match graph.keys().find(|&&id| Some(id) != exclude_node) {
-            Some(&node) => node,
-            None => return true, // No nodes to check
-        };
-
-        let mut visited = HashSet::new();
-        let mut stack = vec![start_node];
-
-        while let Some(current) = stack.pop() {
-            if Some(current) == exclude_node || visited.contains(&current) {
-                continue;
-            }
-
-            visited.insert(current);
-
-            if let Some(neighbors) = graph.get(&current) {
-                for &neighbor in neighbors {
-                    if Some(neighbor) != exclude_node && !visited.contains(&neighbor) {
-                        stack.push(neighbor);
-                    }
-                }
-            }
-        }
-
-        // Check connectivity exactly like original: visited.len() + 1 != graph.len()
-        // But adjust for exclude_node presence
-        let expected_count = if exclude_node.is_some() && graph.contains_key(&exclude_node.unwrap()) {
-            graph.len() - 1
-        } else {
-            graph.len()
-        };
-
-        visited.len() == expected_count
-    }
-    fn cannot_crash(&mut self, drone_id: NodeId) -> Result<bool, String> {
-        let network_state = self.build_network_state();
-
-        if network_state.node_map.len() <= 1 {
-            return Ok(false);
-        }
-
-        // Check if drone exists
-        if !network_state.node_map.contains_key(&NetNode::Drone(drone_id)) {
-            return Err(format!("Drone {drone_id} is not in the net!"));
-        }
-
-        // Get drone's neighbors to simulate removal
-        //let drone_neighbors = network_state.node_map.get(&NetNode::Drone(drone_id)).unwrap();
-
-        // Check host constraints after removing drone connections
-        for (node, neighbors) in &network_state.node_map {
-            match node {
-                NetNode::Client(client_id) => {
-                    let filtered_neighbors: Vec<NodeId> = neighbors
-                        .iter()
-                        .filter(|id| **id != drone_id)
-                        .cloned()
-                        .collect();
-                    let adj = filtered_neighbors.len();
-                    if adj <= 0 || adj > 2 {
-                        return Err(format!(
-                            "Cannot Crash Drone {drone_id} because Client {client_id} would have {adj} Neighbors!"
-                        ));
-                    }
-                }
-                NetNode::Server(server_id) => {
-                    let filtered_neighbors: Vec<NodeId> = neighbors
-                        .iter()
-                        .filter(|id| **id != drone_id)
-                        .cloned()
-                        .collect();
-                    let adj = filtered_neighbors.len();
-                    if adj <= 1 {
-                        return Err(format!(
-                            "Cannot Crash Drone {drone_id} because Server {server_id} would have only {adj} Neighbors!"
-                        ));
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        // Check if removing drone disconnects the drone network
-        let is_connected = self.is_graph_connected_excluding(&network_state.drone_graph, Some(drone_id));
-
-        // Return true if crashing would disconnect the network
-        Ok(!is_connected)
-    }
-
-    fn cannot_remove(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
-        let network_state = self.build_network_state();
-
-        // Validate both nodes exist and are connected - match original error messages
-        let first_neighbors = network_state.node_map.get(&first)
-            .ok_or_else(|| format!("{} {} is not in the map!", first.node_type(), first.id()))?;
-
-        if !first_neighbors.contains(second.id()) {
-            return Err(format!(
-                "{} {} is not connected to {} {}!",
-                first.node_type(), first.id(),
-                second.node_type(), second.id()
-            ));
-        }
-
-        let second_neighbors = network_state.node_map.get(&second)
-            .ok_or_else(|| format!("{} {} is not in the map!", second.node_type(), second.id()))?;
-
-        if !second_neighbors.contains(first.id()) {
-            return Err(format!(
-                "{} {} is not connected to {} {}!",
-                second.node_type(), second.id(),
-                first.node_type(), first.id()
-            ));
-        }
-
-        // Check host constraints after removing connection - match original logic
-        for (node, neighbors) in &network_state.node_map {
-            let mut adj = neighbors.len();
-
-            // Simulate removing the connection
-            if *node == first && neighbors.contains(second.id()) {
-                adj -= 1;
-            } else if *node == second && neighbors.contains(first.id()) {
-                adj -= 1;
-            }
-
-            match node {
-                NetNode::Client(client_id) => {
-                    if adj <= 0 || adj > 2 {
-                        return Err(format!(
-                            "Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"
-                        ));
-                    }
-                }
-                NetNode::Server(server_id) => {
-                    if adj <= 1 {
-                        return Err(format!(
-                            "Connection cannot be removed because Server {server_id} would have only {adj} Neighbors!"
-                        ));
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        // Create modified drone graph without this edge and check connectivity
-        let mut modified_drone_graph = network_state.drone_graph.clone();
-
-        if let NetNode::Drone(first_id) = first {
-            if let Some(neighbors) = modified_drone_graph.get_mut(&first_id) {
-                neighbors.retain(|&id| id != *second.id());
-            }
-        }
-        if let NetNode::Drone(second_id) = second {
-            if let Some(neighbors) = modified_drone_graph.get_mut(&second_id) {
-                neighbors.retain(|&id| id != *first.id());
-            }
-        }
-
-        // Add debug log like original
-        self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", modified_drone_graph));
-
-        let is_connected = self.is_graph_connected_excluding(&modified_drone_graph, None);
-        Ok(!is_connected) // Return true if removal would disconnect the network
-    }
-
-    fn cannot_add(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
-        let network_map = self.build_network_map(); // Use original function to maintain exact behavior
-
-        // Check if nodes exist in the map - match original error messages
-        if !network_map.contains_key(&first) {
-            return Err(format!("{} {} is not in the map!", first.node_type(), first.id()));
-        }
-        if !network_map.contains_key(&second) {
-            return Err(format!("{} {} is not in the map!", second.node_type(), second.id()));
-        }
-
-        // Simulate adding the connection
-        let mut modified_net_map = network_map.clone();
-
-        if let Some(first_neighbors) = modified_net_map.get_mut(&first) {
-            first_neighbors.push(*second.id());
-        }
-        if let Some(second_neighbors) = modified_net_map.get_mut(&second) {
-            second_neighbors.push(*first.id());
-        }
-
-        // Check host constraints - match original logic exactly
-        for (node, neighbors) in modified_net_map.iter() {
-            match node {
-                NetNode::Client(client_id) => {
-                    let adj = neighbors.len();
-                    if adj <= 0 || adj > 2 {
-                        return Err(format!(
-                            "Connection cannot be removed because Client {client_id} would have {adj} Neighbors!"
-                        ));
-                    }
-                }
-                _ => continue,
-            }
-        }
-
-        Ok(false)
-    }
 
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
@@ -419,12 +71,10 @@ impl SimulationControllerData {
                             self.mono_remove_sender(backwards_node, forward_node)?
                         }
 
-                        // ———> qui rimuovo COMPLETAMENTE il drone dallo stato
                         self.drones.retain(|d| d.id != drone_id);
                         self.drone_command_sender.remove(&drone_id);
                         self.packet_sender.remove(&drone_id);
-                        // se tieni altri mappi (es. self.running_network, self.stats, ecc.)
-                        // rimuovi anche lì drone_id
+                        self.stats.total_active_connections -= 1;
 
                         Ok(())
                     },
@@ -456,31 +106,7 @@ impl SimulationControllerData {
         }
     }
 
-    /// - Drone Events
-    pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
-        match event {
-            DroneEvent::PacketSent(_packet) => {
-                self.stats.received_packet();
-                Ok(())
-            },
-            DroneEvent::PacketDropped(_packet) => {
-                Ok(())
-            },
-            DroneEvent::ControllerShortcut(packet) => {
-                let receiver_id = match packet.routing_header.hops.last() {
-                    Some(receiver_id) => receiver_id,
-                    None => return Err((LogType::ERROR, "No routing header found for controller shortcut".to_string())),
-                };
-                match self.controller_shortcut(*receiver_id, packet) {
-                    Ok(()) => Ok(()),
-                    Err(e) => Err((LogType::ERROR, e)),
-                }
-
-            },
-        }
-    }
-
-    /// - Nodes Commands
+    /// - Net Commands
     fn mono_add_sender(&mut self, first_node: NetNode, second_node: NetNode) -> Result<(), String> {
         //checking if packet sender for forward node exists
         match self.packet_sender.get(second_node.id()) {
@@ -492,12 +118,8 @@ impl SimulationControllerData {
                             Some(forward_drone_command_sender) => {
                                 let forward_command = DroneCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
                                 //trying to send command forward
-                                match forward_drone_command_sender.send(forward_command) {
-                                    Ok(()) => {
-                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                                    },
-                                    Err(e) => return Err(e.to_string()),
-                                }
+                                forward_node_command(forward_drone_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
+
                             },
                             None => return Err(format!("Drone {first_id} command sender not found")),
                         }
@@ -512,12 +134,8 @@ impl SimulationControllerData {
                             Some(forward_client_command_sender) => {
                                 let forward_command = Internal(HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone()));
                                 //trying to send command forward
-                                match forward_client_command_sender.send(forward_command) {
-                                    Ok(()) => {
-                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                                    },
-                                    Err(e) => return Err(e.to_string()),
-                                }
+                                forward_node_command(forward_client_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
+
                             },
                             None => return Err(format!("Client {first_id} command sender not found")),
                         }
@@ -532,12 +150,7 @@ impl SimulationControllerData {
                             Some(forward_server_command_sender) => {
                                 let forward_command = HostCommand::AddSender(*second_node.id(), forward_packet_sender.clone());
                                 //trying to send command forward
-                                match forward_server_command_sender.send(forward_command) {
-                                    Ok(()) => {
-                                        debug!(target: "main", "Asking to add {} {} Sender to {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                                    },
-                                    Err(e) => return Err(e.to_string()),
-                                }
+                                forward_node_command(forward_server_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
                             },
                             None => return Err(format!("Server {first_id} command sender not found")),
                         }
@@ -585,12 +198,8 @@ impl SimulationControllerData {
                     Some(forward_drone_command_sender) => {
                         let forward_command = DroneCommand::RemoveSender(*second_node.id());
                         //trying to send command forward
-                        match forward_drone_command_sender.send(forward_command) {
-                            Ok(()) => {
-                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                            },
-                            Err(e) => return Err(e.to_string()),
-                        }
+                        forward_node_command(forward_drone_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
+
                     },
                     None => return Err(format!("Drone {first_id} command sender not found")),
                 }
@@ -605,12 +214,8 @@ impl SimulationControllerData {
                     Some(forward_client_command_sender) => {
                         let forward_command = Internal(HostCommand::RemoveSender(*second_node.id()));
                         //trying to send command forward
-                        match forward_client_command_sender.send(forward_command) {
-                            Ok(()) => {
-                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                            },
-                            Err(e) => return Err(e.to_string()),
-                        }
+                        forward_node_command(forward_client_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
+
                     },
                     None => return Err(format!("Client {first_id} command sender not found💥")),
                 }
@@ -625,12 +230,8 @@ impl SimulationControllerData {
                     Some(forward_server_command_sender) => {
                         let forward_command = HostCommand::RemoveSender(*second_node.id());
                         //trying to send command forward
-                        match forward_server_command_sender.send(forward_command) {
-                            Ok(()) => {
-                                debug!(target: "main", "Asking to remove {} {} Sender from {} {first_id}", second_node.node_type(), second_node.id(), first_node.node_type());
-                            },
-                            Err(e) => return Err(e.to_string()),
-                        }
+                        forward_node_command(forward_server_command_sender, forward_command, first_id, first_node.node_type(), *second_node.id(), second_node.node_type())?
+
                     },
                     None => return Err(format!("Server {first_id} command sender not found")),
                 }
@@ -753,7 +354,7 @@ impl SimulationControllerData {
                 .decode() {
                     Ok(media) => media,
                     Err(e) => return Err(e.to_string()),
-            };
+                };
 
         let image = Image {
             width: media.width(),
@@ -831,316 +432,6 @@ impl SimulationControllerData {
         let command = ControllerShortcut(packet);
         self.send_client_command(client_id, command)
     }
-
-    /// - Client Events
-
-    pub fn handle_channels(&mut self) {
-        while let Ok(event) = self.host_event_receiver.try_recv() {
-            match self.handle_host_event(event) {
-                Ok(()) => {},
-                Err(e) => {self.logs.push_sc_log(e.0, e.1);},
-            }
-        }
-        while let Ok(event) = self.drone_event_receiver.try_recv() {
-            match self.handle_drone_event(event) {
-                Ok(()) => {},
-                Err(e) => {self.logs.push_sc_log(e.0, e.1)}
-            }
-        }
-    }
-
-    pub fn handle_host_event(&mut self, event: HostEvent) -> Result<(), (LogType, String)> {
-        match event {
-            HostEvent::PacketReconstructed(server_to_client) => {
-                self.handle_packet_reconstructed(server_to_client)?
-            },
-            HostEvent::PacketSent(_packet) => {
-                self.stats.received_packet();
-            },
-            HostEvent::ServersDiscovered(client_id, servers) => {
-                if let Some(chat_servers) = servers.get(&Chat) {
-                    self.chat_cache
-                        .known_chat_servers
-                        .insert(client_id, chat_servers.clone());
-                }
-                if let Some(content_servers) = servers.get(&Content) {
-                    self.net_cache
-                        .known_content_servers
-                        .insert(client_id, content_servers.clone());
-                }
-                info!(target: "main", "Servers discovered: {servers:?}");
-            },
-            HostEvent::ChatUpdate(server_id, string) => {
-                let chat: Chat = serde_json::from_str(&string)
-                    .map_err(|e| (LogType::ERROR, e.to_string()))?;
-
-                let key = (chat.users.user1, chat.users.user2);
-                let mut chats_stored = HashMap::new();
-                chats_stored.insert(key, chat);
-
-                let chat_list = ChatList { chats_stored };
-                self.chat_cache.local_chats.insert(server_id, chat_list);
-            }
-            HostEvent::DownloadingInfo(server_id, content_id, percentage) => {
-                //debug!(target: "main", "[LeDron-CLI] - 💥Downloading: {:?}", percentage);
-                let media_id: MediaId = match content_id {
-                    ContentID::Media(id) => id,
-                    ContentID::File(_) => return Err((LogType::WARN, "The content downloading is a File, not a Media".to_string()))
-                };
-
-                let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
-                    Some(map) => map,
-                    None => {
-                        return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
-                    }
-                };
-
-                match server_map.get_mut(&media_id) {
-                    Some((channels, net_cache_media)) => {
-                        if let NetCacheMedia::Downloading(_) = net_cache_media {
-                            if let (None, None) = channels {
-                                let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                                let (render_update_sender, render_update_receiver) = mpsc::channel();
-                                let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                                let renderer_channels = (render_update_sender, resize_request_receiver);
-
-                                match self.tx_to_renderer.as_ref() {
-                                    Some(sender) => {
-                                        if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                            return Err((LogType::ERROR, e.to_string()));
-                                        }
-                                    },
-                                    None => {
-                                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                                    }
-                                }
-                                *channels = media_channels;
-                            }
-                            *net_cache_media = NetCacheMedia::Downloading(percentage);
-                        }
-                    }
-                    None => {
-                        return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
-                    }
-                }
-            },
-            HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
-            HostEvent::ExpectedPDR(expected_pdr) => {},
-            HostEvent::NetSpeed(upload, download) => {},
-        }
-        Ok(())
-    }
-
-    fn handle_packet_reconstructed(&mut self, server_to_client: ServerToClient) -> Result<(), (LogType, String)> {
-        match server_to_client {
-            ServerToClient::ServerType(server_type)
-            => {
-                info!(target: "main", "Server type: {:?}", server_type) },
-            ServerToClient::FilesList(client_id, server_id, file_list)
-            => {
-                self.net_cache
-                    .known_file_list
-                    .entry(client_id)
-                    .or_default()
-                    .insert(server_id, file_list.clone());
-                info!(target: "main", "Files list from Server {server_id} received: {file_list:?}") },
-            ServerToClient::File(server_id, file_id, file)
-            => {
-
-                /*let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                let (render_update_sender, render_update_receiver) = mpsc::channel();
-                let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                let renderer_channels = (render_update_sender, resize_request_receiver);
-                let net_cache_media = NetCacheMedia::Downloaded(file);
-                let mut media_map = HashMap::new();
-                media_map.insert(file_id, (media_channels, net_cache_media));
-                match self.tx_to_renderer.as_ref() {
-                    Some(sender) => {
-                        match sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                            Ok(_) => {},
-                            Err(e) => {return Err((LogType::ERROR, e.to_string()))}
-                        }
-                    },
-                    None => {
-                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                    }
-                }
-                self.net_cache.downloaded_medias.insert(server_id, media_map);*/
-
-                // Construct filename based on file ID and inferred extension
-                /*let path = PathBuf::from("assets").join(&file_id);
-
-                fs::write(&path, &file).expect("file not downloaded");
-
-                // Open with system default application
-                #[cfg(target_os = "windows")]
-                {
-                    let path_str = path.to_str().unwrap();
-                    //let quoted_path = format!("\"{}\"", path_str);
-                    Command::new("cmd")
-                        .args(&["/C", "start", "", &path_str])
-                        .spawn()
-                        .expect("Unable to open file on Windows");
-                }
-
-                #[cfg(target_os = "macos")]
-                {
-                    Command::new("open")
-                        .arg(&path)
-                        .spawn()
-                        .expect("Unable to open file on macOS");
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    Command::new("xdg-open")
-                        .arg(&path)
-                        .spawn()
-                        .expect("Unable to open file on Linux");
-                }
-
-                self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
-*/
-            },
-            ServerToClient::MediaList(client_id, server_id, media_list)
-            => {
-                self.net_cache
-                    .known_media_list
-                    .entry(client_id)
-                    .or_default()
-                    .insert(server_id, media_list.clone());
-                info!(target: "main", "Media list from Server {server_id} received: {:?}", media_list) },
-            ServerToClient::Media(server_id, media_id, image)
-            => {
-                let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
-                    Some(map) => map,
-                    None => {
-                        return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_medias")));
-                    }
-                };
-
-                match server_map.get_mut(&media_id) {
-                    Some((channels, net_cache_media)) => {
-                        if let (None, None) = channels {
-                            let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                            let (render_update_sender, render_update_receiver) = mpsc::channel();
-                            let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                            let renderer_channels = (render_update_sender, resize_request_receiver);
-
-                            match self.tx_to_renderer.as_ref() {
-                                Some(sender) => {
-                                    if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                        return Err((LogType::ERROR, e.to_string()));
-                                    }
-                                },
-                                None => {
-                                    self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                                }
-                            }
-                            *channels = media_channels;
-                        }
-                        *net_cache_media = NetCacheMedia::Downloaded(image);
-                    }
-                    None => {
-                        return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
-                    }
-                }
-
-                //----------------------------------------------------------------------
-                /*let extension = match get_extension(&media_id) {
-                    Some(extension) => extension,
-                    None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
-                };
-                let path = format!("assets/{}", media_id);
-                let path_ref = Path::new(&path);
-
-                if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                    // Convert to DynamicImage
-                    let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
-
-                    // If extension is jpg/jpeg, convert to RGB to drop alpha
-                    let save_result = match extension.to_lowercase().as_str() {
-                        "jpg" | "jpeg" => {
-                            let rgb_image: RgbImage = dynamic_image.to_rgb8();
-                            rgb_image.save(path_ref)
-                        },
-                        _ => dynamic_image.save(path_ref), // png, etc.
-                    };
-
-                    match save_result {
-                        Ok(_) => {
-                            self.logs.push_sc_log(LogType::INFO, format!("Media {} from Server {server_id} saved as {}", media_id, path));
-                            open_image(&path)
-                        },
-                        Err(e) => self.logs.push_sc_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e)),
-                    }
-                } else {
-                    self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
-                }*/
-            },
-            ServerToClient::ClientList(client_id, server_id, client_list)
-            => {
-                let contacts: Vec<NodeId> = client_list.iter().filter(|id| **id != client_id).cloned().collect();
-                self.chat_cache
-                    .known_contacts
-                    .entry(client_id)
-                    .or_default()
-                    .insert(server_id, contacts);
-                info!(target: "main", "Client list from CatServer {server_id} received: {:?}", client_list) },
-            ServerToClient::MessageFrom(server_id, client_id, message)
-            => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
-            ServerToClient::FileFrom(server_id, client_id,..)
-            => {
-                self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
-            }
-            ServerToClient::MediaFrom(server_id, client_id, ..)
-            => {
-                self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
-            }
-            ServerToClient::Sending(content_id, d) => {}
-            ServerToClient::WrongServer(server_id)
-            => {
-                self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
-            }
-            ServerToClient::ErrNotFound(server_id)
-            => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
-            ServerToClient::ErrClientId(server_id)
-            => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
-        }
-        Ok(())
-    }
-
-    pub fn handle_rx_renderer(&mut self){
-        match &self.rx_from_renderer{
-            None => {}
-            Some(channel) => {
-                while let Ok(event) = channel.try_recv() {
-                    match event{
-                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            error!(target: "main", "Received encoded Response");
-                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {
-
-                                }
-                                Some(hash) => {
-                                    match hash.remove(&enc_media){
-                                        None => {}
-                                        Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn get_extension(media_id: &MediaId) -> Option<&str> {
-    media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
 }
 
 fn get_filename<P: AsRef<Path>>(path: P) -> Option<String> {
@@ -1148,6 +439,19 @@ fn get_filename<P: AsRef<Path>>(path: P) -> Option<String> {
         .file_name()
         .and_then(|name| name.to_str())
         .map(|s| s.to_string())
+}
+
+fn forward_node_command<T: NodeCommand>(sender: &Sender<T>, command: T, first_id: NodeId, first_type: NodeType, second_id: NodeId, second_type: NodeType) -> Result<(), String> {
+    match sender.send(command) {
+        Ok(()) => {
+            debug!(target: "main", "Asking to add {second_type} {second_id} Sender to {first_type} {first_id}");
+            Ok(())
+        },
+        Err(e) => Err(e.to_string()),
+    }
+}
+fn get_extension(media_id: &MediaId) -> Option<&str> {
+    media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
 }
 
 fn open_image(path: &str) {

@@ -13,11 +13,8 @@ use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
 use log::LevelFilter;
 use tui_logger::TuiWidgetState;
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, RendererCommand, RendererResponse, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
-
-#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -68,12 +65,14 @@ impl SimulationControllerData {
     {
         let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
         let mut host_log_state: HashMap<NodeId, (String, TuiWidgetState)> = HashMap::new();
+        let mut total_active_connections = 0;
 
         let mut drones = vec![];
         for drone in config.drone {
             let connected_ids = drone.connected_node_ids.clone();
             running_network.insert(NetNode::Drone(drone.id), connected_ids);
             drones.push(drone);
+            total_active_connections += 1;
         }
 
         let mut clients = vec![];
@@ -83,6 +82,7 @@ impl SimulationControllerData {
             running_network.insert(NetNode::Client(client_id), connected_ids);
             clients.push(client);
             host_log_state.insert(client_id, (format!("{client_id}_Client"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{client_id}_Client").as_str(), LevelFilter::max())));
+            total_active_connections += 1;
         }
 
         let mut servers = vec![];
@@ -92,7 +92,7 @@ impl SimulationControllerData {
             running_network.insert(NetNode::Server(server_id), connected_ids);
             servers.push(server);
             host_log_state.insert(server_id, (format!("{server_id}_Server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_Server").as_str(), LevelFilter::max())));
-
+            total_active_connections += 1;
         }
 
 
@@ -107,6 +107,8 @@ impl SimulationControllerData {
                 links.insert((a, b));
             }
         }
+        let mut stats = Statistics::default();
+        stats.total_active_connections = total_active_connections;
         Self {
             drones,
             clients,
@@ -120,7 +122,7 @@ impl SimulationControllerData {
             packet_sender,
             running_network,
             logs: Logs::default(),
-            stats: Statistics::default(),
+            stats,
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
 
             host_log_state,

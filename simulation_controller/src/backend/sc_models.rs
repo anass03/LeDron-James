@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use host::{ClientId, FileId, Image, MediaId, ServerId};
+use std::collections::{HashMap, HashSet};
+use host::{ClientId, FileId, HostCommand, Image, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -8,6 +8,16 @@ use server::chat::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
+use wg_2024::controller::DroneCommand;
+use wg_2024::network::NodeId;
+use client::ClientCommand;
+use crate::backend::simulation_controller::SimulationControllerData;
+
+pub(crate) trait NodeCommand {}
+
+impl NodeCommand for DroneCommand {}
+impl NodeCommand for HostCommand {}
+impl NodeCommand for ClientCommand {}
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone, Debug)]
@@ -302,4 +312,72 @@ impl Display for DroneType {
     }
 }
 
-//-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
+
+#[derive(Default, Clone, Copy)]
+pub(crate) enum NodeType {
+    #[default]
+    Drone,
+    Client,
+    Server,
+}
+impl Display for NodeType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NodeType::Drone => f.write_str("Drone"),
+            NodeType::Client => f.write_str("Client"),
+            NodeType::Server => f.write_str("Server"),
+        }
+    }
+}
+#[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
+pub enum NetNode { Drone(NodeId), Client(NodeId), Server(NodeId) }
+impl NetNode {
+    pub fn id(&self) -> &NodeId {
+        match self {
+            NetNode::Drone(id) => id,
+            NetNode::Client(id) => id,
+            NetNode::Server(id) => id,
+        }
+    }
+
+    pub(crate) fn from(sim: & SimulationControllerData, node_id: NodeId) -> Option<NetNode> {
+        for drone in sim.drones.iter() {
+            if drone.id == node_id {
+                return Some(NetNode::Drone(node_id));
+            }
+        }
+        for client in sim.clients.iter() {
+            if client.id == node_id {
+                return Some(NetNode::Client(node_id));
+            }
+        }
+        for server in sim.servers.iter() {
+            if server.id == node_id {
+                return Some(NetNode::Server(node_id));
+            }
+        }
+        None
+    }
+
+    pub(crate) fn node_type(&self) -> NodeType {
+        match self {
+            NetNode::Drone(_) => NodeType::Drone,
+            NetNode::Client(_) => NodeType::Client,
+            NetNode::Server(_) => NodeType::Server,
+        }
+    }
+}
+pub(crate) type NodeMap = HashMap<NetNode, Vec<NodeId>>;
+
+#[derive(Debug, Clone)]
+pub(crate) enum NetworkOperation {
+    CrashDrone(NodeId),
+    RemoveConnection(NetNode, NetNode),
+    AddConnection(NetNode, NetNode),
+}
+// Struct to cache network state and avoid rebuilding maps
+pub(crate) struct NetworkState {
+    pub(crate) node_map: NodeMap,
+    pub(crate) drone_graph: HashMap<NodeId, Vec<NodeId>>,
+    pub(crate) host_ids: HashSet<NodeId>,
+}
