@@ -107,6 +107,8 @@ pub enum HostEvent {
     //both
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
+    ///Route used by host
+    Route(NodeId, Vec<NodeId>),
 
     //client
     /// Rebuilt entire high level message(es. from server to client)
