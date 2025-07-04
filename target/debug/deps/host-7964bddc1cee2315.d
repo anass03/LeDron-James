@@ -1,0 +1,8 @@
+C:\Users\SS\Desktop\!UNIVERSITA\II° ANNO\PRIMO SEMESTRE\AdvancedProgramming\LeDron-James\target\debug\deps\libhost-7964bddc1cee2315.rmeta: host\src\lib.rs host\src\host.rs
+
+C:\Users\SS\Desktop\!UNIVERSITA\II° ANNO\PRIMO SEMESTRE\AdvancedProgramming\LeDron-James\target\debug\deps\libhost-7964bddc1cee2315.rlib: host\src\lib.rs host\src\host.rs
+
+C:\Users\SS\Desktop\!UNIVERSITA\II° ANNO\PRIMO SEMESTRE\AdvancedProgramming\LeDron-James\target\debug\deps\host-7964bddc1cee2315.d: host\src\lib.rs host\src\host.rs
+
+host\src\lib.rs:
+host\src\host.rs:
