@@ -174,7 +174,7 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
             }
         },
         SelectedTab::TOMLEditor => tab2::render_tab2(app, inner_block, buf),
-        SelectedTab::Settings => () //tab1::render_tab3(app, inner_block, buf),
+        SelectedTab::Settings => tab3::render_tab3(app, inner_block, buf),
     }
 }
 

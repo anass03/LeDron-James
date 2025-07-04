@@ -82,7 +82,7 @@ impl SimulationControllerData {
             let connected_ids = client.connected_drone_ids.clone();
             running_network.insert(NetNode::Client(client_id), connected_ids);
             clients.push(client);
-            host_log_state.insert(client_id, (format!("{client_id}_client"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{client_id}_client").as_str(), LevelFilter::max())));
+            host_log_state.insert(client_id, (format!("{client_id}_Client"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{client_id}_Client").as_str(), LevelFilter::max())));
         }
 
         let mut servers = vec![];
@@ -91,7 +91,7 @@ impl SimulationControllerData {
             let connected_ids = server.connected_drone_ids.clone();
             running_network.insert(NetNode::Server(server_id), connected_ids);
             servers.push(server);
-            host_log_state.insert(server_id, (format!("{server_id}_server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_server").as_str(), LevelFilter::max())));
+            host_log_state.insert(server_id, (format!("{server_id}_Server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_Server").as_str(), LevelFilter::max())));
 
         }
 

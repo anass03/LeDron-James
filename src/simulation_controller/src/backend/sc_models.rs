@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use host::{ClientId, FileId, HostCommand, Image, MediaId, ServerId};
+use host::{ClientId, FileId, Image, MediaId, ServerId};
 use toml::value::{Datetime, Time};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
@@ -8,16 +8,6 @@ use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
-use std::path::Path;
-use std::sync::{mpsc, Arc, Mutex};
-use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
-use client::ClientCommand;
-use crossbeam_channel::{Sender as Sender_c, Receiver as Receiver_c};
-use wg_2024::controller::DroneCommand;
-use wg_2024::network::NodeId;
-use crate::backend::sc_models::FileRendererUpdate::Redraw;
-use crate::backend::simulation_controller::SimulationControllerData;
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone, Debug)]
@@ -313,10 +303,3 @@ impl Display for DroneType {
 }
 
 //-----------------------------------------------THREADED SIMULATION CONTROLLER-----------------------------------------------------------
-/*pub(crate) struct SimulationHelper {
-    pub(crate) net_info:
-}*/
-
-pub(crate) enum CommandSH {
-
-}
