@@ -44,6 +44,7 @@ fn main() -> std::io::Result<()> {
 
         tx_to_renderer: None,
         rx_from_renderer: None,
+        host_log_state: Default::default(),
     };
     match initialize("topologies/personalized_network.toml") {
         Ok((simulation_controller, handles)) => {

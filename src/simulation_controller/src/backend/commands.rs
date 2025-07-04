@@ -9,7 +9,7 @@ use std::sync::mpsc::{Receiver, Sender};
 use wg_2024::controller::{DroneCommand, DroneEvent};
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{ClientId, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
+use host::{ClientId, ContentID, FileId, HostCommand, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use client::ClientCommand;
 use client::ClientCommand::*;
 use host::ClientNetCommand::*;
@@ -884,9 +884,11 @@ impl SimulationControllerData {
                 let chat_list = ChatList { chats_stored };
                 self.chat_cache.local_chats.insert(server_id, chat_list);
             }
-            HostEvent::DownloadingInfo(client_id, percentage) => {
-                /*let server_id = 0;
-                let media_id: MediaId = String::new();
+            HostEvent::DownloadingInfo(server_id, content_id, percentage) => {
+                let media_id: MediaId = match content_id {
+                    ContentID::Media(id) => id,
+                    ContentID::File(_) => return Err((LogType::WARN, "The content downloading is a File, not a Media".to_string()))
+                };
 
                 let server_map = match self.net_cache.downloaded_medias.get_mut(&server_id) {
                     Some(map) => map,
@@ -919,12 +921,12 @@ impl SimulationControllerData {
                     None => {
                         return Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")));
                     }
-                }*/
+                }
             },
-            HostEvent::UploadingInfo(client_id, percentage) => {},
+            HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
             HostEvent::ExpectedPDR(expected_pdr) => {},
             HostEvent::NetSpeed(upload, download) => {},
-            HostEvent::UsageCPU(usage) => {},
+            _ => {},
         }
         Ok(())
     }
