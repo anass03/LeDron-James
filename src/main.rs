@@ -9,8 +9,8 @@ use log::*;
 
 fn main() -> std::io::Result<()> {
     // 1) inizializza tui-logger
-    _ = init_logger(LevelFilter::Trace);
-    _ = set_default_level(LevelFilter::Trace);
+    _ = init_logger(LevelFilter::max());
+    _ = set_default_level(LevelFilter::max());
 
     // 2) (opzionale) file di log su disco
     let mut path = std::env::temp_dir();
