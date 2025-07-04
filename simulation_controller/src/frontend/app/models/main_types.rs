@@ -18,16 +18,8 @@ pub(in crate::frontend::app) struct Settings{
 }
 impl Settings{
     pub(in crate::frontend::app) fn load() ->Self{
-        use std::path::Path;
-
-        let sub_crate_dir = env!("CARGO_MANIFEST_DIR");
-        let workspace_root = Path::new(sub_crate_dir)
-            .parent()
-            .unwrap()
-            .parent()
-            .unwrap();
         Self{
-            toml_path: format!("{}/topologies/personalized_network.toml", workspace_root.display())
+            toml_path: "topologies/personalized_network.toml".to_string()
         }
     }
 }
