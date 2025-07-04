@@ -19,7 +19,7 @@ use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererRespon
 use host::ServerTypes::*;
 use petgraph::visit::Topo;
 use ratatui_image::thread::ResizeRequest;
-use server::chat2::Chat;
+use server::chat::Chat;
 use server::MediaServerError;
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::topology_algorithm::vectors::Vector;

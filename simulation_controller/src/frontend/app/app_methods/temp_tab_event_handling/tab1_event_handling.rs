@@ -4,7 +4,7 @@ use std::ops::DerefMut;
 use host::{ClientId, FileId, MediaId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
-use server::chat2::Chat;
+use server::chat::Chat;
 use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;

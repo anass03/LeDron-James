@@ -24,6 +24,6 @@ initializer = { path = "initializer" }
 simulation_controller = { path = "simulation_controller" }
 
 [workspace]
-members = [ "host", "client", "simulation_controller", "initializer", "initializer_utils" ]
+members = [ "host", "client", "simulation_controller", "initializer", "initializer_utils","server" ]
 
 resolver = "2"

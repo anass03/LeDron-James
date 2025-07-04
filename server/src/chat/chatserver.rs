@@ -15,13 +15,13 @@ use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 
 /// A chat server implementation that supports text, media, and file communication between clients.
-pub struct ChatServer2 {
+pub struct ChatServer {
     info: GenServer,
     client_list: Vec<NodeId>,
     chats: Vec<Chat>
 }
 
-impl ChatServer2 {
+impl ChatServer {
     delegate_to_host_ref!(info => {
         pub fn send_logging(&self, log_type: LogType, module: LogModule, msg: String);
     });

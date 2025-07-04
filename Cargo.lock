@@ -20,7 +20,7 @@ version = "0.1.0"
 dependencies = [
  "client",
  "crossbeam-channel",
- "host 0.1.0",
+ "host",
  "initializer",
  "log",
  "ratatui",
@@ -444,7 +444,7 @@ name = "client"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
- "host 0.1.0",
+ "host",
  "image",
  "rand 0.9.1",
  "serde",
@@ -1152,21 +1152,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "host"
-version = "0.1.0"
-source = "git+https://github.com/anass03/LeDron-James?branch=client#4918a2c1d34441afe421ff8d776e63a4616bcf08"
-dependencies = [
- "crossbeam-channel",
- "image",
- "log",
- "ordered-float",
- "rand 0.9.1",
- "serde",
- "serde_json",
- "wg_2024",
-]
-
-[[package]]
 name = "hound"
 version = "3.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1305,7 +1290,7 @@ dependencies = [
  "client",
  "crossbeam-channel",
  "flyPath",
- "host 0.1.0",
+ "host",
  "initializer_utils",
  "lockheedrustin-drone",
  "rand 0.9.1",
@@ -1329,7 +1314,7 @@ version = "0.1.0"
 dependencies = [
  "client",
  "crossbeam-channel",
- "host 0.1.0",
+ "host",
  "serde",
  "serde_json",
  "server",
@@ -2398,7 +2383,7 @@ dependencies = [
  "chrono",
  "crossbeam-channel",
  "delegate",
- "host 0.1.0 (git+https://github.com/anass03/LeDron-James?branch=client)",
+ "host",
  "image",
  "serde",
  "serde_json",
@@ -2479,7 +2464,7 @@ dependencies = [
  "colored 2.2.0",
  "crossbeam-channel",
  "crossterm 0.29.0",
- "host 0.1.0",
+ "host",
  "image",
  "infer",
  "initializer_utils",

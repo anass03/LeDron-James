@@ -395,7 +395,7 @@ pub(super) mod chat_rendering{
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::ToSpan;
     use ratatui::widgets;
-    use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
+    use server::chat::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
     use server::MessageSC;
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};

@@ -4,7 +4,7 @@ use toml::value::{Datetime, Time};
 use std::fmt::{Debug, Display, Formatter};
 use std::fs::File;
 use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
-use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
+use server::chat::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;

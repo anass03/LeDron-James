@@ -17,7 +17,7 @@ use rustaceans_wit_attitudes::RustaceansWitAttitudesDrone;
 use Krusty_Club::Krusty_C;
 use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
-use server::ChatServer2 as LeChatServer;
+use server::ChatServer as LeChatServer;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
 use rand::{random_range, Rng};
 use simulation_controller::backend::sc_models::DroneType;
@@ -90,7 +90,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
     let mut drone_types = HashMap::new();
-
+    let mut i=0;
     /// - Initializing the drones
     for drone in config.drone.iter() {
 
@@ -110,13 +110,13 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-        let mut i = random_range(0..10);
+        // let mut i = random_range(0..10);
         /// - spawning the thread of the drone and collecting the handle in a vector
         match i {
             0 => {
-                drone_types.insert(drone.id, DroneType::RollingDrone);
+                drone_types.insert(drone.id, DroneType::KrustyDrone);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = RollingDrone::new(
+                    let mut drone = Krusty_C::new(
                         drone_clone.id,
                         drone_event_send,
                         controller_drone_recv,
@@ -129,9 +129,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             1 => {
-                drone_types.insert(drone.id, DroneType::LockheedRustin);
+                drone_types.insert(drone.id, DroneType::RustaceansDrone);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = LockheedRustin::new(
+                    let mut drone = RustaceansWitAttitudesDrone::new(
                         drone_clone.id,
                         drone_event_send,
                         controller_drone_recv,
@@ -144,9 +144,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             2 => {
-                drone_types.insert(drone.id, DroneType::FlyPath);
+                drone_types.insert(drone.id, DroneType::KrustyDrone);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = FlyPath::new(
+                    let mut drone = Krusty_C::new(
                         drone_clone.id,
                         drone_event_send,
                         controller_drone_recv,
@@ -159,9 +159,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             3 => {
-                drone_types.insert(drone.id, DroneType::RustDrone);
+                drone_types.insert(drone.id, DroneType::LockheedRustin);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = RustDrone::new(
+                    let mut drone = LockheedRustin::new(
                      drone_clone.id,
                      drone_event_send,
                      controller_drone_recv,
@@ -174,9 +174,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             4 => {
-                drone_types.insert(drone.id, DroneType::BoberDrone);
+                drone_types.insert(drone.id, DroneType::RustaceansDrone);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = BoberDrone::new(
+                    let mut drone = RustaceansWitAttitudesDrone::new(
                        drone_clone.id,
                        drone_event_send,
                        controller_drone_recv,
@@ -189,9 +189,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             5 => {
-                drone_types.insert(drone.id, DroneType::BagelBomber);
+                drone_types.insert(drone.id, DroneType::RustyDrone);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = BagelBomber::new(
+                    let mut drone = RustyDrone::new(
                        drone_clone.id,
                        drone_event_send,
                        controller_drone_recv,
@@ -204,9 +204,9 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 }));
             },
             6 => {
-                drone_types.insert(drone.id, DroneType::RustyDrone);
+                drone_types.insert(drone.id, DroneType::FlyPath);
                 handles.insert(drone.id, thread::spawn(move || {
-                    let mut drone = RustyDrone::new(
+                    let mut drone = FlyPath::new(
                        drone_clone.id,
                        drone_event_send,
                        controller_drone_recv,
@@ -265,6 +265,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             },
             _ => panic!("Error initializing Drones")
         }
+        i=i+1;
         /*handles.insert(drone.id, thread::spawn(move || {
             /*let mut drone = LeDron::new(
                 drone_clone.id,
