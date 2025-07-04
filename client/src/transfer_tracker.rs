@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use crossbeam_channel::Sender;
-use host::{ContentID, HostEvent};
+use host::{ContentID, HostEvent, ServerId};
 #[derive(Clone)]
 pub struct TransferTracker {
     pub uploads: Arc<Mutex<HashMap<ContentID, (usize, Arc<AtomicUsize>)>>>,
@@ -23,7 +23,7 @@ impl TransferTracker {
         }
     }
 
-    pub fn get_closure(&self, id: ContentID, ctrl: Sender<HostEvent>) -> impl FnMut(usize) + Send + 'static {
+    pub fn get_closure(&self, id: ContentID, server_id: ServerId, ctrl: Sender<HostEvent>) -> impl FnMut(usize) + Send + 'static {
         let map = self.uploads.clone();
         move |chunk_len: usize| {
             let mut remove = false;
@@ -47,7 +47,7 @@ impl TransferTracker {
 
             if let Some((current, total)) = percent_opt {
                 let percent = (current as f32 / total as f32) * 100.0;
-                let _ = ctrl.send(HostEvent::UploadingInfo(id.clone(), percent));
+                let _ = ctrl.send(HostEvent::UploadingInfo(server_id, id.clone(), percent));
             }
 
             if remove {

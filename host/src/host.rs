@@ -117,11 +117,9 @@ pub enum HostEvent {
     ExpectedPDR(HashMap<NodeId, f64>),
     ///Network speed
     NetSpeed(Upload, Download),
-    ///Performance of network
-    UsageCPU(Usage),
     ///Info on downloading/uploading the entire data
-    DownloadingInfo(ContentID, f32),
-    UploadingInfo(ContentID, f32),
+    DownloadingInfo(ServerId, ContentID, f32),
+    UploadingInfo(ServerId, ContentID, f32),
     //server
     ///for real time chat
     ChatUpdate(ServerId, String)

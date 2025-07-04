@@ -717,6 +717,10 @@ impl Client {
         let session_id = packet.session_id;
         let idx = fragment.fragment_index as usize;
         let total = fragment.total_n_fragments as usize;
+        let mut server_id = 0;
+        if let Some(id)  = packet.routing_header.hops.first(){
+            server_id = id.clone();
+        }
 
         // inizializza se necessario
         let mut received = match self.host.received_fragments.lock() {
@@ -765,11 +769,8 @@ impl Client {
                 let (total, received) = self.pending_fragments[&content_id];
                 let percent = (received as f32 / total as f32) * 100.0;
 
-                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(content_id.clone(), percent));
-                self.host.send_logging(
-                    LogType::DEBUG, LogModule::SESSION,
-                    format!("💥 Downloading info: {:?}", percent),
-                );
+                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(server_id, content_id.clone(), percent));
+
                 // Rimuovi se completato
                 if received == total {
                     self.pending_fragments.remove(&content_id);
@@ -836,7 +837,7 @@ impl Client {
 
         // 4) Build the closure to update progress
         let mut on_fragment_sent = self.tracker
-            .get_closure(content_id.clone(), self.host.controller_send.clone());
+            .get_closure(content_id.clone(), server_id, self.host.controller_send.clone());
         let cb = Box::new(move |chunk_len: usize| on_fragment_sent(chunk_len));
 
         // 5) Delegate to send_net_cmd
