@@ -286,7 +286,14 @@ impl Functionality for Host {
                         LogModule::NACK,
                         format!("Alternative route found: {:?}", new_route),
                     );
-
+                    match self.controller_send.send(HostEvent::Route(self.id, new_route.clone())){
+                        Ok(_) => {},
+                        Err(err) => { self.send_logging(
+                            LogType::WARN,
+                            LogModule::SESSION,
+                            format!("error sending route to controller {}", err),
+                        );}
+                    }
                     {
                         let mut sent = self.sent_fragments.lock().unwrap();
                         if let Some(session) = sent.get_mut(&session_id) {
@@ -350,7 +357,14 @@ impl Functionality for Host {
                                 LogModule::NACK,
                                 format!("Route found after flood: {:?}", new_route_after_flood),
                             );
-
+                            match self.controller_send.send(HostEvent::Route(self.id, new_route_after_flood.clone())){
+                                Ok(_) => {},
+                                Err(err) => { self.send_logging(
+                                    LogType::WARN,
+                                    LogModule::SESSION,
+                                    format!("error sending route to controller {}", err),
+                                );}
+                            }
                             {
                                 let mut sent = self.sent_fragments.lock().unwrap();
                                 if let Some(session) = sent.get_mut(&session_id) {

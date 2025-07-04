@@ -108,7 +108,7 @@ pub enum HostEvent {
     /// I report sending a low level packet (to be wrapped in the controller if needed)
     PacketSent(Packet),
     ///Route used by host
-    Route(HostID, Vec<NodeId>),
+    Route(NodeId, Vec<NodeId>),
 
     //client
     /// Rebuilt entire high level message(es. from server to client)
@@ -125,10 +125,6 @@ pub enum HostEvent {
     //server
     ///for real time chat
     ChatUpdate(ServerId, String)
-}
-pub enum HostID{
-    ServerId(ServerId),
-    ClientId(ClientId),
 }
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum ContentID{

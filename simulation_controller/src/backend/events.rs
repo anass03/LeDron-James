@@ -113,6 +113,7 @@ impl SimulationControllerData {
             HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
             HostEvent::ExpectedPDR(expected_pdr) => {},
             HostEvent::NetSpeed(upload, download) => {},
+            HostEvent::Route(host_id, route) => {},
         }
         Ok(())
     }
