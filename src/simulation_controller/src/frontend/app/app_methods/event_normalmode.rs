@@ -19,14 +19,7 @@ impl App<'_>{
                 }
                 "q" => self.stay = false,
                 "i" => {
-                    if let Ok(mut file) = std::fs::OpenOptions::new()
-                        .create(true)
-                        .write(true)
-                        .append(true)
-                        .open("logs.txt")
-                    {
-                        let _ = writeln!(file, "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
-                    }
+                    debug!(target:"main", "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
                 }
                 _ => {
                     match self.selected_tab {

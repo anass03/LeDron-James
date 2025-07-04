@@ -304,7 +304,7 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
                                     match tx_rsp.send(RendererResponse::Encoded((server_id,media_id,return_item))){
                                         Ok(_) => {
-                                            info!("[RENDERER] - Successfully sent an Encoded response");
+                                            info!(target: "main", "[RENDERER] - Successfully sent an Encoded response");
                                         }
                                         Err(str) => {
                                         }

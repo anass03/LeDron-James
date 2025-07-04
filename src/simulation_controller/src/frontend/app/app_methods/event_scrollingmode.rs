@@ -9,13 +9,13 @@ impl App<'_>{
             match key.code{
                 KeyCode::Esc => {
                     self.app_mode = AppMode::Normal;
-                    self.cache.main_log_state.transition(TuiWidgetEvent::EscapeKey)
+                    self.cache.main_log_state.1.transition(TuiWidgetEvent::EscapeKey)
                 },
                 KeyCode::Up => {
-                    self.cache.main_log_state.transition(TuiWidgetEvent::PrevPageKey)
+                    self.cache.main_log_state.1.transition(TuiWidgetEvent::PrevPageKey)
                 }
                 KeyCode::Down => {
-                    self.cache.main_log_state.transition(TuiWidgetEvent::NextPageKey)
+                    self.cache.main_log_state.1.transition(TuiWidgetEvent::NextPageKey)
                 }
                 _ => {()}
             }

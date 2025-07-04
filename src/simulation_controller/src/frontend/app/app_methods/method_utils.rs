@@ -7,9 +7,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::mpsc::{Receiver, Sender};
 use std::thread::Thread;
+use log::LevelFilter;
 use ratatui::text::Text;
 use ratatui_image::thread::ResizeRequest;
 use rodio::{Decoder, OutputStream, Sink};
+use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
 use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
@@ -89,6 +91,19 @@ impl App<'_> {
 
             self.cache.tab1_data.netnode_list.initialize(dronec, serverc, clientc);
         }
+        if !self.cache.main_log_state.0{
+            self.cache.main_log_state.0 = true;
+            let mut new_state = TuiWidgetState::default()
+                .set_default_display_level(LevelFilter::Off)
+                .set_level_for_target("main", LevelFilter::max());
+
+            for (_,(target,_)) in &self.simulation_controller_data.host_log_state{
+                new_state = new_state.set_level_for_target(target.as_str(), LevelFilter::max());
+            }
+            self.cache.main_log_state.1 = new_state;
+        }
+
+
     }
     pub(super) fn clean_topology_inputs_buffer(&mut self){
         self.cache.text_buffer.inputfirst_text_area = TextArea::default();
