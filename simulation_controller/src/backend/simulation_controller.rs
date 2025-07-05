@@ -14,7 +14,7 @@ use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
 use log::LevelFilter;
 use tui_logger::TuiWidgetState;
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
+use crate::backend::sc_models::{ChannelStatus, ChatCache, DroneType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 /// Simulation Controller struct contains:
@@ -50,7 +50,9 @@ pub struct SimulationControllerData {
     pub net_cache: NetCache,
 
     pub tx_to_renderer: Option<std::sync::mpsc::Sender<RendererCommand>>,
-    pub rx_from_renderer: Option<std::sync::mpsc::Receiver<RendererResponse>>,
+
+
+    pub rx_from_renderer: ChannelStatus,
 }
 
 impl SimulationControllerData {
@@ -134,7 +136,7 @@ impl SimulationControllerData {
             net_cache: NetCache::default(),
 
             tx_to_renderer: None,
-            rx_from_renderer: None,
+            rx_from_renderer: ChannelStatus::None,
         }
     }
 }
@@ -160,7 +162,7 @@ impl Default for SimulationControllerData {
             net_cache: NetCache::default(),
             download_folder: PathBuf::from("/assets"),
             tx_to_renderer: None,
-            rx_from_renderer: None,
+            rx_from_renderer: ChannelStatus::None,
             host_log_state: Default::default(),
         }
     }
