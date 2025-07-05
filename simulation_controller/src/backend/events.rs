@@ -10,7 +10,8 @@ use wg_2024::network::NodeId;
 use host::{ContentID, FileId, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
-use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{ChannelStatus, ChatList, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::ChannelStatus::Initialized;
 use crate::backend::simulation_controller::SimulationControllerData;
 
 impl SimulationControllerData {
@@ -189,10 +190,10 @@ impl SimulationControllerData {
                 info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list) },
             ServerToClient::Media(server_id, media_id, image)
             => {
-                self.save_media(&media_id, &image)?;
                 self.update_net_cache_media(server_id, media_id.clone(), Some(image.clone()), None)?;
 
                 // Save in local folder
+                self.save_media(&media_id, &image)?;
 
             },
             ServerToClient::ClientList(client_id, server_id, client_list)
@@ -231,7 +232,7 @@ impl SimulationControllerData {
     pub fn handle_rx_renderer(&mut self){
         match &self.rx_from_renderer{
             None => {}
-            Some(channel) => {
+            Initialized(channel) => {
                 while let Ok(event) = channel.try_recv() {
                     match event{
                         RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
@@ -254,7 +255,8 @@ impl SimulationControllerData {
 
                     }
                 }
-            }
+            },
+            _ => {}
         }
     }
 
@@ -293,14 +295,14 @@ impl SimulationControllerData {
                     let renderer_channels = (render_update_sender, resize_request_receiver);
 
                     match self.tx_to_renderer.as_ref() {
-                        Some(sender) => {
+                        Some(mut sender) => {
                             if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
                                 return Err((LogType::ERROR, e.to_string()));
                             }
                         },
                         None => {
                             self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                        }
+                        },
                     }
                     *channels = media_channels;
                 }

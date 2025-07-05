@@ -109,7 +109,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-        let mut i = random_range(0..10);
+        let mut i = random_range(0..8);
         /// - spawning the thread of the drone and collecting the handle in a vector
         match i {
             0 => {
