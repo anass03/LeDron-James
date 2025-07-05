@@ -229,17 +229,11 @@ pub(crate) enum DroneSettingsPopup{
 pub(crate) struct DroneSettingsPopup{
     pub command_list_state: ListState,
     pub command_offset:u8, // Which command I've selected
-    pub selected_item: DroneSettingsItems,
 
-    pub drone_pdr: u8,
+    pub drone_pdr: f32,
     pub command_popup: DroneSettingsCommandsPopup
 }
 
-#[derive(Clone, Debug, Default)]
-pub(crate) enum DroneSettingsItems{
-    #[default]
-    Blocks, Commands
-}
 impl DroneSettingsPopup{
     pub fn command_up(&mut self){
         if self.command_offset > 0 {

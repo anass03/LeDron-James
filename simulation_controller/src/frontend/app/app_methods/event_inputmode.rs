@@ -69,40 +69,79 @@ impl App<'_>{
         }
     }
     fn handle_topology_inputmode(&mut self, event: Event) {
-        // I gotta understand which field is currently selected
-        match event{
-            Event::Key(key) => {
-                if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Esc  => {
-                            // Salvo input
-                            self.app_mode = AppMode::Normal;
-                        },
-                        KeyCode::F(1) => {
-                            self.clean_topology_inputs_buffer();
-                            self.app_mode = AppMode::Normal;
-                        },
+        match self.app_mode{
+            AppMode::Input(mode) => {
+                match mode{
+                    1 => {
+                        match event{
+                            Event::Key(key) => {
+                                if key.kind == KeyEventKind::Press {
+                                    match key.code {
+                                        KeyCode::Esc  => {
+                                            // Salvo input
+                                            self.app_mode = AppMode::Normal;
+                                        },
+                                        KeyCode::F(1) => {
+                                            self.cache.text_buffer.clean_topology_inputs_buffer();
+                                            self.app_mode = AppMode::Normal;
+                                        },
 
-                        _ => {
-                            let input = Input::from(event.clone());
-                            match Self::map_italian_brackets(&event){
-                                Some(c) => {
-                                    self.cache.text_buffer.chat_text_area.insert_char(c);
-                                },
-                                None => {
-                                    if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
-                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
-                                    };
-                                    self.cache.text_buffer.chat_text_area.input(input);
+                                        _ => {
+                                            let input = Input::from(event.clone());
+                                            match Self::map_italian_brackets(&event){
+                                                Some(c) => {
+                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
+                                                },
+                                                None => {
+                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
-                            }
+                            },
+                            _ => ()
+                        }
+
+                    }
+                    0 | _ => {
+                        match event{
+                            Event::Key(key) => {
+                                if key.kind == KeyEventKind::Press {
+                                    match key.code {
+                                        KeyCode::Esc  => {
+                                            // Salvo input
+                                            self.app_mode = AppMode::Normal;
+                                        },
+                                        KeyCode::F(1) => {
+                                            self.cache.text_buffer.clean_topology_inputs_buffer();
+                                            self.app_mode = AppMode::Normal;
+                                        },
+
+                                        _ => {
+                                            let input = Input::from(event.clone());
+                                            match Self::map_italian_brackets(&event){
+                                                Some(c) => {
+                                                    self.cache.text_buffer.chat_text_area.insert_char(c);
+                                                },
+                                                None => {
+                                                    if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
+                                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
+                                                    };
+                                                    self.cache.text_buffer.chat_text_area.input(input);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            _ => ()
                         }
                     }
                 }
-            },
-            _ => ()
+            }
+            _ => (),
         }
-
     }
     fn map_italian_brackets(event: &Event) -> Option<char> {
         if let Event::Key(KeyEvent { code, modifiers, .. }) = event {

@@ -1727,7 +1727,7 @@ pub(super) mod net_rendering{
         // Top: Animated spinner or bouncing dots
         let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
         let spinner = spinner_frames[(app.cache.counter as usize) % spinner_frames.len()];
-        let spinner_line = Line::from(format!("{} Downloading from {:?}", spinner, server_id))
+        let spinner_line = Line::from(format!("{} Downloading from Server {:?}", spinner, server_id))
             .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
         let spinner_para = Paragraph::new(spinner_line)
             .alignment(Alignment::Center);
@@ -1780,7 +1780,7 @@ pub(super) mod net_rendering{
             "🎭 Wisdom: There are 10 kinds of people: those who understand binary and those who don’t."
         ];
         // Make the tip change 4-5x slower
-        let tip = tips[(app.cache.counter as usize / 8) % tips.len()];
+        let tip = tips[(app.cache.counter as usize / 25) % tips.len()];
         let tip_line = Line::from(tip).style(Style::default().fg(Color::Cyan));
         let tip_para = Paragraph::new(tip_line)
             .alignment(Alignment::Center);

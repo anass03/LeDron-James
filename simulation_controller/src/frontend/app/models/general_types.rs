@@ -155,6 +155,56 @@ impl<'a> TextBuffer<'_>{
             inputthird_text_area: Default::default()
         }
     }
+    pub(crate) fn clean_topology_inputs_buffer(&mut self){
+        self.inputfirst_text_area = TextArea::default();
+        self.inputsecond_text_area = TextArea::default();
+        self.inputthird_text_area = TextArea::default();
+        self.chat_text_area = TextArea::default();
+    }
+
+    pub(crate) fn first_field_parse_f32(&mut self, clean_after: bool) -> Result<f32,String>{
+        let lines = self.inputfirst_text_area.clone().into_lines();
+        match lines.get(0) {
+            None => {
+                Err("Couldn't parse nothing!".to_string())
+            }
+            Some(str) => {
+                match f32::from_str(str) {
+                    Ok(n) => {
+                        if clean_after {
+                            self.clean_topology_inputs_buffer();
+                        }
+                        Ok(n)
+                    }
+                    Err(err) => {
+                        Err(err.to_string())
+                    }
+                }
+            }
+        }
+    }
+    pub(crate) fn first_field_parse_u8(&mut self, clean_after: bool) -> Result<u8,String>{
+        let lines = self.inputfirst_text_area.clone().into_lines();
+        match lines.get(0) {
+            None => {
+                Err("Couldn't parse nothing!".to_string())
+            }
+            Some(str) => {
+                match u8::from_str(str) {
+                    Ok(n) => {
+                        if clean_after {
+                            self.clean_topology_inputs_buffer();
+                        }
+                        Ok(n)
+                    }
+                    Err(err) => {
+                        Err(err.to_string())
+                    }
+                }
+            }
+        }
+    }
+
     /// 1 - Get f32 on the first buffer
     /// 2 - Get ID and Message ( String )
     fn get_parsed_data(&self, n:u8)->Result<ParsedBuffer, String>{
@@ -166,8 +216,8 @@ impl<'a> TextBuffer<'_>{
                     }
                     Some(mystr) => {
                         match f32::from_str(mystr){
-                            Ok(x) => {Ok(ParsedBuffer::OneParsed(x))}
-                            Err(x) => {Err(format!("Cannot parse an f32 [{:?}]", x))}
+                            Ok(num) => {Ok(ParsedBuffer::OneParsed(num))}
+                            Err(err) => {Err(format!("{}", err))}
                         }
                     }
                 }
