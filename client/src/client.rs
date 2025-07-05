@@ -158,7 +158,6 @@ impl Client {
                     },
 
                     default(Duration::from_millis(200)) => {
-                        // Se non arriva nulla per 200 ms, rilancio una nuova ondata di ServerType
                         self.request_server_type();
                     }
                 }
@@ -206,8 +205,8 @@ impl Client {
                 session_id: generate_unique_session_id(),
                 content: payload,
             };
-            let cb = Box::new(|_: usize| {});
-            if let Err(err) = self.host.build_msg_fragment(server_id, message, cb) {
+            //let cb = Box::new(|_: usize| {});
+            if let Err(err) = self.host.build_msg_fragment(server_id, message, |_| {}) {
                 self.host.send_logging(
                     LogType::ERROR, LogModule::SESSION,
                     format!("Failed to send ServerType request: {}", err),
@@ -770,7 +769,10 @@ impl Client {
                 let percent = (received as f32 / total as f32) * 100.0;
 
                 let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(server_id, content_id.clone(), percent));
-
+                self.host.send_logging(
+                    LogType::DEBUG, LogModule::SESSION,
+                    format!("INFO DOWNLOAD {:?}", percent),
+                );
                 // Rimuovi se completato
                 if received == total {
                     self.pending_fragments.remove(&content_id);

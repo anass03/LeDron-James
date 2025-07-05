@@ -176,8 +176,8 @@ impl GenServer {
     /// Prepares a message for transmission, optionally extracting content metadata.
     fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>, usize)> {
         let data = serde_json::to_vec(response).ok()?;
-        let total = (data.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
         let compressed = self.compress_anything(&data).ok()?;
+        let total = (compressed.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
         let msg = Message {
             session_id: generate_unique_session_id(),
             content: compressed,
