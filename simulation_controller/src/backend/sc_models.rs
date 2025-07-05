@@ -113,13 +113,7 @@ impl Statistics{
     pub fn received_packet(&mut self) { self.total_packet_exchanged += 1; }
     pub fn dropped_packet(&mut self) { self.total_packet_dropped += 1; }
 }
-#[derive(Default)]
-pub enum ChannelStatus{
-    #[default]
-    None,
-    Initialized(std::sync::mpsc::Receiver<RendererResponse>),
-    Moved
-}
+
 pub enum RendererCommand{
     Stop,
     AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)),

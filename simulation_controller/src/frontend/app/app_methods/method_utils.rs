@@ -5,11 +5,15 @@ use std::fs::File;
 use std::io;
 use std::io::{BufRead, Write};
 use std::path::Path;
-use log::LevelFilter;
+use log::{info, LevelFilter};
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
-use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand};
+use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::frontend::app::models::general_types::Node;
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use super::super::App;
+use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as ServerConfig};
+
 
 
 
@@ -17,6 +21,48 @@ fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
 }
 impl App<'_> {
+    /// - Media Renderer Handler
+    pub fn handle_rx_renderer(&mut self){
+        match &self.simulation_controller_data.rx_from_renderer{
+            None => {}
+            Some(channel) => {
+                while let Ok(event) = channel.try_recv() {
+                    match event{
+                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
+                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
+                            match self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&enc_server) {
+                                None => {}
+                                Some(hash) => {
+                                    match hash.remove(&enc_media){
+                                        None => {}
+                                        Some(((ch1,ch2),net)) => {
+                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        RendererResponse::Computed((ret_vec)) => {
+                            for (id,top) in ret_vec{
+                                for (node,act,ref mut current_alg) in &mut self.cache.tab1_data.netnode_list.items{
+                                    let maybe_target = match node {
+                                        Node::Client(cl) => cl.id,
+                                        Node::Server(sr) => sr.id,
+                                        Node::Drone(dr) => dr.id,
+                                    };
+
+                                    if maybe_target == id{
+                                        *current_alg = top;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
     pub(crate) fn handle_downloaded_medias(&mut self){
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (id,(channels,media)) in values{
@@ -78,8 +124,17 @@ impl App<'_> {
             let serverc = self.simulation_controller_data.servers.clone();
             let clientc = self.simulation_controller_data.clients.clone();
 
-            self.cache.tab1_data.netnode_list.initialize(dronec, serverc, clientc);
+            self.initialize_netnodelist(dronec, serverc, clientc);
+
+            for (node,act,top) in self.cache.tab1_data.netnode_list.items.clone(){
+                match node{
+                    Node::Client(cl) => {self.initialize_node_pop_map(cl.id);}
+                    Node::Server(sr) => {self.initialize_node_pop_map(sr.id);}
+                    Node::Drone(dr) => {self.initialize_node_pop_map(dr.id);}
+                }
+            }
         }
+
         if !self.cache.main_log_state.0{
             self.cache.main_log_state.0 = true;
             let mut new_state = TuiWidgetState::default()
@@ -93,6 +148,30 @@ impl App<'_> {
         }
 
 
+    }
+    pub(in crate::frontend::app) fn initialize_netnodelist(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
+
+        let mut nodes = Vec::new();
+
+        for d in drones{
+            let id = d.id;
+            nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
+            self.initialize_node_pop_map(id)
+        }
+        for s in servers{
+            let id = s.id;
+            nodes.push((Node::Server(s),true, TopologyAlgorithm::default()));
+            self.initialize_node_pop_map(id)
+        }
+        for c in clients{
+            let id = c.id;
+            nodes.push((Node::Client(c),true, TopologyAlgorithm::default()));
+            self.initialize_node_pop_map(id)
+        }
+        self.cache.tab1_data.netnode_list.items = nodes;
+        self.cache.tab1_data.netnode_list.selected= 0;
+        self.cache.tab1_data.netnode_list.state.select(Some(self.cache.tab1_data.netnode_list.selected as usize));
+        self.cache.tab1_data.netnode_list.initialized= true;
     }
     pub(super) fn save_text_buffer(&mut self) {
         let lines = self.cache.text_buffer.toml_text_area.clone().into_lines();

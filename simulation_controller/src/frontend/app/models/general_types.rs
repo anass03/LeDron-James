@@ -4,6 +4,7 @@ use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as Se
 use wg_2024::network::NodeId;
 use std::str::FromStr;
 use tui_textarea::CursorMove::Top;
+use crate::frontend::app::App;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub(in crate::frontend::app) struct TextBuffer<'a>{
@@ -60,24 +61,6 @@ impl NetNodeList {
             selected: 0,
             state: ListState::default(),
         }
-    }
-    pub(in crate::frontend::app) fn initialize(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
-
-        let mut nodes = Vec::new();
-
-        for d in drones{
-            nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
-        }
-        for s in servers{
-            nodes.push((Node::Server(s),true, TopologyAlgorithm::default()))
-        }
-        for c in clients{
-            nodes.push((Node::Client(c),true, TopologyAlgorithm::default()))
-        }
-        self.items = nodes;
-        self.selected= 0;
-        self.state.select(Some(self.selected as usize));
-        self.initialized= true;
     }
     fn retrieve_nodes(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
         self.selected = 0;
@@ -139,7 +122,7 @@ impl NetNodeList {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(in crate::frontend::app) enum Node{
     Client(ClientConfig), Server(ServerConfig), Drone(DroneConfig)
 }

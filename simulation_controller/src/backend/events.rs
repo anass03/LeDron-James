@@ -254,37 +254,6 @@ impl SimulationControllerData {
         Ok(())
     }
 
-    /// - Media Renderer Handler
-    pub fn handle_rx_renderer(&mut self){
-        match &self.rx_from_renderer{
-            None => {}
-            Some(channel) => {
-                while let Ok(event) = channel.try_recv() {
-                    match event{
-                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
-                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {}
-                                Some(hash) => {
-                                    match hash.remove(&enc_media){
-                                        None => {}
-                                        Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        RendererResponse::Computed(_) => {
-                            // todo()!
-                        }
-
-                    }
-                }
-            }
-        }
-    }
-
     /// - Channel Handler
     pub fn handle_channels(&mut self) {
         while let Ok(event) = self.host_event_receiver.try_recv() {

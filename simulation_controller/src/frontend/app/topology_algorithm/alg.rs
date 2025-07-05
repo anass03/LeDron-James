@@ -1,6 +1,7 @@
 use std::collections::HashMap;
+use std::sync::mpsc::Sender;
 use wg_2024::network::NodeId;
-use crate::backend::sc_models::LogType;
+use crate::backend::sc_models::{LogType, RendererCommand};
 use crate::backend::simulation_controller::SimulationControllerData;
 use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
@@ -103,6 +104,16 @@ impl App<'_>{
                     }
                     Some(vec) => {
                         create_map(id, &self.simulation_controller_data, top_alg,vec);
+
+                    }
+                }
+                match &self.simulation_controller_data.tx_to_renderer {
+                    None => {}
+                    Some(tx_cmd) => {
+                        match tx_cmd.send(RendererCommand::ComputeSetOfTopologies(vec![(id,top_alg.clone())])){
+                            Ok(_) => {}
+                            Err(_) => {}
+                        }
                     }
                 }
             }
