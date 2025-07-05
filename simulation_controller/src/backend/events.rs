@@ -189,38 +189,11 @@ impl SimulationControllerData {
                 info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list) },
             ServerToClient::Media(server_id, media_id, image)
             => {
+                self.save_media(&media_id, &image)?;
                 self.update_net_cache_media(server_id, media_id.clone(), Some(image.clone()), None)?;
 
-                //----------------------------------------------------------------------
-                let extension = match get_extension(&media_id) {
-                    Some(extension) => extension,
-                    None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
-                };
-                let path = format!("{}/{}", self.download_folder.to_str().unwrap(), media_id);
-                let path_ref = Path::new(&path);
+                // Save in local folder
 
-                if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                    // Convert to DynamicImage
-                    let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
-
-                    // If extension is jpg/jpeg, convert to RGB to drop alpha
-                    let save_result = match extension.to_lowercase().as_str() {
-                        "jpg" | "jpeg" => {
-                            let rgb_image: RgbImage = dynamic_image.to_rgb8();
-                            rgb_image.save(path_ref)
-                        },
-                        _ => dynamic_image.save(path_ref), // png, etc.
-                    };
-
-                    match save_result {
-                        Ok(_) => {
-                            info!(target: "main", "Image saved: {path}");
-                        },
-                        Err(e) => return Err((LogType::ERROR, format!("Error saving media {}: {}", media_id, e)))
-                    }
-                } else {
-                    return Err((LogType::ERROR, format!("Impossible to  generate image from media {}", media_id)))
-                }
             },
             ServerToClient::ClientList(client_id, server_id, client_list)
             => {
@@ -353,6 +326,47 @@ impl SimulationControllerData {
             self.stats.network_reliability = ((1.0
                 - (self.stats.total_packet_dropped as f64 / self.stats.total_packet_exchanged as f64)) * 100.0) as u8;
         }
+    }
+
+    fn save_media(&self, media_id: &MediaId, image: &Image) -> Result<(), (LogType, String)> {
+        // Get file extension
+        let extension = get_extension(media_id)
+            .ok_or_else(|| (LogType::INFO, format!("Unknown extension for file {media_id}")))?;
+
+        // Construct path safely
+        let path = self.download_folder.join(media_id);
+
+        // Ensure download directory exists
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| (LogType::ERROR, format!("Failed to create directory {}: {}", parent.display(), e)))?;
+        }
+
+        // Create image buffer without cloning if possible
+        let rgba_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone())
+            .ok_or_else(|| (LogType::ERROR, format!("Failed to create image buffer from media {}", media_id)))?;
+
+        // Convert to DynamicImage
+        let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+
+        // Save based on extension
+        let save_result = match extension.to_lowercase().as_str() {
+            "jpg" | "jpeg" => {
+                // Convert to RGB to drop alpha channel for JPEG
+                let rgb_image: RgbImage = dynamic_image.to_rgb8();
+                rgb_image.save(&path)
+            },
+            _ => {
+                // For PNG and other formats that support alpha
+                dynamic_image.save(&path)
+            }
+        };
+
+        save_result
+            .map_err(|e| (LogType::ERROR, format!("Error saving media {}: {}", media_id, e)))?;
+
+        info!(target: "main", "Image saved: {}", path.display());
+        Ok(())
     }
 }
 
