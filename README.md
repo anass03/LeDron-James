@@ -11,16 +11,16 @@ This solution is useful for studying communication protocols in unreliable netwo
 
 ## Key Features
 
-* **Network Discovery Protocol**: flooding-based discovery to reconstruct network topology fileciteturn1file3
-* **Source Routing**: explicit path headers for direct packet forwarding fileciteturn1file7
-* **Fragmentation/Reassembly**: fixed-size message fragmentation and safe reassembly fileciteturn1file3
+* **Network Discovery Protocol**: flooding-based discovery to reconstruct network topology
+* **Source Routing**: explicit path headers for direct packet forwarding
+* **Fragmentation/Reassembly**: fixed-size message fragmentation and safe reassembly
 * **Packet Drop Simulation**: configurable Packet Drop Rate (PDR) via TOML file
-* **Simulation Controller**: monitoring and control interface for crashes, PDR adjustments, and link management fileciteturn1file11
+* **Simulation Controller**: monitoring and control interface for crashes, PDR adjustments, and link management
 * **Client-Server Protocol**: support for HTTP-like text/media interactions and chat messaging
 
 ## Architecture
 
-* **Network Initializer**: reads `network_init.toml` to create drones, clients, servers, and Crossbeam channels according to the specified topology fileciteturn1file5
+* **Network Initializer**: reads a user-specified TOML file (default `network_init.toml`, but any filename can be passed as an argument) to create drones, clients, servers, and Crossbeam channels according to the defined topology
 * **Drones**: perform packet forwarding, apply PDR, and handle simulated crashes
 * **Client/Server**: utilize an Assembler component for serialization, fragmentation, and ACK/NACK handling
 * **Simulation Controller**: central thread for issuing commands and receiving events
@@ -92,7 +92,7 @@ Use the Simulation Controller commands:
 cargo test -- --nocapture
 ```
 
-Ensure that your test `network_init.toml` covers various topologies (chain, star, butterfly, tree) fileciteturn1file0
+Ensure that your test `network_init.toml` covers various topologies (chain, star, butterfly, tree)
 
 ## Contributing
 
