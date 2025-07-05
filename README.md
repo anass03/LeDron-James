@@ -20,7 +20,7 @@ This solution is useful for studying communication protocols in unreliable netwo
 
 ## Architecture
 
-* **Network Initializer**: reads a user-specified TOML file (default `network_init.toml`, but any filename can be passed as an argument) to create drones, clients, servers, and Crossbeam channels according to the defined topology
+* **Network Initializer**: reads a user-specified TOML file (default `personalized_network.toml`, but any filename can be passed as an argument) to create drones, clients, servers, and Crossbeam channels according to the defined topology
 * **Drones**: perform packet forwarding, apply PDR, and handle simulated crashes
 * **Client/Server**: utilize an Assembler component for serialization, fragmentation, and ACK/NACK handling
 * **Simulation Controller**: central thread for issuing commands and receiving events
