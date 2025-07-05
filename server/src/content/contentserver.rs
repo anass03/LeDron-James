@@ -236,6 +236,7 @@ impl ContentServer {
                 );
                 match Self::save_image_to(&path, &image) {
                     Ok(_) => {
+                        self.handle_media_list(receiver_id, source);
                         self.send_logging(LogType::INFO,LogModule::MEDIA,format!("Media saved in {}", path.display()))
                     },
                     Err(e) => self.send_logging(LogType::ERROR,LogModule::MEDIA,format!("Error writing media {}: {}", path.display(), e)),
@@ -291,7 +292,8 @@ impl ContentServer {
                 );
                 match Self::save_text_file(&path, &data) {
                     Ok(_) => {
-                        //self.send_logging(format!("File saved in {}", path.display())),
+                        self.handle_files_list(receiver_id, source);
+                        self.send_logging(LogType::INFO,LogModule::FILE,format!("File saved in {}", path.display()));
                     }
                     Err(e) => self.send_logging(LogType::ERROR,LogModule::FILE,format!("Error writing file {}: {}", path.display(), e)),
                 }
