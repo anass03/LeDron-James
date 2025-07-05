@@ -126,7 +126,7 @@ impl SimulationControllerData {
             running_network,
             logs: Logs::default(),
             stats,
-            download_folder: PathBuf::from("/assets"),
+            download_folder: PathBuf::from("assets"),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
 
             host_log_state,
@@ -159,7 +159,7 @@ impl Default for SimulationControllerData {
             topology_algorithm_data: TopologyAlgorithm::default(),
             chat_cache: ChatCache::default(),
             net_cache: NetCache::default(),
-            download_folder: PathBuf::from("/assets"),
+            download_folder: PathBuf::from("assets"),
             tx_to_renderer: None,
             rx_from_renderer: None,
             host_log_state: Default::default(),
