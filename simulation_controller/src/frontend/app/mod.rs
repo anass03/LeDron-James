@@ -240,7 +240,7 @@ impl App<'_>{
         // Update dropped packets chartd
         let total_paket_dropped =  self.simulation_controller_data.stats.total_packet_dropped;
         let graph_width = self.cache.tab0_data.charts_data.dropped_packets_chart_width;
-            self.cache.tab0_data.charts_data.update_dropped_per_tick(total_paket_dropped, graph_width);
+        self.cache.tab0_data.charts_data.update_dropped_per_tick(total_paket_dropped, graph_width);
 
 
         // We initialize the TOML buffer with the file indicated in the settings

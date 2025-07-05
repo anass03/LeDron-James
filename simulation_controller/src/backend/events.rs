@@ -3,7 +3,7 @@ use std::sync::mpsc;
 use log::{debug, error, info};
 use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
-use host::{ContentID, HostEvent, Image, MediaId, ServerId, ServerToClient};
+use host::{ContentID, FileId, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
 use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia, RendererCommand, RendererResponse};
@@ -91,12 +91,21 @@ impl SimulationControllerData {
                 info!(target: "main", "Server type: {:?}", server_type) },
             ServerToClient::FilesList(client_id, server_id, file_list)
             => {
+                let filtered_file_list: Vec<FileId> = file_list
+                    .into_iter()
+                    .filter(|file_id| {
+                        // Rimuovi file macOS e file nascosti
+                        !file_id.starts_with("._") && !file_id.starts_with(".")
+                    })
+                    .collect();
+
                 self.net_cache
                     .known_file_list
                     .entry(client_id)
                     .or_default()
-                    .insert(server_id, file_list.clone());
-                info!(target: "main", "Files list from Server {server_id} received: {file_list:?}") },
+                    .insert(server_id, filtered_file_list.clone());
+
+                info!(target: "main", "Filtered files list from Server {server_id}: {:?}", filtered_file_list);},
             ServerToClient::File(server_id, file_id, file)
             => {
 
@@ -157,12 +166,23 @@ impl SimulationControllerData {
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
             => {
+                // Filter metadata: ._ files
+                let filtered_media_list: Vec<MediaId> = media_list
+                    .into_iter()
+                    .filter(|media_id| {
+                        // Rimuovi file che iniziano con ._
+                        !media_id.starts_with("._") &&
+                            // Opzionalmente, rimuovi anche altri file nascosti
+                            !media_id.starts_with(".")
+                    })
+                    .collect();
+
                 self.net_cache
                     .known_media_list
                     .entry(client_id)
                     .or_default()
-                    .insert(server_id, media_list.clone());
-                info!(target: "main", "Media list from Server {server_id} received: {:?}", media_list) },
+                    .insert(server_id, filtered_media_list.clone());
+                info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list) },
             ServerToClient::Media(server_id, media_id, image)
             => {
                 self.update_net_cache_media(server_id, media_id, Some(image), None)?
