@@ -37,8 +37,8 @@ impl FnList{
     }
 
     pub(in crate::frontend::app) fn select_next(&mut self){
-            self.selected += 1;
-            self.state.select(Some(self.selected as usize));
+        self.selected += 1;
+        self.state.select(Some(self.selected as usize));
     }
     pub(in crate::frontend::app) fn select_prev(&mut self){
         if self.selected > 0 {
@@ -63,21 +63,21 @@ impl NetNodeList {
     }
     pub(in crate::frontend::app) fn initialize(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
 
-                let mut nodes = Vec::new();
+        let mut nodes = Vec::new();
 
-                for d in drones{
-                    nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
-                }
-                for s in servers{
-                    nodes.push((Node::Server(s),true, TopologyAlgorithm::default()))
-                }
-                for c in clients{
-                    nodes.push((Node::Client(c),true, TopologyAlgorithm::default()))
-                }
-                self.items = nodes;
-            self.selected= 0;
-            self.state.select(Some(self.selected as usize));
-            self.initialized= true;
+        for d in drones{
+            nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
+        }
+        for s in servers{
+            nodes.push((Node::Server(s),true, TopologyAlgorithm::default()))
+        }
+        for c in clients{
+            nodes.push((Node::Client(c),true, TopologyAlgorithm::default()))
+        }
+        self.items = nodes;
+        self.selected= 0;
+        self.state.select(Some(self.selected as usize));
+        self.initialized= true;
     }
     fn retrieve_nodes(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
         self.selected = 0;
@@ -155,7 +155,7 @@ impl<'a> TextBuffer<'_>{
             inputthird_text_area: Default::default()
         }
     }
-    /// 1 - Get ID ( u8 ) on the first buffer
+    /// 1 - Get f32 on the first buffer
     /// 2 - Get ID and Message ( String )
     fn get_parsed_data(&self, n:u8)->Result<ParsedBuffer, String>{
         match n{
@@ -165,9 +165,9 @@ impl<'a> TextBuffer<'_>{
                         Err("Nothing to parse".to_string())
                     }
                     Some(mystr) => {
-                        match u8::from_str(mystr){
+                        match f32::from_str(mystr){
                             Ok(x) => {Ok(ParsedBuffer::OneParsed(x))}
-                            Err(x) => {Err(format!("Cannot parse an u8 [{:?}]", x))}
+                            Err(x) => {Err(format!("Cannot parse an f32 [{:?}]", x))}
                         }
                     }
                 }
@@ -201,7 +201,7 @@ impl<'a> TextBuffer<'_>{
 }
 
 enum ParsedBuffer {
-    OneParsed(u8), TwoParsed(u8, String)
+    OneParsed(f32), TwoParsed(u8, String)
 }
 
 pub(in crate::frontend::app) enum TOMLmessages{

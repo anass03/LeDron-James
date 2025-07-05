@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::layout::Rect;
+use ratatui::symbols::bar::Set;
 use ratatui::widgets::ListState;
+use tui_textarea::TextArea;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::ChatCache;
 use crate::frontend::app::models::general_types::{FnList, NetNodeList};
@@ -219,14 +221,56 @@ pub(crate) enum DronePopup{
 pub(crate) enum DroneDataPopup{
     FirstPage(), // View some statistics
 }
-#[derive(Debug, Clone)]
+/*#[derive(Debug, Clone)]
 pub(crate) enum DroneSettingsPopup{
     FirstPage(DroneSettingsFirstPage), // View the drone popup settings
+}*/
+#[derive(Clone, Debug)]
+pub(crate) struct DroneSettingsPopup{
+    pub command_list_state: ListState,
+    pub command_offset:u8, // Which command I've selected
+    pub selected_item: DroneSettingsItems,
+
+    pub drone_pdr: u8,
+    pub command_popup: DroneSettingsCommandsPopup
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) enum DroneSettingsItems{
+    #[default]
+    Blocks, Commands
+}
+impl DroneSettingsPopup{
+    pub fn command_up(&mut self){
+        if self.command_offset > 0 {
+            self.command_offset -= 1;
+            self.command_list_state.select_previous();
+        }
+    }
+    pub fn command_down(&mut self){
+        if self.command_offset < 4 {
+            self.command_offset += 1;
+            self.command_list_state.select_next();
+        }
+    }
+}
+#[derive(Default, Clone, Debug)]
+pub(crate) enum DroneSettingsCommandsPopup{
+    #[default]
+    None,
+    SetPDR(CommandPopup),
+    AddSender(CommandPopup),
+    RemoveSender(CommandPopup),
+    Crash(CommandPopup)
 }
 #[derive(Clone, Debug)]
-pub(crate) struct DroneSettingsFirstPage{
-    pub command_offset:u8, // Which command I've selected
-    pub drone_pdr: u8,
+pub(crate) struct CommandPopup{
+    pub status: SettingsPopupStatus,
+    pub cursor: u8,
+}
+#[derive(Clone, Debug)]
+pub(crate) enum SettingsPopupStatus{
+    Idle, CorrectlySent, Error(String)
 }
 
 

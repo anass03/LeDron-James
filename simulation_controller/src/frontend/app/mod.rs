@@ -18,7 +18,7 @@ use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
-use image::{DynamicImage, ImageBuffer, Rgba};
+use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
 use log::{error, info};
 use rand::Rng;
 use ratatui::style::Stylize;
@@ -104,18 +104,14 @@ impl App<'_>{
             match self.selected_tab{
                 SelectedTab::Topology => {
                     match self.cache.tab1_data.viewing.clone() {
-                        ViewedTab1::Main => {}
-                        ViewedTab1::Popup((id,popup)) => {
+                        ViewedTab1::Popup((_,popup)) => {
                             match popup{
                                 NodePopup::Client(clpop) => {
                                     match clpop {
-                                        ClientPopup::ChatPage(_) => {}
                                         ClientPopup::InternetPage(netpop) => {
                                             match netpop{
-                                                ClientNetPopup::FirstPage(_) => {}
                                                 ClientNetPopup::SecondPage(ndpage) => {
                                                     match ndpage.image_rendering_data {
-                                                        RenderingImage::False => {}
                                                         RenderingImage::True(data) => {
                                                             drawn = true;
                                                             terminal.draw(|f| {
@@ -123,18 +119,19 @@ impl App<'_>{
                                                                 Self::render_image(f, self, data);
                                                             })?;
                                                         }
+                                                        _ => {}
                                                     }
                                                 }
+                                                _ => {}
                                             }
                                         }
-                                        ClientPopup::DataPage(_) => {}
-                                        ClientPopup::SettingsPage(_) => {}
+                                        _ => {}
                                     }
                                 }
-                                NodePopup::Server(_) => {}
-                                NodePopup::Drone(_) => {}
+                                _ => {}
                             }
                         }
+                        _ => {}
                     }
                 }
                 _ => (),
@@ -149,7 +146,7 @@ impl App<'_>{
                 instant = Instant::now();
                 self.tick_refresh();
             }
-            if downloaded_instant.elapsed() > Duration::from_millis(500) {
+            if downloaded_instant.elapsed() > Duration::from_millis(100) {
                 downloaded_instant = Instant::now();
                 self.handle_downloaded_medias();
             }
@@ -302,8 +299,8 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                         channels.push((tx, rx));
                     },
                     RendererCommand::Encode((tx_to_renderer, server_id,media_id,image))=> {
-                        if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                            let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+                        if let Some(rgb_buffer) = ImageBuffer::<Rgb<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
+                            let dynamic_image = DynamicImage::ImageRgb8(rgb_buffer);
                             match Picker::from_query_stdio(){
                                 Ok(pick) => {
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));

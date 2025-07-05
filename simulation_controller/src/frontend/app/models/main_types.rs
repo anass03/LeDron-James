@@ -18,8 +18,16 @@ pub(in crate::frontend::app) struct Settings{
 }
 impl Settings{
     pub(in crate::frontend::app) fn load() ->Self{
+        use std::path::Path;
+
+        let sub_crate_dir = env!("CARGO_MANIFEST_DIR");
+        let workspace_root = Path::new(sub_crate_dir)
+            .parent()
+            .unwrap()
+            .parent()
+            .unwrap();
         Self{
-            toml_path: "topologies/personalized_network.toml".to_string()
+            toml_path: format!("{}/topologies/personalized_network.toml", workspace_root.display())
         }
     }
 }
@@ -160,8 +168,8 @@ impl<'a> Cache<'a> {
                 (colors.len(),colors)
             },
             counter: 0,
-            main_log_state: (true,TuiWidgetState::default()
-                .set_default_display_level(LevelFilter::max())
+            main_log_state: (false,TuiWidgetState::default()
+                .set_default_display_level(LevelFilter::Off)
                 .set_level_for_target("main", LevelFilter::max())),
         }
     }

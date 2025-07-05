@@ -21,7 +21,7 @@ impl App<'_> {
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (id,(channels,media)) in values{
                 match media{
-                    NetCacheMedia::Downloaded(vec) => {
+                    /*NetCacheMedia::Downloaded(vec) => {
                         match channels.0.clone(){
                             None => {}
                             Some(ch_resize_req) => {
@@ -42,7 +42,7 @@ impl App<'_> {
                                 }
                             }
                         }
-                    }
+                    }*/
                     NetCacheMedia::Rendered(ref mut rendered) => {
                         match &channels.1{
                             None => {

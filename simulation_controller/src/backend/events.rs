@@ -259,11 +259,9 @@ impl SimulationControllerData {
                 while let Ok(event) = channel.try_recv() {
                     match event{
                         RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            error!(target: "main", "Received encoded Response");
+                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
                             match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {
-
-                                }
+                                None => {}
                                 Some(hash) => {
                                     match hash.remove(&enc_media){
                                         None => {}
