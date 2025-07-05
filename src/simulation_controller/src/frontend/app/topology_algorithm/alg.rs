@@ -4,6 +4,7 @@ use wg_2024::network::NodeId;
 use crate::backend::sc_models::LogType;
 use crate::backend::simulation_controller::{NetNode, SimulationControllerData};
 use crate::frontend::app::App;
+use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::vectors::{generate_force_vec, Vector};
 use crate::frontend::app::topology_algorithm::alg_models::{DisplayedNode, TopologyAlgorithm, TopologyStatus};
 
@@ -27,70 +28,108 @@ impl App<'_>{
         }
         links.into_iter().collect()
     }
-    pub fn initialize_node_map(&self, top_alg: &mut TopologyAlgorithm ,id:NodeId){
-        top_alg.status = TopologyStatus::Computing;
-        fn create_map(sim: &SimulationControllerData, top_alg:&mut TopologyAlgorithm, connected: &Vec<NodeId>){
-            for id in connected{
-                top_alg.map.insert(*id, DisplayedNode::new_with_position({
-                                                                             if sim.running_network.contains_key(&NetNode::Drone(*id)){
-                                                                                 NetNode::Drone(*id)
-                                                                             }else if sim.running_network.contains_key(&NetNode::Server(*id)){
-                                                                                 NetNode::Server(*id)
+
+    /// Single Nodes Methods for popups
+    pub fn initialize_node_pop_map(&mut self,id:NodeId){
+        fn create_map(id:NodeId, sim: &SimulationControllerData, top_alg:&mut TopologyAlgorithm, connected: &Vec<NodeId>){
+            top_alg.map.insert(id, DisplayedNode::new_with_position({
+                                                                        if sim.running_network.contains_key(&NetNode::Drone(id)){
+                                                                            NetNode::Drone(id)
+                                                                        }else if sim.running_network.contains_key(&NetNode::Server(id)){
+                                                                            NetNode::Server(id)
+                                                                        }else{
+                                                                            NetNode::Client(id)
+                                                                        }
+                                                                    }, Vector::random(100,80)));
+            for n_id in connected{
+                top_alg.map.insert(*n_id, DisplayedNode::new_with_position({
+                                                                             if sim.running_network.contains_key(&NetNode::Drone(*n_id)){
+                                                                                 NetNode::Drone(*n_id)
+                                                                             }else if sim.running_network.contains_key(&NetNode::Server(*n_id)){
+                                                                                 NetNode::Server(*n_id)
                                                                              }else{
-                                                                                 NetNode::Client(*id)
+                                                                                 NetNode::Client(*n_id)
                                                                              }
                                                                          }, Vector::random(100,80)));
             }
         }
-        match &self.simulation_controller_data.running_network.get(&NetNode::Drone(id)){
-            None => {
-                match &self.simulation_controller_data.running_network.get(&NetNode::Server(id)){
+
+        let mut maybe_alg = None;
+        for (x,y,z) in &mut self.cache.tab1_data.netnode_list.items{
+            match x{
+                Node::Client(cl) => {
+                    if cl.id == id{
+                        maybe_alg = Some(z);
+                    }
+                }
+                Node::Server(sr) => {
+                    if sr.id == id{
+                        maybe_alg = Some(z);
+                    }
+                }
+                Node::Drone(dr) => {
+                    if dr.id == id{
+                        maybe_alg = Some(z);
+                    }
+                }
+            }
+        }
+        match maybe_alg{
+            None => {}
+            Some(top_alg) => {
+                top_alg.status = TopologyStatus::Computing;
+                for (x,y) in &self.simulation_controller_data.topology_algorithm_data.map_links{
+                    if x.eq(&id){
+                        top_alg.map_links.push((*x, *y));
+                    }else if y.eq(&id){
+                        top_alg.map_links.push((*x, *y));
+                    }
+                }
+                match &self.simulation_controller_data.running_network.get(&NetNode::Drone(id)){
                     None => {
-                        match &self.simulation_controller_data.running_network.get(&NetNode::Client(id)) {
-                            None => (),
+                        match &self.simulation_controller_data.running_network.get(&NetNode::Server(id)){
+                            None => {
+                                match &self.simulation_controller_data.running_network.get(&NetNode::Client(id)) {
+                                    None => (),
+                                    Some(vec) => {
+                                        create_map(id, &self.simulation_controller_data, top_alg,vec);
+                                    }
+                                }
+                            }
                             Some(vec) => {
-                                create_map(&self.simulation_controller_data, top_alg,vec);
+                                create_map(id, &self.simulation_controller_data, top_alg,vec);
                             }
                         }
                     }
                     Some(vec) => {
-                        create_map(&self.simulation_controller_data, top_alg,vec);
+                        create_map(id, &self.simulation_controller_data, top_alg,vec);
                     }
                 }
             }
-            Some(vec) => {
-                create_map(&self.simulation_controller_data, top_alg,vec);
-            }
         }
-        for (x,y) in &self.simulation_controller_data.topology_algorithm_data.map_links{
-            if x.eq(&id){
-                top_alg.map_links.push((*x, *y));
-            }else if y.eq(&id){
-                top_alg.map_links.push((*x, *y));
-            }
-        }
-
     }
-    pub fn check_topology_status(&mut self){
+
+    /// Check Main Topology Status
+    pub fn check_main_topology_status(&mut self){
         match self.simulation_controller_data.topology_algorithm_data.status{
             TopologyStatus::Stopped => {
                 // Do NUN
             }
             TopologyStatus::ToInitialize => {
                 // Initialize each necessary field
-                self.topology_status_initialize();
+                self.topology_main_status_initialize();
             }
             TopologyStatus::Computing => {
                 // Keep going generating forces and iterating algorithm
                 self.simulation_controller_data.topology_algorithm_data.check_if_nan();
-                self.topology_status_computing();
+                self.topology_main_status_computing();
             }
             TopologyStatus::Converged => {
                 // Do nothing
             }
         }
     }
-    fn topology_status_initialize(&mut self){
+    fn topology_main_status_initialize(&mut self){
         let mut top_alg = &mut self.simulation_controller_data.topology_algorithm_data;
         top_alg.status = TopologyStatus::Computing;
         // Generate random positions for network
@@ -98,7 +137,7 @@ impl App<'_>{
             top_alg.map.insert(node.id().clone(), DisplayedNode::new_with_position(node, Vector::random(100,80)));
         }
     }
-    fn topology_status_computing(&mut self){
+    fn topology_main_status_computing(&mut self){
         match self.generate_all_forces(){
             Ok(hsh) => {
                 for element in hsh{

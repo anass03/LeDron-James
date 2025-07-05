@@ -1131,6 +1131,9 @@ impl SimulationControllerData {
                                     }
                                 }
                             }
+                        },
+                        RendererResponse::Computed(_) => {
+                            // todo()!
                         }
                     }
                 }

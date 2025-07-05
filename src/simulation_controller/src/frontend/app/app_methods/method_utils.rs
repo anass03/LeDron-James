@@ -69,6 +69,8 @@ impl App<'_> {
             let clientc = self.simulation_controller_data.clients.clone();
 
             self.cache.tab1_data.netnode_list.initialize(dronec, serverc, clientc);
+
+
         }
         if !self.cache.main_log_state.0{
             self.cache.main_log_state.0 = true;
@@ -81,8 +83,6 @@ impl App<'_> {
             }
             self.cache.main_log_state.1 = new_state;
         }
-
-
     }
     pub(super) fn clean_topology_inputs_buffer(&mut self){
         self.cache.text_buffer.inputfirst_text_area = TextArea::default();

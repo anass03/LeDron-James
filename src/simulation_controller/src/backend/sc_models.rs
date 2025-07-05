@@ -8,6 +8,8 @@ use server::chat2::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
+use wg_2024::network::NodeId;
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 /// Used in multiple crates, needs to be pub
 #[derive(Clone, Debug)]
@@ -102,10 +104,14 @@ impl Statistics{
 }
 
 pub enum RendererCommand{
-    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((Sender<ResizeRequest>,ServerId, MediaId, Image))
+    Stop,
+    AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)),
+    Encode((Sender<ResizeRequest>,ServerId, MediaId, Image)),
+    ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
 }
 pub enum RendererResponse{
-    Encoded((ServerId,MediaId, ThreadProtocol))
+    Encoded((ServerId,MediaId, ThreadProtocol)),
+    Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 
 pub struct NetCache{

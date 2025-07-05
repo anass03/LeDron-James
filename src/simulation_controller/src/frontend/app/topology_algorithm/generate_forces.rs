@@ -28,8 +28,8 @@ impl App<'_>{
         // Get Vector Positioning
         let mut forces = vec![];
 
-        forces.push(self.generate_center_attraction_force(vector)?);
-        forces.push(self.generate_repulsion_force(id)?);
+        forces.push(self.generate_center_attraction_force(vector)?); // no self
+        forces.push(self.generate_repulsion_force(id)?); // no self
         forces.push(self.generate_spring_force(id)?);
         forces.push(self.generate_link_repulsion_force(id)?);
         forces.push(self.generate_border_repulsion_force(vector)?);
@@ -90,7 +90,6 @@ impl App<'_>{
         } else {
             NetNode::Server(id)
         };
-
         let neighbors = self
             .simulation_controller_data
             .running_network
