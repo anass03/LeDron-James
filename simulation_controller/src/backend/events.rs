@@ -1,5 +1,9 @@
 use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::mpsc;
+use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use log::{debug, error, info};
 use wg_2024::controller::DroneEvent;
 use wg_2024::network::NodeId;
@@ -130,7 +134,7 @@ impl SimulationControllerData {
                 self.net_cache.downloaded_medias.insert(server_id, media_map);*/
 
                 // Construct filename based on file ID and inferred extension
-                /*let path = PathBuf::from("assets").join(&file_id);
+                let path = self.download_folder.join(&file_id);
 
                 fs::write(&path, &file).expect("file not downloaded");
 
@@ -161,8 +165,8 @@ impl SimulationControllerData {
                         .expect("Unable to open file on Linux");
                 }
 
-                self.logs.push_sc_log(LogType::INFO, format!("File {file_id} received from Server {server_id}"));
-*/
+                return Err((LogType::INFO, format!("File {file_id} received from Server {server_id}")))
+
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
             => {
@@ -185,14 +189,14 @@ impl SimulationControllerData {
                 info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list) },
             ServerToClient::Media(server_id, media_id, image)
             => {
-                self.update_net_cache_media(server_id, media_id, Some(image), None)?
+                self.update_net_cache_media(server_id, media_id.clone(), Some(image.clone()), None)?;
 
                 //----------------------------------------------------------------------
-                /*let extension = match get_extension(&media_id) {
+                let extension = match get_extension(&media_id) {
                     Some(extension) => extension,
                     None => return Err((LogType::INFO, format!("Unknown extension for file {media_id}"))),
                 };
-                let path = format!("assets/{}", media_id);
+                let path = format!("{}/{}", self.download_folder.to_str().unwrap(), media_id);
                 let path_ref = Path::new(&path);
 
                 if let Some(rgba_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
@@ -210,14 +214,13 @@ impl SimulationControllerData {
 
                     match save_result {
                         Ok(_) => {
-                            self.logs.push_sc_log(LogType::INFO, format!("Media {} from Server {server_id} saved as {}", media_id, path));
-                            open_image(&path)
+                            info!(target: "main", "Image saved: {path}");
                         },
-                        Err(e) => self.logs.push_sc_log(LogType::ERROR, format!("Error saving media {}: {}", media_id, e)),
+                        Err(e) => return Err((LogType::ERROR, format!("Error saving media {}: {}", media_id, e)))
                     }
                 } else {
-                    self.logs.push_sc_log(LogType::ERROR, format!("Impossible to  generate image from media {}", media_id));
-                }*/
+                    return Err((LogType::ERROR, format!("Impossible to  generate image from media {}", media_id)))
+                }
             },
             ServerToClient::ClientList(client_id, server_id, client_list)
             => {
@@ -350,5 +353,25 @@ impl SimulationControllerData {
             self.stats.network_reliability = ((1.0
                 - (self.stats.total_packet_dropped as f64 / self.stats.total_packet_exchanged as f64)) * 100.0) as u8;
         }
+    }
+}
+
+#[inline]
+fn get_extension(media_id: &MediaId) -> Option<&str> {
+    media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
+}
+
+fn open_image(path: &str) {
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open").arg(path).spawn().ok();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd").args(["/C", "start", path]).spawn().ok();
+    }
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open").arg(path).spawn().ok();
     }
 }

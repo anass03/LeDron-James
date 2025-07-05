@@ -24,29 +24,8 @@ fn main() -> std::io::Result<()> {
     debug!(target:"main", "Initialized Logging");
 
     let mut thread_handles = HashMap::new();
-    let mut simulation_controller_data = SimulationControllerData {
-        drones: vec![],
-        clients: vec![],
-        servers: vec![],
-        drone_types: Default::default(),
-        running_network: HashMap::new(),
-        drone_command_sender: Default::default(),
-        client_command_sender: Default::default(),
-        server_command_sender: Default::default(),
-        drone_event_receiver: unbounded().1,
-        host_event_receiver: unbounded().1,
-        packet_sender: Default::default(),
-        logs: Logs::default(),
-        stats: Statistics::default(),
-        topology_algorithm_data: TopologyAlgorithm::default(),
-        chat_cache: ChatCache::default(),
-        net_cache: NetCache::default(),
-
-        tx_to_renderer: None,
-        rx_from_renderer: None,
-        host_log_state: Default::default(),
-    };
-    match initialize("topologies/personalized_network.toml") {
+    let mut simulation_controller_data = SimulationControllerData::default();
+    match initialize("topologies/double_chain_network.toml") {
         Ok((simulation_controller, handles)) => {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;

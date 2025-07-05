@@ -392,23 +392,3 @@ fn forward_node_command<T: NodeCommand>(sender: &Sender<T>, command: T, first_id
         .map_err(|e| e.to_string())
         .map(|_| debug!(target: "main", "Asking to add {second_type} {second_id} Sender to {first_type} {first_id}"))
 }
-
-#[inline]
-fn get_extension(media_id: &MediaId) -> Option<&str> {
-    media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id)
-}
-
-fn open_image(path: &str) {
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open").arg(path).spawn().ok();
-    }
-    #[cfg(target_os = "windows")]
-    {
-        Command::new("cmd").args(["/C", "start", path]).spawn().ok();
-    }
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open").arg(path).spawn().ok();
-    }
-}

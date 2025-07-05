@@ -1,8 +1,9 @@
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use std::collections::HashMap;
 use std::fmt::Display;
 use client::ClientCommand;
 use std::collections::HashSet;
+use std::path::PathBuf;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
 use wg_2024::config::Client as ClientConfig;
@@ -41,6 +42,7 @@ pub struct SimulationControllerData {
     pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
+    pub download_folder: PathBuf,
 
     pub host_log_state: HashMap<NodeId, (String, TuiWidgetState)>,
 
@@ -123,6 +125,7 @@ impl SimulationControllerData {
             running_network,
             logs: Logs::default(),
             stats,
+            download_folder: PathBuf::from("/assets"),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
 
             host_log_state,
@@ -132,6 +135,33 @@ impl SimulationControllerData {
 
             tx_to_renderer: None,
             rx_from_renderer: None,
+        }
+    }
+}
+
+impl Default for SimulationControllerData {
+    fn default() -> Self {
+        Self {
+            drones: vec![],
+            clients: vec![],
+            servers: vec![],
+            drone_types: Default::default(),
+            running_network: HashMap::new(),
+            drone_command_sender: Default::default(),
+            client_command_sender: Default::default(),
+            server_command_sender: Default::default(),
+            drone_event_receiver: unbounded().1,
+            host_event_receiver: unbounded().1,
+            packet_sender: Default::default(),
+            logs: Logs::default(),
+            stats: Statistics::default(),
+            topology_algorithm_data: TopologyAlgorithm::default(),
+            chat_cache: ChatCache::default(),
+            net_cache: NetCache::default(),
+            download_folder: PathBuf::from("/assets"),
+            tx_to_renderer: None,
+            rx_from_renderer: None,
+            host_log_state: Default::default(),
         }
     }
 }
