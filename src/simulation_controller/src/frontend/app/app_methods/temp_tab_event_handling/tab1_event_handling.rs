@@ -6,10 +6,11 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
 use server::chat2::Chat;
 use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia};
+use crate::backend::simulation_controller::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, DroneDataPopup, DronePopup, DroneSettingsFirstPage, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, CommandPopup, DroneDataPopup, DronePopup, DroneSettingsCommandsPopup, DroneSettingsItems, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, SettingsPopupStatus, ViewedTab1};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -187,10 +188,10 @@ impl App<'_> {
                         id,
                         NodePopup::Drone(
                             DronePopup::SettingsPage(
-                                DroneSettingsPopup::FirstPage(DroneSettingsFirstPage { command_offset: 0, drone_pdr: 0 })
+                                DroneSettingsPopup{ command_list_state: Default::default(), command_offset: 0, selected_item: DroneSettingsItems::Blocks, drone_pdr: 0, command_popup: Default::default() })
                             )
                         )
-                    ));
+                    );
             }
             _ => {
                 self.cache.tab1_data.popup_cursor = 0;
@@ -872,10 +873,148 @@ impl App<'_> {
                 }
             }
             PopupSelection::OptArea => {
-                
+                match client_popup{
+                    DronePopup::DataPage(datapage) => {
+
+                    }
+                    DronePopup::SettingsPage(settpage) => {
+                        match settpage.command_popup{
+                            DroneSettingsCommandsPopup::None => {
+                                self.handle_sett_drone_page(key,id,settpage)
+                            }
+                            DroneSettingsCommandsPopup::SetPDR(commpop) => {
+                                match key {
+                                    _ => (),
+                                }
+
+                            }
+                            DroneSettingsCommandsPopup::AddSender(addsend) => {
+
+                            }
+                            DroneSettingsCommandsPopup::RemoveSender(remsend) => {
+
+                            }
+                            DroneSettingsCommandsPopup::Crash(crapop) => {
+
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+    fn handle_data_drone_page(&mut self, key:KeyEvent,id:NodeId, data_page: DroneDataPopup){
+
+    }
+    fn handle_sett_drone_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup){
+        match sett_page.selected_item{
+            DroneSettingsItems::Blocks => {
+                match key.code{
+                    KeyCode::Right => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        match self.cache.tab1_data.popup_cursor{
+                            0 => {
+                                sett_page.selected_item=DroneSettingsItems::Commands;
+                            }
+                            1 => {
+                                // Recompute the map?
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            DroneSettingsItems::Commands => {
+                match key.code{
+                    KeyCode::Char('i') | KeyCode::Char('I') => {
+                        // todo!()
+                    }
+                    KeyCode::Up => {
+                        sett_page.command_up();
+                    },
+                    KeyCode::Down => {
+                        sett_page.command_down();
+                    }
+                    KeyCode::Enter => {
+                        // Which command I've selected?
+                        match sett_page.command_offset {
+                            0 => {
+                                // SetPDR
+                                sett_page.command_popup = DroneSettingsCommandsPopup::SetPDR(CommandPopup{
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            1 => {
+                                // Add Sender
+                                sett_page.command_popup = DroneSettingsCommandsPopup::AddSender(CommandPopup{
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            2 => {
+                                // Remove Sender
+                                sett_page.command_popup = DroneSettingsCommandsPopup::RemoveSender(CommandPopup{
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            3 => {
+                                // Crash
+                                sett_page.command_popup = DroneSettingsCommandsPopup::Crash(CommandPopup{
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            4 => {
+                                // Recompute Topology Map
+                                for (node,cds,topalg) in self.cache.tab1_data.netnode_list.items{
+                                    match node{
+                                        Node::Client(cl) => {
+                                            if cl.id == id{
+
+                                            }
+                                        }
+                                        Node::Server(sr) => {
+                                            if sr.id == id{
+
+                                            }
+                                        }
+                                        Node::Drone(dr) => {
+                                            if dr.id == id{
+
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Drone(
+                    DronePopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+
 
 }
 

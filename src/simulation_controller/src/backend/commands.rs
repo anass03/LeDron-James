@@ -1117,15 +1117,15 @@ impl SimulationControllerData {
                 while let Ok(event) = channel.try_recv() {
                     match event{
                         RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            error!(target: "main", "Received encoded Response");
+                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
                             match self.net_cache.downloaded_medias.get_mut(&enc_server) {
                                 None => {
-
+                                    error!(target: "main", "[LEDRON-CLI] Couldn't find server id of the encoded media!")
                                 }
                                 Some(hash) => {
                                     match hash.remove(&enc_media){
                                         None => {}
-                                        Some(((ch1,ch2),net)) => {
+                                        Some(((ch1,ch2),_)) => {
                                             hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
                                         }
                                     }

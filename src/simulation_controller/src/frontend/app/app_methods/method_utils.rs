@@ -32,28 +32,7 @@ impl App<'_> {
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (id,(channels,media)) in values{
                 match media{
-                    NetCacheMedia::Downloaded(vec) => {
-                        match channels.0.clone(){
-                            None => {}
-                            Some(ch_resize_req) => {
-                                match self.simulation_controller_data.tx_to_renderer.clone(){
-                                    None => {
-                                        // Impossible
-                                    }
-                                    Some(ch_to_renderer) => {
-                                        match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req,server_id.clone(),id.clone(),vec.clone()))) {
-                                            Ok(_) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Successfully sent encode request to the renderer".to_string())
-                                            }
-                                            Err(str) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+
                     NetCacheMedia::Rendered(ref mut rendered) => {
                         match &channels.1{
                             None => {

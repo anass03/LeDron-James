@@ -168,8 +168,8 @@ impl<'a> Cache<'a> {
                 (colors.len(),colors)
             },
             counter: 0,
-            main_log_state: (true,TuiWidgetState::default()
-                .set_default_display_level(LevelFilter::max())
+            main_log_state: (false,TuiWidgetState::default()
+                .set_default_display_level(LevelFilter::Off)
                 .set_level_for_target("main", LevelFilter::max())),
         }
     }

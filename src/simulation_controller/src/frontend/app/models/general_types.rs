@@ -155,7 +155,7 @@ impl<'a> TextBuffer<'_>{
             inputthird_text_area: Default::default()
         }
     }
-    /// 1 - Get ID ( u8 ) on the first buffer
+    /// 1 - Get f32 on the first buffer
     /// 2 - Get ID and Message ( String )
     fn get_parsed_data(&self, n:u8)->Result<ParsedBuffer, String>{
         match n{
@@ -165,9 +165,9 @@ impl<'a> TextBuffer<'_>{
                         Err("Nothing to parse".to_string())
                     }
                     Some(mystr) => {
-                        match u8::from_str(mystr){
+                        match f32::from_str(mystr){
                             Ok(x) => {Ok(ParsedBuffer::OneParsed(x))}
-                            Err(x) => {Err(format!("Cannot parse an u8 [{:?}]", x))}
+                            Err(x) => {Err(format!("Cannot parse an f32 [{:?}]", x))}
                         }
                     }
                 }
@@ -201,7 +201,7 @@ impl<'a> TextBuffer<'_>{
 }
 
 enum ParsedBuffer {
-    OneParsed(u8), TwoParsed(u8, String)
+    OneParsed(f32), TwoParsed(u8, String)
 }
 
 pub(in crate::frontend::app) enum TOMLmessages{

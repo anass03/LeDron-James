@@ -1027,6 +1027,7 @@ pub(super) mod net_rendering{
     use std::sync::mpsc::Receiver;
     use client::Client;
     use host::{ClientId, FileId, MediaId, ServerId};
+    use log::error;
     use ratatui::{widgets, Frame};
     use ratatui::style::{Styled, Stylize};
     use ratatui::text::{ToSpan, ToText};
@@ -1201,6 +1202,18 @@ pub(super) mod net_rendering{
                                                             0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
                                                         }
                                                     }
+                                                    NetCacheMedia::Downloaded(_) => {
+                                                        match app.cache.counter % 20 {
+                                                            (num) => {
+                                                                if num<10{
+                                                                    '✓'
+                                                                }else{
+                                                                    ' '
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    NetCacheMedia::Rendered(_) => '✓',
                                                     _ => {
                                                         ' '
                                                     }
@@ -1250,11 +1263,17 @@ pub(super) mod net_rendering{
                                                         }
                                                     }
                                                     NetCacheFile::Downloaded(_) => {
-                                                        match app.cache.counter % 2 {
-                                                            0 => '📱', 1=> '📲', _ => ' '
+                                                        match app.cache.counter % 20 {
+                                                            (num) => {
+                                                                if num<10{
+                                                                    '✓'
+                                                                }else{
+                                                                    ' '
+                                                                }
+                                                            }
                                                         }
                                                     }
-                                                    NetCacheFile::Rendered(_) => '✅',
+                                                    NetCacheFile::Rendered(_) => '✓',
                                                 };
                                                 ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
                                             }
@@ -1661,12 +1680,12 @@ pub(super) mod net_rendering{
     fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
         match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
             None => {
-
+                error!(target: "main", "[LEDRON-CLI] Couldn't find server id in downloaded media while rendering")
             }
             Some(hash) => {
                 match hash.get(&file_id){
                     None => {
-
+                        error!(target: "main", "[LEDRON-CLI] Couldn't find file id in downloaded media while rendering")
                     }
                     Some((_,file_status)) => {
                         match file_status{
@@ -1675,10 +1694,10 @@ pub(super) mod net_rendering{
                                 render_loading_gauge(app,area,buf,file_status, ndpage_data.selected_server)
                             }
                             NetCacheMedia::Downloaded(vec) => {
-                                // todo!()
+                                render_waiting_for_rendering(app, area, buf);
                             }
                             NetCacheMedia::Rendered(image_protocol) => {
-                                // I render it externally so no need to do it again here,
+                                // I render it externally ddso no need to do it again here,
                                 // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
                             }
                             NetCacheMedia::FatalErrorRendering() => {
@@ -1690,61 +1709,117 @@ pub(super) mod net_rendering{
             }
         }
     }
-    fn render_loading_gauge(app:&App, area:Rect, buf:&mut Buffer, net_cache_media: &NetCacheMedia, server_id: ServerId){
-        match net_cache_media{
-            NetCacheMedia::Downloading(status) => {
-                let title = Line::from(format!(" Downloading media from {:?}{:?} ",server_id,
-                                               match app.cache.counter%3{
-                                                   0  => ".",
-                                                   1 => "..",
-                                                   2 => "...",
-                                                   _ => ""
-                                               }
-                )).centered();
+    fn render_loading_gauge(app: &App, area: Rect, buf: &mut Buffer, net_cache_media: &NetCacheMedia, server_id: ServerId) {
+        // Split area vertically: [top, gauge, info, bottom]
+        let [top_area, gauge_area, info_area, bottom_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(20),
+                Constraint::Length(3), // Gauge height
+                Constraint::Percentage(20),
+                Constraint::Percentage(40),
+            ])
+            .areas(area);
 
-                let title_block = Block::new()
-                    .borders(Borders::NONE)
-                    .padding(Padding::vertical(1))
-                    .title(title);
+        // Top: Animated spinner or bouncing dots
+        let spinner_frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+        let spinner = spinner_frames[(app.cache.counter as usize) % spinner_frames.len()];
+        let spinner_line = Line::from(format!("{} Downloading from {:?}", spinner, server_id))
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        let spinner_para = Paragraph::new(spinner_line)
+            .alignment(Alignment::Center);
+        spinner_para.render(top_area, buf);
 
-                let label = format!("{:.1}%", status);
-
-                Gauge::default()
-                    .block(title_block)
-                    .gauge_style(app.animation_color())
-                    .ratio(*status as f64 / 100.0)
-                    .label(label)
-                    .use_unicode(true)
-                    .render(area, buf);
-
+        // Gauge: Centered, smaller
+        let (label, ratio) = match net_cache_media {
+            NetCacheMedia::Downloading(status) | NetCacheMedia::Rendering(status) => {
+                (format!("{:.1}%", status), *status as f64 / 100.0)
             }
-            NetCacheMedia::Rendering(status) => {
-                let title = Line::from(format!(" Rendering media, please wait{:?} ",
-                                               match app.cache.counter%3{
-                                                   0  => ".",
-                                                   1 => "..",
-                                                   2 => "...",
-                                                   _ => ""
-                                               }
-                )).centered();
+            _ => ("0%".to_string(), 0.0),
+        };
+        let gauge_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title("Progress");
+        Gauge::default()
+            .block(gauge_block)
+            .gauge_style(app.animation_color())
+            .ratio(ratio)
+            .label(label)
+            .use_unicode(true)
+            .render(gauge_area, buf);
 
-                let title_block = Block::new()
-                    .borders(Borders::NONE)
-                    .padding(Padding::vertical(1))
-                    .title(title);
+        // Info: Show what is happening
+        let info_lines = match net_cache_media {
+            NetCacheMedia::Downloading(_) => vec![
+                Line::from("Downloading media from server...").style(Style::default().fg(Color::Gray)),
+                Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
+            ],
+            NetCacheMedia::Rendering(_) => vec![
+                Line::from("Rendering image, please wait...").style(Style::default().fg(Color::Gray)),
+                Line::from("Rendering time depends on image size.").style(Style::default().fg(Color::Gray)),
+            ],
+            _ => vec![],
+        };
+        let info_para = Paragraph::new(info_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE));
+        info_para.render(info_area, buf);
 
-                let label = format!("{:.1}%", status);
+        // Bottom: Fun tip or status
+        let tips = [
+            "💡 Tip: You can continue browsing while downloading!",
+            "💡 Tip: Large images may take longer to render.",
+            "⁉️ Question: What came first, the chicken or the egg?",
+            "💡 Tip: Try uploading smaller images for faster preview.",
+            "🐛 Fun Fact: Bugs travel faster in production",
+            "💡 Tip: The spinner is animated!",
+            "🎭 Wisdom: There are 10 kinds of people: those who understand binary and those who don’t."
+        ];
+        // Make the tip change 4-5x slower
+        let tip = tips[(app.cache.counter as usize / 8) % tips.len()];
+        let tip_line = Line::from(tip).style(Style::default().fg(Color::Cyan));
+        let tip_para = Paragraph::new(tip_line)
+            .alignment(Alignment::Center);
+        tip_para.render(bottom_area, buf);
+    }
+    fn render_waiting_for_rendering(app: &App, area: Rect, buf: &mut Buffer) {
+        let [top_area, center_area, bottom_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+            ])
+            .areas(area);
 
-                Gauge::default()
-                    .block(title_block)
-                    .gauge_style(app.animation_color())
-                    .ratio(*status as f64 / 100.0)
-                    .label(label)
-                    .use_unicode(true)
-                    .render(area, buf);
-            }
-            _ => (),
-        }
+        // Top: Animated spinner
+        let spinner_chars = ['|', '/', '-', '\\'];
+        let spinner = spinner_chars[(app.cache.counter as usize) % spinner_chars.len()];
+        let spinner_line = Line::from(format!("  {}  Waiting for rendering...", spinner))
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        let spinner_para = Paragraph::new(spinner_line)
+            .alignment(Alignment::Center);
+        spinner_para.render(top_area, buf);
+
+        // Center: Info
+        let info_lines = vec![
+            Line::from("Image downloaded, waiting for renderer thread...").style(Style::default().fg(Color::Gray)),
+            Line::from("This may take a few seconds for large images.").style(Style::default().fg(Color::Gray)),
+            Line::from(""),
+            Line::from("💡 Tip: Try smaller images for faster preview.").style(Style::default().fg(Color::Cyan)),
+        ];
+        let info_para = Paragraph::new(info_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE));
+        info_para.render(center_area, buf);
+
+        // Bottom: Status
+        let status_line = Line::from("Renderer is busy. Please wait...")
+            .style(Style::default().fg(Color::Magenta));
+        let status_para = Paragraph::new(status_line)
+            .alignment(Alignment::Center);
+        status_para.render(bottom_area, buf);
     }
 }
 pub(super) mod settings_rendering{

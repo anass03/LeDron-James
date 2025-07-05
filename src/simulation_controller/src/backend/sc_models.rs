@@ -148,6 +148,7 @@ pub enum NetCacheMedia {
     // re-rendered each time Terminal changes its size.
     FatalErrorRendering(), // Fatal error rendering, file has to be re-sent!
 }
+
 impl Debug for NetCacheMedia{
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self{
