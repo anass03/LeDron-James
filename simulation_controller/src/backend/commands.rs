@@ -18,7 +18,7 @@ use crate::backend::simulation_controller::SimulationControllerData;
 use crate::backend::sc_models::{NetNode, NodeCommand, NodeType};
 use crate::backend::sc_models::{LogType, ChatList, NetCacheMedia, RendererResponse, FileRendererUpdate, RendererCommand};
 use host::ServerTypes::*;
-use petgraph::visit::Topo;
+use petgraph::visit::{Topo, Walker};
 use ratatui_image::thread::ResizeRequest;
 use server::chat::Chat;
 use server::MediaServerError;
@@ -94,6 +94,9 @@ impl SimulationControllerData {
             Some(drone_command_sender) => {
                 match drone_command_sender.send(command) {
                     Ok(()) => {
+                        if let Some(drone) = self.drones.iter_mut().find(|drone| drone.id == drone_id) {
+                            drone.pdr = valid_pdr;
+                        }
                         info!(target: "main", "Changing Drone {drone_id} PDR to: {valid_pdr}");
                         Ok(()) },
                     Err(e) => Err(e.to_string()),
