@@ -1,19 +1,21 @@
 use std::default::Default;
-use ratatui::layout::Rect;
+use ratatui::layout::{Alignment, Rect};
 use ratatui::buffer::Buffer;
-use ratatui::layout::Alignment::Center;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{NodePopup, PopupSelection, ViewedTab1};
-use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, POPUP_BG_COLOR};
+use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
 // popup code
 
 use ratatui::layout::{Constraint, Direction, Layout};
-use ratatui::style::{Color, Style, Stylize};
+use ratatui::style::{Color, Modifier, Style, Stylize};
+use ratatui::text::Line;
 use ratatui::widgets;
-use ratatui::widgets::{Block, BorderType, Borders, Widget};
-use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine,};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, };
 use crate::backend::sc_models::NetNode;
+use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use textwrap;
 
 pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -235,14 +237,14 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
 
 pub(super) mod data_rendering{
     use ratatui::buffer::Buffer;
-    use ratatui::layout::{Direction, Layout, Rect, Constraint};
+    use ratatui::layout::{Constraint, Direction, Layout, Rect};
     use ratatui::prelude::Color;
     use ratatui::style::{Style, Stylize};
     use ratatui::widgets::{Block, BorderType, Borders, Widget};
-    use tui_logger::{TuiLoggerWidget, TuiWidgetState};
+    use tui_logger::TuiLoggerWidget;
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
-    use crate::frontend::app::ui::tabs::{process_log_paragraph, MAIN_BLOCK_BORDERS};
+    use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
 
     // For Client & Server
     pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
@@ -338,9 +340,167 @@ pub(super) mod data_rendering{
             }
         }
     }
-    // Download / upload
-    // Cpu utilize [?]
-    // PDR Expected -> BarCHART
-    //
+
 }
 
+
+// Popup border color based on status
+pub fn popup_border_color(status: &crate::frontend::app::models::tab1_types::SettingsPopupStatus) -> Color {
+    use crate::frontend::app::models::tab1_types::SettingsPopupStatus::*;
+    match status {
+        CorrectlySent => Color::Green,
+        Error(_) => Color::Red,
+        Idle => MAIN_BLOCK_BORDERS,
+    }
+}
+
+// Returns a smaller centered popup area
+pub fn small_centered_popup_area(area: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(30),
+            Constraint::Percentage(40),
+            Constraint::Percentage(30),
+        ])
+        .split(area);
+    let vertical_center = popup_layout[1];
+    let horizontal = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(25),
+            Constraint::Percentage(50),
+            Constraint::Percentage(25),
+        ])
+        .split(vertical_center);
+    horizontal[1]
+}
+
+pub(super) fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
+    let popup_area = small_centered_popup_area(area);
+    widgets::Clear.render(popup_area, buf);
+    let block = Block::default()
+        .title("Add Sender")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(popup_border_color(&cmd.status)));
+    let inner = block.inner(popup_area);
+    block.render(popup_area, buf);
+    let [input_area, button_area, status_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Min(2),
+        ])
+        .areas(inner);
+    let mut nodeid_block = Block::default()
+        .title("Node ID (u8)")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(
+            if cmd.cursor == 0{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }));
+    let inner_nodeid = nodeid_block.inner(input_area);
+    nodeid_block.render(input_area, buf);
+    app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
+    let send_button = Paragraph::new("[ Send ]")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(
+            if cmd.cursor == 1{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ).add_modifier(Modifier::BOLD));
+    send_button.render(button_area, buf);
+    match &cmd.status {
+        crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
+            let msg = Paragraph::new("Correctly sent!")
+                .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                .alignment(Alignment::Center);
+            msg.render(status_area, buf);
+        },
+        crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
+            // Wrap long error messages to fit in multiple rows
+            let error_text = format!("Error: {}", e);
+            let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
+            let lines: Vec<Line> = wrapped_lines.iter()
+                .map(|line| Line::from(line.to_string())
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+                .collect();
+            let msg = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            msg.render(status_area, buf);
+        },
+        _ => {},
+    }
+}
+
+pub(super) fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
+    let popup_area = small_centered_popup_area(area);
+    widgets::Clear.render(popup_area, buf);
+    let block = Block::default()
+        .title("Remove Sender")
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(popup_border_color(&cmd.status)));
+    let inner = block.inner(popup_area);
+    block.render(popup_area, buf);
+    let [input_area, button_area, status_area] = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Length(3),
+            Constraint::Min(2),
+        ])
+        .areas(inner);
+    let mut nodeid_block = Block::default()
+        .title("Node ID (u8)")
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(
+            if cmd.cursor == 0{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ));
+    let inner_nodeid = nodeid_block.inner(input_area);
+    nodeid_block.render(input_area, buf);
+    app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
+    let send_button = Paragraph::new("[ Send ]")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(
+            if cmd.cursor == 1{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ).add_modifier(Modifier::BOLD));
+    send_button.render(button_area, buf);
+    match &cmd.status {
+        crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
+            let msg = Paragraph::new("Correctly sent!")
+                .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                .alignment(Alignment::Center);
+            msg.render(status_area, buf);
+        },
+        crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
+            // Wrap long error messages to fit in multiple rows
+            let error_text = format!("Error: {}", e);
+            let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
+            let lines: Vec<Line> = wrapped_lines.iter()
+                .map(|line| Line::from(line.to_string())
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+                .collect();
+            let msg = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
+            msg.render(status_area, buf);
+        },
+        _ => {},
+    }
+}

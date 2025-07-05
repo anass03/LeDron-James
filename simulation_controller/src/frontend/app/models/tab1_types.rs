@@ -203,13 +203,66 @@ pub(crate) enum ClientDataPopup{
     FirstPage(), // View some statistics
 }
 #[derive(Debug, Clone)]
-pub(crate) enum ClientSettingsPopup{
-    FirstPage(), // View the client popup settings
+pub(crate) struct ClientSettingsPopup{
+    pub command_offset:u8, // Which command I've selected
+
+    pub command_popup: ClientSettingsCommandsPopup
+}
+impl ClientSettingsPopup{
+    pub fn command_up(&mut self){
+        if self.command_offset > 0 {
+            self.command_offset -= 1;
+        }
+    }
+    pub fn command_down(&mut self){
+        if self.command_offset < 2 {
+            self.command_offset += 1;
+        }
+    }
+}
+
+#[derive(Default, Clone, Debug)]
+pub(crate) enum ClientSettingsCommandsPopup{
+    #[default]
+    None,
+    AddSender(CommandPopup),
+    RemoveSender(CommandPopup),
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum ServerPopup{
-    FirstPage()
+    DataPage(ServerDataPopup),
+    SettingsPage(ServerSettingsPopup)
+}
+#[derive(Clone, Debug)]
+pub(crate) struct ServerSettingsPopup{
+    pub command_offset:u8, // Which command I've selected
+
+    pub command_popup: ServerSettingsCommandsPopup
+}
+impl ServerSettingsPopup{
+    pub fn command_up(&mut self){
+        if self.command_offset > 0 {
+            self.command_offset -= 1;
+        }
+    }
+    pub fn command_down(&mut self){
+        if self.command_offset < 2 {
+            self.command_offset += 1;
+        }
+    }
+}
+#[derive(Default, Clone, Debug)]
+pub(crate) enum ServerSettingsCommandsPopup{
+    #[default]
+    None,
+    AddSender(CommandPopup),
+    RemoveSender(CommandPopup),
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum ServerDataPopup{
+    FirstPage(), // View some statistics
 }
 #[derive(Debug, Clone)]
 pub(crate) enum DronePopup{
@@ -227,7 +280,6 @@ pub(crate) enum DroneSettingsPopup{
 }*/
 #[derive(Clone, Debug)]
 pub(crate) struct DroneSettingsPopup{
-    pub command_list_state: ListState,
     pub command_offset:u8, // Which command I've selected
 
     pub drone_pdr: f32,
@@ -238,13 +290,11 @@ impl DroneSettingsPopup{
     pub fn command_up(&mut self){
         if self.command_offset > 0 {
             self.command_offset -= 1;
-            self.command_list_state.select_previous();
         }
     }
     pub fn command_down(&mut self){
         if self.command_offset < 4 {
             self.command_offset += 1;
-            self.command_list_state.select_next();
         }
     }
 }
@@ -257,11 +307,15 @@ pub(crate) enum DroneSettingsCommandsPopup{
     RemoveSender(CommandPopup),
     Crash(CommandPopup)
 }
+
+// Common between all the nodes
+
 #[derive(Clone, Debug)]
 pub(crate) struct CommandPopup{
     pub status: SettingsPopupStatus,
     pub cursor: u8,
 }
+
 #[derive(Clone, Debug)]
 pub(crate) enum SettingsPopupStatus{
     Idle, CorrectlySent, Error(String)

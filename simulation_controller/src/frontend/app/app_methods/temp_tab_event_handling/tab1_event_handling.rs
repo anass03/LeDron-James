@@ -9,7 +9,7 @@ use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia};
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, CommandPopup, DroneDataPopup, DronePopup, DroneSettingsCommandsPopup, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, SettingsPopupStatus, ViewedTab1};
+use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsCommandsPopup, ClientSettingsPopup, CommandPopup, DroneDataPopup, DronePopup, DroneSettingsCommandsPopup, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerDataPopup, ServerPopup, ServerSettingsCommandsPopup, ServerSettingsPopup, SettingsPopupStatus, ViewedTab1};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 impl App<'_> {
@@ -73,7 +73,9 @@ impl App<'_> {
                                             self.cache.tab1_data.viewing =
                                                 ViewedTab1::Popup((
                                                     sr.id,
-                                                    NodePopup::Server(ServerPopup::FirstPage())
+                                                    NodePopup::Server(ServerPopup::DataPage(
+                                                        ServerDataPopup::FirstPage()
+                                                    ))
                                                 ))
                                         }
                                         Node::Drone(dr) => {
@@ -162,7 +164,10 @@ impl App<'_> {
                     ViewedTab1::Popup((
                         id,
                         NodePopup::Client(ClientPopup::SettingsPage(
-                            ClientSettingsPopup::FirstPage()
+                            ClientSettingsPopup{
+                                command_offset: 0,
+                                command_popup: Default::default(),
+                            }
                         ))
                     ))
             }
@@ -194,7 +199,10 @@ impl App<'_> {
                         id,
                         NodePopup::Drone(
                             DronePopup::SettingsPage(
-                                DroneSettingsPopup{ command_list_state: Default::default(), command_offset: 0, drone_pdr: pdr, command_popup: Default::default() })
+                                DroneSettingsPopup{ command_offset: 0,
+                                    drone_pdr: pdr,
+                                    command_popup: Default::default()
+                                })
                             )
                         )
                     );
@@ -204,6 +212,39 @@ impl App<'_> {
             }
         }
     }
+    fn coordinate_server_popup_cursor_with_opt_menu(&mut self, id:NodeId, current_cursor: usize){
+        match current_cursor{
+            0 => {
+                self.cache.tab1_data.viewing =
+                    ViewedTab1::Popup((
+                        id,
+                        NodePopup::Server(
+                            ServerPopup::DataPage(
+                                ServerDataPopup::FirstPage()
+                            )
+                        )
+                    ));
+            }
+            1 => {
+                self.cache.tab1_data.viewing =
+                    ViewedTab1::Popup((
+                        id,
+                        NodePopup::Server(
+                            ServerPopup::SettingsPage(
+                                ServerSettingsPopup{
+                                    command_offset: 0,
+                                    command_popup: Default::default()
+                                })
+                        )
+                    )
+                    );
+            }
+            _ => {
+                self.cache.tab1_data.popup_cursor = 0;
+            }
+        }
+    }
+
     fn handle_client_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: ClientPopup){
         match self.cache.tab1_data.popup_selection {
             PopupSelection::MenuArea => {
@@ -238,13 +279,23 @@ impl App<'_> {
                         self.handle_chat_page(key,id,ch_page)
                     }
                     ClientPopup::InternetPage(net_page) => {
-                        self.handle_net_page(key,id,net_page)
+                        self.handle_net_client_page(key, id, net_page)
                     }
                     ClientPopup::DataPage(data_page) => {
 
                     }
-                    ClientPopup::SettingsPage(_) => {
-
+                    ClientPopup::SettingsPage(sett_page) => {
+                        match sett_page.command_popup.clone(){
+                            ClientSettingsCommandsPopup::None => {
+                                self.handle_sett_client_page(key, id, sett_page)
+                            }
+                            ClientSettingsCommandsPopup::AddSender(cmd) => {
+                                self.handle_client_add_sender_popup(key, id, sett_page, cmd);
+                            }
+                            ClientSettingsCommandsPopup::RemoveSender(cmd) => {
+                                self.handle_client_remove_sender_popup(key, id, sett_page, cmd);
+                            }
+                        }
                     }
                 }
             }
@@ -512,7 +563,7 @@ impl App<'_> {
             }
         }
     }
-    fn handle_net_page(&mut self, key: KeyEvent,id:NodeId, net_page:ClientNetPopup){
+    fn handle_net_client_page(&mut self, key: KeyEvent, id:NodeId, net_page:ClientNetPopup){
         match net_page {
             ClientNetPopup::FirstPage(stpage) => {
                 // I am outside because this is shared by the two known_chat_servers cases
@@ -843,12 +894,453 @@ impl App<'_> {
             }
         }
     }
-    fn handle_data_page(&mut self, key: KeyEvent,id:NodeId, net_page: ClientNetPopup){}
-    fn handle_sett_page(&mut self, key:KeyEvent,id:NodeId){}
+    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, net_page: ClientNetPopup){}
+
+
+    fn handle_sett_client_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup){
+        match self.cache.tab1_data.popup_cursor{
+            0 => {
+                // Commands
+                match key.code{
+                    KeyCode::Up => {
+                        sett_page.command_up();
+                    },
+                    KeyCode::Down => {
+                        sett_page.command_down();
+                    }
+                    KeyCode::Right => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }else{
+                            self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                            self.cache.tab1_data.popup_cursor = 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Which command I've selected?
+                        match sett_page.command_offset {
+                            0 => {
+                                // Add Sender
+                                sett_page.command_popup = ClientSettingsCommandsPopup::AddSender(CommandPopup {
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            1 => {
+                                // Remove Sender
+                                sett_page.command_popup = ClientSettingsCommandsPopup::RemoveSender(CommandPopup {
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            2 => {
+                                // Recompute Topology Map
+                                self.initialize_node_pop_map(id);
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            1 => {
+                match key.code{
+                    KeyCode::Right => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Re-Compute Map
+                        self.initialize_node_pop_map(id);
+                    }
+                    _ => (),
+                }
+            }
+            _ => {
+
+            }
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Client(
+                    ClientPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+    fn handle_client_add_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup, mut command_popup: CommandPopup){
+        match key.code{
+            KeyCode::Esc => {
+                // Go back
+                sett_page.command_popup = ClientSettingsCommandsPopup::None;
+            }
+            KeyCode::Up => {
+                if command_popup.cursor>0{
+                    command_popup.cursor -= 1;
+                    sett_page.command_popup = ClientSettingsCommandsPopup::AddSender(command_popup);
+                }
+            }
+            KeyCode::Down => {
+                if command_popup.cursor<1{
+                    command_popup.cursor += 1;
+                    sett_page.command_popup = ClientSettingsCommandsPopup::AddSender(command_popup);
+                }
+            }
+            KeyCode::Enter => {
+                match command_popup.cursor{
+                    0 => {
+                        // text editor, first field
+                        self.app_mode = AppMode::Input(1);
+                    }
+                    1 => {
+                        // parse and send
+                        match self.cache.text_buffer.first_field_parse_u8(true){
+                            Ok(id_target) => {
+                                match self.simulation_controller_data.add_sender(id,id_target){
+                                    Ok(_) => {
+                                        command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                    }
+                                    Err(err) => {
+                                        command_popup.status = SettingsPopupStatus::Error(err);
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                command_popup.status = SettingsPopupStatus::Error(err);
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+                sett_page.command_popup = ClientSettingsCommandsPopup::AddSender(command_popup);
+            }
+            _ => (),
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Client(
+                    ClientPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+    fn handle_client_remove_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup, mut command_popup: CommandPopup){
+        match key.code{
+            KeyCode::Esc => {
+                // Go back
+                sett_page.command_popup = ClientSettingsCommandsPopup::None;
+            }
+            KeyCode::Up => {
+                if command_popup.cursor>0{
+                    command_popup.cursor -= 1;
+                    sett_page.command_popup = ClientSettingsCommandsPopup::RemoveSender(command_popup);
+                }
+            }
+            KeyCode::Down => {
+                if command_popup.cursor<1{
+                    command_popup.cursor += 1;
+                    sett_page.command_popup = ClientSettingsCommandsPopup::RemoveSender(command_popup);
+                }
+            }
+            KeyCode::Enter => {
+                match command_popup.cursor{
+                    0 => {
+                        // text editor, first field
+                        self.app_mode = AppMode::Input(1);
+                    }
+                    1 => {
+                        // parse and send
+                        match self.cache.text_buffer.first_field_parse_u8(true){
+                            Ok(id_target) => {
+                                match self.simulation_controller_data.remove_sender(id,id_target){
+                                    Ok(_) => {
+                                        command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                    }
+                                    Err(err) => {
+                                        command_popup.status = SettingsPopupStatus::Error(err);
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                command_popup.status = SettingsPopupStatus::Error(err);
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+                sett_page.command_popup = ClientSettingsCommandsPopup::RemoveSender(command_popup);
+            }
+            _ => (),
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Client(
+                    ClientPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
 
 
 
-    fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){}
+    fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){
+        match self.cache.tab1_data.popup_selection {
+            PopupSelection::MenuArea => {
+                match key.code{
+                    KeyCode::Up => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }else {
+                            self.cache.tab1_data.popup_cursor = 1;
+                        }
+                        self.coordinate_server_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                    }
+                    KeyCode::Down => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }else{
+                            self.cache.tab1_data.popup_cursor = 0;
+                        }
+                        self.coordinate_server_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                    }
+                    KeyCode::Right | KeyCode::Enter => {
+                        self.cache.tab1_data.popup_selection = PopupSelection::OptArea;
+                        self.coordinate_server_popup_cursor_with_opt_menu(id, self.cache.tab1_data.popup_cursor);
+                        self.cache.tab1_data.popup_cursor = 0;
+                    }
+                    _ => (),
+                }
+            }
+            PopupSelection::OptArea => {
+                match server_popup{
+                    ServerPopup::DataPage(datapage) => {
+
+                    }
+                    ServerPopup::SettingsPage(settpage) => {
+                        match settpage.command_popup.clone(){
+                            ServerSettingsCommandsPopup::None => {
+                                self.handle_sett_server_page(key,id,settpage);
+                            }
+                            ServerSettingsCommandsPopup::AddSender(addsend) => {
+                                self.handle_server_add_sender_popup(key, id, settpage, addsend);
+                            }
+                            ServerSettingsCommandsPopup::RemoveSender(remsend) => {
+                                self.handle_server_remove_sender_popup(key, id, settpage, remsend);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn handle_sett_server_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page: ServerSettingsPopup){
+        match self.cache.tab1_data.popup_cursor{
+            0 => {
+                // Commands
+                match key.code{
+                    KeyCode::Up => {
+                        sett_page.command_up();
+                    },
+                    KeyCode::Down => {
+                        sett_page.command_down();
+                    }
+                    KeyCode::Right => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }else{
+                            self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                            self.cache.tab1_data.popup_cursor = 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Which command I've selected?
+                        match sett_page.command_offset {
+                            0 => {
+                                // Add Sender
+                                sett_page.command_popup = ServerSettingsCommandsPopup::AddSender(CommandPopup {
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            1 => {
+                                // Remove Sender
+                                sett_page.command_popup = ServerSettingsCommandsPopup::RemoveSender(CommandPopup {
+                                    status: SettingsPopupStatus::Idle,
+                                    cursor: 0,
+                                });
+                            }
+                            2 => {
+                                // Recompute Topology Map
+                                self.initialize_node_pop_map(id);
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            1 => {
+                match key.code{
+                    KeyCode::Right => {
+                        if self.cache.tab1_data.popup_cursor < 1{
+                            self.cache.tab1_data.popup_cursor += 1;
+                        }
+                    }
+                    KeyCode::Left => {
+                        if self.cache.tab1_data.popup_cursor > 0{
+                            self.cache.tab1_data.popup_cursor -= 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // Re-Compute Map
+                        self.initialize_node_pop_map(id);
+                    }
+                    _ => (),
+                }
+            }
+            _ => {
+
+            }
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Server(
+                    ServerPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+    fn handle_server_add_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ServerSettingsPopup, mut command_popup: CommandPopup){
+        match key.code{
+            KeyCode::Esc => {
+                // Go back
+                sett_page.command_popup = ServerSettingsCommandsPopup::None;
+            }
+            KeyCode::Up => {
+                if command_popup.cursor>0{
+                    command_popup.cursor -= 1;
+                    sett_page.command_popup = ServerSettingsCommandsPopup::AddSender(command_popup);
+                }
+            }
+            KeyCode::Down => {
+                if command_popup.cursor<1{
+                    command_popup.cursor += 1;
+                    sett_page.command_popup = ServerSettingsCommandsPopup::AddSender(command_popup);
+                }
+            }
+            KeyCode::Enter => {
+                match command_popup.cursor{
+                    0 => {
+                        // text editor, first field
+                        self.app_mode = AppMode::Input(1);
+                    }
+                    1 => {
+                        // parse and send
+                        match self.cache.text_buffer.first_field_parse_u8(true){
+                            Ok(id_target) => {
+                                match self.simulation_controller_data.add_sender(id,id_target){
+                                    Ok(_) => {
+                                        command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                    }
+                                    Err(err) => {
+                                        command_popup.status = SettingsPopupStatus::Error(err);
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                command_popup.status = SettingsPopupStatus::Error(err);
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+                sett_page.command_popup = ServerSettingsCommandsPopup::AddSender(command_popup);
+            }
+            _ => (),
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Server(
+                    ServerPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+    fn handle_server_remove_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ServerSettingsPopup, mut command_popup: CommandPopup){
+        match key.code{
+            KeyCode::Esc => {
+                // Go back
+                sett_page.command_popup = ServerSettingsCommandsPopup::None;
+            }
+            KeyCode::Up => {
+                if command_popup.cursor>0{
+                    command_popup.cursor -= 1;
+                    sett_page.command_popup = ServerSettingsCommandsPopup::RemoveSender(command_popup);
+                }
+            }
+            KeyCode::Down => {
+                if command_popup.cursor<1{
+                    command_popup.cursor += 1;
+                    sett_page.command_popup = ServerSettingsCommandsPopup::RemoveSender(command_popup);
+                }
+            }
+            KeyCode::Enter => {
+                match command_popup.cursor{
+                    0 => {
+                        // text editor, first field
+                        self.app_mode = AppMode::Input(1);
+                    }
+                    1 => {
+                        // parse and send
+                        match self.cache.text_buffer.first_field_parse_u8(true){
+                            Ok(id_target) => {
+                                match self.simulation_controller_data.remove_sender(id,id_target){
+                                    Ok(_) => {
+                                        command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                    }
+                                    Err(err) => {
+                                        command_popup.status = SettingsPopupStatus::Error(err);
+                                    }
+                                }
+                            }
+                            Err(err) => {
+                                command_popup.status = SettingsPopupStatus::Error(err);
+                            }
+                        }
+                    }
+                    _ => (),
+                }
+                sett_page.command_popup = ServerSettingsCommandsPopup::RemoveSender(command_popup);
+            }
+            _ => (),
+        }
+        self.cache.tab1_data.viewing =
+            ViewedTab1::Popup((
+                id,
+                NodePopup::Server(
+                    ServerPopup::SettingsPage(sett_page)
+                )
+            ))
+    }
+
+
     fn handle_drone_popup(&mut self, key: KeyEvent,id:NodeId, client_popup: DronePopup){
         match self.cache.tab1_data.popup_selection {
             PopupSelection::MenuArea => {
@@ -889,16 +1381,16 @@ impl App<'_> {
                                 self.handle_sett_drone_page(key,id,settpage)
                             }
                             DroneSettingsCommandsPopup::SetPDR(commpop) => {
-                                self.handle_set_pdr_popup(key,id,settpage,commpop);
+                                self.handle_drone_set_pdr_popup(key, id, settpage, commpop);
                             }
                             DroneSettingsCommandsPopup::AddSender(addsend) => {
-                                self.handle_add_sender_popup(key,id,settpage,addsend);
+                                self.handle_drone_add_sender_popup(key, id, settpage, addsend);
                             }
                             DroneSettingsCommandsPopup::RemoveSender(remsend) => {
-                                self.handle_remove_sender_popup(key,id,settpage,remsend);
+                                self.handle_drone_remove_sender_popup(key, id, settpage, remsend);
                             }
                             DroneSettingsCommandsPopup::Crash(crapop) => {
-                                self.handle_crash_drone_popup(key,id,settpage,crapop);
+                                self.handle_drone_crash_drone_popup(key, id, settpage, crapop);
                             }
                         }
                     }
@@ -1005,7 +1497,8 @@ impl App<'_> {
                 )
             ))
     }
-    fn handle_set_pdr_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
+
+    fn handle_drone_set_pdr_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
         match key.code{
             KeyCode::Esc => {
                 // Go back
@@ -1062,7 +1555,7 @@ impl App<'_> {
                 )
             ))
     }
-    fn handle_add_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
+    fn handle_drone_add_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
         match key.code{
             KeyCode::Esc => {
                 // Go back
@@ -1093,6 +1586,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.add_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);
@@ -1118,7 +1614,7 @@ impl App<'_> {
                 )
             ))
     }
-    fn handle_remove_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
+    fn handle_drone_remove_sender_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
         match key.code{
             KeyCode::Esc => {
                 // Go back
@@ -1174,7 +1670,7 @@ impl App<'_> {
                 )
             ))
     }
-    fn handle_crash_drone_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
+    fn handle_drone_crash_drone_popup(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup, mut command_popup: CommandPopup){
         match key.code{
             KeyCode::Esc => {
                 // Go back

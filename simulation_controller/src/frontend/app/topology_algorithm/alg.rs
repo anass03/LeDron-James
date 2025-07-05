@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
+use log::{info, warn};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::{LogType, RendererCommand};
 use crate::backend::simulation_controller::SimulationControllerData;
@@ -55,28 +56,47 @@ impl App<'_>{
             }
         }
 
+        // First, determine the node type from the UI list
+        let node_type = {
+            let mut found_type = NetNode::Client(id); // fallback
+            for (x,_,_) in &self.cache.tab1_data.netnode_list.items {
+                match x {
+                    Node::Client(cl) if cl.id == id => { found_type = NetNode::Client(id); break; },
+                    Node::Server(sr) if sr.id == id => { found_type = NetNode::Server(id); break; },
+                    Node::Drone(dr) if dr.id == id => { found_type = NetNode::Drone(id); break; },
+                    _ => continue,
+                }
+            }
+            found_type
+        };
+
         let mut maybe_alg = None;
         for (x,y,z) in &mut self.cache.tab1_data.netnode_list.items{
             match x{
                 Node::Client(cl) => {
                     if cl.id == id{
                         maybe_alg = Some(z);
+                        break;
                     }
                 }
                 Node::Server(sr) => {
                     if sr.id == id{
                         maybe_alg = Some(z);
+                        break;
                     }
                 }
                 Node::Drone(dr) => {
                     if dr.id == id{
                         maybe_alg = Some(z);
+                        break;
                     }
                 }
             }
         }
         match maybe_alg{
-            None => {}
+            None => {
+                warn!(target: "topology", "[TOPOLOGY] - Node {} not found in netnode_list.items", id);
+            }
             Some(top_alg) => {
                 top_alg.status = TopologyStatus::Computing;
                 for (x,y) in &self.simulation_controller_data.topology_algorithm_data.map_links{
@@ -86,27 +106,44 @@ impl App<'_>{
                         top_alg.map_links.push((*x, *y));
                     }
                 }
-                match &self.simulation_controller_data.running_network.get(&NetNode::Drone(id)){
-                    None => {
-                        match &self.simulation_controller_data.running_network.get(&NetNode::Server(id)){
-                            None => {
-                                match &self.simulation_controller_data.running_network.get(&NetNode::Client(id)) {
-                                    None => (),
-                                    Some(vec) => {
-                                        create_map(id, &self.simulation_controller_data, top_alg,vec);
+
+                // Check if node exists in running_network
+                let node_in_network = self.simulation_controller_data.running_network.get(&NetNode::Drone(id)).is_some() ||
+                                    self.simulation_controller_data.running_network.get(&NetNode::Server(id)).is_some() ||
+                                    self.simulation_controller_data.running_network.get(&NetNode::Client(id)).is_some();
+
+                if !node_in_network {
+                    warn!(target: "topology", "[TOPOLOGY] - Node {} not found in running_network, adding as standalone node", id);
+                    // Add the node to the map even if it's not in running_network
+                    top_alg.map.insert(id, DisplayedNode::new_with_position(node_type, Vector::random(100,80)));
+                } else {
+                    // Original logic for connected nodes
+                    match &self.simulation_controller_data.running_network.get(&NetNode::Drone(id)){
+                        None => {
+                            match &self.simulation_controller_data.running_network.get(&NetNode::Server(id)){
+                                None => {
+                                    match &self.simulation_controller_data.running_network.get(&NetNode::Client(id)) {
+                                        None => {
+                                            warn!(target: "topology", "[TOPOLOGY] - Node {} found in running_network but no connections", id);
+                                            // Add the node even if it has no connections
+                                            top_alg.map.insert(id, DisplayedNode::new_with_position(node_type, Vector::random(100,80)));
+                                        },
+                                        Some(vec) => {
+                                            create_map(id, &self.simulation_controller_data, top_alg,vec);
+                                        }
                                     }
                                 }
-                            }
-                            Some(vec) => {
-                                create_map(id, &self.simulation_controller_data, top_alg,vec);
+                                Some(vec) => {
+                                    create_map(id, &self.simulation_controller_data, top_alg,vec);
+                                }
                             }
                         }
-                    }
-                    Some(vec) => {
-                        create_map(id, &self.simulation_controller_data, top_alg,vec);
-
+                        Some(vec) => {
+                            create_map(id, &self.simulation_controller_data, top_alg,vec);
+                        }
                     }
                 }
+                
                 match &self.simulation_controller_data.tx_to_renderer {
                     None => {}
                     Some(tx_cmd) => {
@@ -115,6 +152,12 @@ impl App<'_>{
                             Err(_) => {}
                         }
                     }
+                }
+                
+                // Debug logging for map size
+                info!(target: "topology", "[TOPOLOGY] - Node {} map initialized with {} nodes", id, top_alg.map.len());
+                if top_alg.map.is_empty() {
+                    warn!(target: "topology", "[TOPOLOGY] - Node {} map is empty! running_network size: {}", id, self.simulation_controller_data.running_network.len());
                 }
             }
         }
@@ -132,8 +175,8 @@ impl App<'_>{
             }
             TopologyStatus::Computing => {
                 // Keep going generating forces and iterating algorithm
-                self.simulation_controller_data.topology_algorithm_data.check_if_nan();
                 self.topology_main_status_computing();
+                self.simulation_controller_data.topology_algorithm_data.check_if_nan();
             }
             TopologyStatus::Converged => {
                 // Do nothing

@@ -34,7 +34,7 @@ impl DisplayedNode{
         self.node.id().clone()
     }
 }
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TopologyAlgorithm{
     pub status: TopologyStatus,
     // Node and its coordinates on the map
@@ -57,7 +57,7 @@ pub struct TopologyAlgorithm{
     counter_errors: u8,
 }
 
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub(crate) enum TopologyStatus{
     Stopped, ToInitialize, Computing, Converged
 }
@@ -99,13 +99,43 @@ impl TopologyAlgorithm{
         self.counter_errors += num;
     }
 
-    pub fn check_if_nan(&mut self) {
-        for (_,data_on_node) in self.map.iter_mut(){
-            if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan(){
-                let current_links = self.map_links.clone();
-                self.initialize(current_links);
-                return ();
+    pub fn is_map_valid(&self) -> bool {
+        for (_, data_on_node) in &self.map {
+            // Check for NaN values
+            if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan() {
+                return false;
             }
+            
+            // Check if node is outside map boundaries (0-100 x 0-80)
+            if data_on_node.position.x < 0.0 || data_on_node.position.x > 100.0 ||
+               data_on_node.position.y < 0.0 || data_on_node.position.y > 80.0 {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn check_if_nan(&mut self) {
+        let mut needs_reinitialization = false;
+        
+        for (_, data_on_node) in self.map.iter_mut() {
+            // Check for NaN values
+            if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan() {
+                needs_reinitialization = true;
+                break;
+            }
+            
+            // Check if node is outside map boundaries (0-100 x 0-80)
+            if data_on_node.position.x < 0.0 || data_on_node.position.x > 100.0 ||
+               data_on_node.position.y < 0.0 || data_on_node.position.y > 80.0 {
+                needs_reinitialization = true;
+                break;
+            }
+        }
+        
+        if needs_reinitialization {
+            let current_links = self.map_links.clone();
+            self.initialize(current_links);
         }
     }
 
@@ -122,8 +152,8 @@ impl TopologyAlgorithm{
                 self.general_status_initialize();
             }
             TopologyStatus::Computing => {
-                self.check_if_nan();
                 self.general_status_computing();
+                self.check_if_nan();
             }
             TopologyStatus::Converged => {
                 // Do nothing
@@ -165,10 +195,24 @@ impl TopologyAlgorithm{
             }
         }
         self.general_compute_and_set_avg_magnitude();
-        if self.avg_positioning_score < 1.5 {
-            self.status = TopologyStatus::Converged;
-            self.computed();
+        let len_map = self.map.len();
+        if len_map<3{
+            if self.avg_positioning_score < 7.5{
+                self.status = TopologyStatus::Converged;
+                self.computed();
+            }
+        }else if len_map < 5{
+            if self.avg_positioning_score < 4f32 {
+                self.status = TopologyStatus::Converged;
+                self.computed();
+            }
+        }else{
+            if self.avg_positioning_score < 2f32 {
+                self.status = TopologyStatus::Converged;
+                self.computed();
+            }
         }
+
     }
 
     fn general_generate_all_forces(&self) -> Result<HashMap<NodeId, Vector>, String> {
@@ -185,7 +229,7 @@ impl TopologyAlgorithm{
         for (ids, res) in &self.nodes_resultant_vec {
             match self.map.get_mut(ids) {
                 Some(displayable) => {
-                    displayable.position = displayable.position.add(&res.scale(0.025));
+                    displayable.position = displayable.position.add(&res.scale(0.010));
                 }
                 None => {
                     error_counter += 1;
@@ -241,8 +285,8 @@ impl TopologyAlgorithm{
 
     fn general_generate_repulsion_force(&self, id: NodeId) -> Result<Vector, String> {
         // Exponential repulsion: very strong at short range, decays over r
-        let k_repulsion: f32 = 340.0;
-        let r: f32 = 8.75;
+        let k_repulsion: f32 = 355.0;
+        let r: f32 = 10.75;
 
         let pos_a = self.map.get(&id).ok_or("Node position not found")?;
         let mut total_force = Vector::new(0.0, 0.0);
@@ -296,8 +340,8 @@ impl TopologyAlgorithm{
         let dy_bottom = map_height - vector.y;
 
         // Exponential repulsion from each border to keep nodes inside the map
-        let k_border: f32 = 240.0;   // overall strength of the border repulsion
-        let r: f32 = 2.5;         // characteristic decay distance
+        let k_border: f32 = 400.0;   // overall strength of the border repulsion
+        let r: f32 = 1.5;         // characteristic decay distance
 
         // Exponential repulsive forces from borders
         let force_left = k_border * (-dx_left / r).exp();     // pushes right

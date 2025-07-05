@@ -20,7 +20,7 @@ use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
 use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
-use log::{error, info};
+use log::{error, info, warn};
 use rand::Rng;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
@@ -329,13 +329,48 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                     RendererCommand::ComputeSetOfTopologies((top_algs)) => {
                         let mut ret_vec:Vec<(NodeId,TopologyAlgorithm)> = Vec::new();
                         for (id, mut top_alg) in top_algs {
-                            while top_alg.status != TopologyStatus::Converged{
-                                top_alg.check_general_node_topology_status();
+                            let mut iteration_count = 0;
+                            const MAX_ITERATIONS: u32 = 1000; // Safety limit
+                            let mut attempts = 0;
+                            const MAX_ATTEMPTS: u32 = 3; // Maximum reinitialization attempts for convergence issues
+                            
+                            'convergence_loop: loop {
+                                while top_alg.status != TopologyStatus::Converged && iteration_count < MAX_ITERATIONS {
+                                    top_alg.check_general_node_topology_status();
+                                    iteration_count += 1;
+                                }
+                                
+                                // Check if the map is valid (no NaN, no points outside boundaries)
+                                let is_valid = top_alg.is_map_valid();
+                                
+                                if top_alg.status == TopologyStatus::Converged && is_valid {
+                                    // Perfect! Converged and valid
+                                    break 'convergence_loop;
+                                } else if is_valid && top_alg.status != TopologyStatus::Converged {
+                                    // Valid but didn't converge - limited attempts
+                                    attempts += 1;
+                                    if attempts >= MAX_ATTEMPTS {
+                                        warn!(target: "main", "[RENDERER] - Node {} valid but didn't converge after {} attempts, keeping current state", id, MAX_ATTEMPTS);
+                                        break 'convergence_loop;
+                                    }
+                                    warn!(target: "main", "[RENDERER] - Node {} valid but didn't converge after {} iterations, reinitializing (attempt {}/{})", id, MAX_ITERATIONS, attempts, MAX_ATTEMPTS);
+                                } else {
+                                    // Invalid map - keep trying indefinitely
+                                    warn!(target: "main", "[RENDERER] - Node {} has invalid map (NaN or out of bounds), reinitializing", id);
+                                }
+                                
+                                // Reinitialize the topology algorithm
+                                let current_links = top_alg.map_links.clone();
+                                top_alg.initialize(current_links);
+                                iteration_count = 0;
                             }
+                            
                             ret_vec.push((id,top_alg));
                         }
                         match tx_rsp.send(Computed(ret_vec)){
-                            Ok(_) => (),
+                            Ok(_) => {
+                                info!(target: "main", "[RENDERER] - Successfully sent computed topologies");
+                            },
                             Err(err) => {
                                 error!(target: "main", "{}", format!("[RENDERER] - Error sending computed topologies [{:?}]", err.to_string()));
                             }

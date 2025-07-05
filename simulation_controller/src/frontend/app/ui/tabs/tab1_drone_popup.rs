@@ -1,26 +1,23 @@
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::prelude::{Color, Modifier, Style};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use wg_2024::network::NodeId;
-use crate::frontend::app::models::tab1_types::{ClientPopup, DronePopup, DroneSettingsCommandsPopup, DroneSettingsPopup, PopupSelection, ServerPopup};
-use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
+use crate::frontend::app::models::tab1_types::{DronePopup, DroneSettingsPopup, PopupSelection};
+use crate::frontend::app::ui::tabs::{tab1, MAIN_BLOCK_BORDERS};
 use std::cmp::PartialEq;
 
-use ratatui::widgets::canvas::{Canvas, Circle, Line as CanvasLine, Map};
-use std::ops::Add;
 use ratatui::style::{Styled, Stylize};
-use ratatui::text::{Line, Span, ToSpan};
+use ratatui::text::Line;
 use crate::backend::sc_models::DroneType;
 use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
-use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas};
+use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas, render_add_sender_popup, render_remove_sender_popup};
 use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
 use crate::frontend::app::ui::tabs::tab1::draw_map;
 
 use ratatui::widgets::{List, ListItem};
-use ratatui::widgets::Wrap;
 use ratatui::widgets;
 
 pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rect, buf : &mut Buffer, drone_popup: &DronePopup, id:NodeId) {
@@ -227,40 +224,8 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
     render_command_popup(app,area,buf,&set_page.command_popup,set_page.drone_pdr);
 }
 
-// Popup border color based on status
-fn popup_border_color(status: &crate::frontend::app::models::tab1_types::SettingsPopupStatus) -> Color {
-    use crate::frontend::app::models::tab1_types::SettingsPopupStatus::*;
-    match status {
-        CorrectlySent => Color::Green,
-        Error(_) => Color::Red,
-        Idle => MAIN_BLOCK_BORDERS,
-    }
-}
-
-// Returns a smaller centered popup area
-fn small_centered_popup_area(area: Rect) -> Rect {
-    let popup_layout = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(30),
-            Constraint::Percentage(40),
-            Constraint::Percentage(30),
-        ])
-        .split(area);
-    let vertical_center = popup_layout[1];
-    let horizontal = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(25),
-            Constraint::Percentage(50),
-            Constraint::Percentage(25),
-        ])
-        .split(vertical_center);
-    horizontal[1]
-}
-
 // Main dispatcher for command popups
-pub(in crate::frontend::app::ui::tabs) fn render_command_popup(app: &App, area: Rect, buf: &mut Buffer, popup: &crate::frontend::app::models::tab1_types::DroneSettingsCommandsPopup, drone_pdr: f32) {
+fn render_command_popup(app: &App, area: Rect, buf: &mut Buffer, popup: &crate::frontend::app::models::tab1_types::DroneSettingsCommandsPopup, drone_pdr: f32) {
     match popup {
         crate::frontend::app::models::tab1_types::DroneSettingsCommandsPopup::SetPDR(cmd) => render_set_pdr_popup(app, area, buf, cmd, drone_pdr),
         crate::frontend::app::models::tab1_types::DroneSettingsCommandsPopup::AddSender(cmd) => render_add_sender_popup(app, area, buf, cmd),
@@ -271,7 +236,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_command_popup(app: &App, area: 
 }
 
 fn render_set_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup, old_pdr: f32) {
-    let popup_area = small_centered_popup_area(area);
+    let popup_area = tab1::small_centered_popup_area(area);
     widgets::Clear.render(popup_area, buf);
     let block = Block::default()
         .title("Set PDR")
@@ -279,7 +244,7 @@ fn render_set_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fr
         .title_bottom(Line::from(format!("Old PDR: {}",old_pdr)).alignment(Alignment::Center))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(popup_border_color(&cmd.status)));
+        .border_style(Style::default().fg(tab1::popup_border_color(&cmd.status)));
     let inner = block.inner(popup_area);
     block.render(popup_area, buf);
     let [fields_area, button_area, status_area] = Layout::default()
@@ -326,16 +291,23 @@ fn render_set_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fr
             msg.render(status_area, buf);
         },
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
-            let msg = Paragraph::new(format!("Error: {}", e))
-                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-                .alignment(Alignment::Center);
+            // Wrap long error messages to fit in multiple rows
+            let error_text = format!("Error: {}", e);
+            let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
+            let lines: Vec<Line> = wrapped_lines.iter()
+                .map(|line| Line::from(line.to_string())
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+                .collect();
+            let msg = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
             msg.render(status_area, buf);
         },
         _ => {},
     }
 }
 
-fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
+/*fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
     let popup_area = small_centered_popup_area(area);
     widgets::Clear.render(popup_area, buf);
     let block = Block::default()
@@ -449,15 +421,15 @@ fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &cra
         _ => {},
     }
 }
-
+*/
 fn render_crash_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
-    let popup_area = small_centered_popup_area(area);
+    let popup_area = tab1::small_centered_popup_area(area);
     widgets::Clear.render(popup_area, buf);
     let block = Block::default()
         .title("Crash Drone")
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(popup_border_color(&cmd.status)));
+        .border_style(Style::default().fg(tab1::popup_border_color(&cmd.status)));
     let inner = block.inner(popup_area);
     block.render(popup_area, buf);
     let [button_area, status_area] = Layout::default()
@@ -485,9 +457,16 @@ fn render_crash_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fron
             msg.render(status_area, buf);
         },
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
-            let msg = Paragraph::new(format!("Error: {}", e))
-                .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-                .alignment(Alignment::Center);
+            // Wrap long error messages to fit in multiple rows
+            let error_text = format!("Error: {}", e);
+            let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
+            let lines: Vec<Line> = wrapped_lines.iter()
+                .map(|line| Line::from(line.to_string())
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+                .collect();
+            let msg = Paragraph::new(lines)
+                .alignment(Alignment::Center)
+                .wrap(Wrap { trim: true });
             msg.render(status_area, buf);
         },
         _ => {},

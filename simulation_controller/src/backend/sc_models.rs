@@ -39,6 +39,15 @@ pub struct Statistics{
     pub total_packet_dropped: usize,
     pub total_active_connections: usize,
     pub network_reliability: u8,
+    pub node_statistic: HashMap<NodeId, NodeStatistics>,
+}
+#[derive(Default)]
+pub struct NodeStatistics{
+    pdr_expected: HashMap<NodeId, f64>, // Only for clients
+    download_at_sec: Vec<f32>, // Only for clients
+    upload_at_sec: Vec<f32>, // Only for clients
+
+    //
 }
 
 // Implementations
@@ -108,6 +117,7 @@ impl Statistics{
             total_packet_dropped: 0,
             total_active_connections: 0,
             network_reliability: 0,
+            node_statistic: Default::default(),
         }
     }
     pub fn received_packet(&mut self) { self.total_packet_exchanged += 1; }
@@ -180,7 +190,7 @@ pub enum NetCacheFile{
     Downloading(f32), // f32 € [0,100] representing client loading status.
     Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32),
-    Rendered(File)
+    Rendered((bool,File)) // (is UTF-8, File)
 }
 
 
