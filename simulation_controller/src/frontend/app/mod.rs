@@ -27,12 +27,14 @@ use ratatui_image::errors::Errors;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
+use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
 use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, ViewedTab1};
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -93,7 +95,7 @@ impl App<'_>{
             // Listening to channels
             self.simulation_controller_data.handle_channels();
             self.simulation_controller_data.handle_rx_renderer();
-            self.check_topology_status();
+            self.check_main_topology_status();
 
 
             // Terminal drawing and other basic app functions
@@ -321,6 +323,12 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                             error!(target: "main", "[RENDERER] - Error rendering the data buffer to image-buffer");
                         }
                     },
+                    RendererCommand::ComputeSetOfTopologies((top_algs)) => {
+                        let mut ret_vec:Vec<(NodeId,TopologyAlgorithm)> = Vec::new();
+                        for (id,top_alg) in top_algs {
+
+                        }
+                    }
                 }
             }
 

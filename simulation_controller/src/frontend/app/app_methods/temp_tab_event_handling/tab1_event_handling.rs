@@ -10,6 +10,7 @@ use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::AppMode;
 use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThirdPage, ChatThirdPageSelection, ClientChatPopup, ClientDataPopup, ClientNetPopup, ClientPopup, ClientSettingsPopup, CommandPopup, DroneDataPopup, DronePopup, DroneSettingsCommandsPopup, DroneSettingsItems, DroneSettingsPopup, NetFirstPage, NetSecondPage, NetSecondPageItems, NodePopup, PopupSelection, RenderingImage, SelectedFileMedia, ServerPopup, SettingsPopupStatus, ViewedTab1};
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 impl App<'_> {
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
@@ -934,7 +935,7 @@ impl App<'_> {
                 }
             }
             DroneSettingsItems::Commands => {
-                match key.code{
+                match key.code {
                     KeyCode::Char('i') | KeyCode::Char('I') => {
                         // todo!()
                     }
@@ -949,53 +950,35 @@ impl App<'_> {
                         match sett_page.command_offset {
                             0 => {
                                 // SetPDR
-                                sett_page.command_popup = DroneSettingsCommandsPopup::SetPDR(CommandPopup{
+                                sett_page.command_popup = DroneSettingsCommandsPopup::SetPDR(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
                                 });
                             }
                             1 => {
                                 // Add Sender
-                                sett_page.command_popup = DroneSettingsCommandsPopup::AddSender(CommandPopup{
+                                sett_page.command_popup = DroneSettingsCommandsPopup::AddSender(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
                                 });
                             }
                             2 => {
                                 // Remove Sender
-                                sett_page.command_popup = DroneSettingsCommandsPopup::RemoveSender(CommandPopup{
+                                sett_page.command_popup = DroneSettingsCommandsPopup::RemoveSender(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
                                 });
                             }
                             3 => {
                                 // Crash
-                                sett_page.command_popup = DroneSettingsCommandsPopup::Crash(CommandPopup{
+                                sett_page.command_popup = DroneSettingsCommandsPopup::Crash(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
                                 });
                             }
                             4 => {
                                 // Recompute Topology Map
-                                for (node,cds,topalg) in self.cache.tab1_data.netnode_list.items{
-                                    match node{
-                                        Node::Client(cl) => {
-                                            if cl.id == id{
-
-                                            }
-                                        }
-                                        Node::Server(sr) => {
-                                            if sr.id == id{
-
-                                            }
-                                        }
-                                        Node::Drone(dr) => {
-                                            if dr.id == id{
-
-                                            }
-                                        }
-                                    }
-                                }
+                                self.initialize_node_pop_map(id);
                             }
                             _ => (),
                         }
@@ -1003,7 +986,6 @@ impl App<'_> {
                     _ => (),
                 }
             }
-
         }
         self.cache.tab1_data.viewing =
             ViewedTab1::Popup((
@@ -1014,11 +996,4 @@ impl App<'_> {
             ))
     }
 
-
 }
-
-
-
-
-
-

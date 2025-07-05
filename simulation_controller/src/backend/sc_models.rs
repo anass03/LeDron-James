@@ -12,6 +12,8 @@ use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use client::ClientCommand;
 use crate::backend::simulation_controller::SimulationControllerData;
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+
 
 pub(crate) trait NodeCommand {}
 
@@ -113,10 +115,14 @@ impl Statistics{
 }
 
 pub enum RendererCommand{
-    Stop, AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)), Encode((Sender<ResizeRequest>,ServerId, MediaId, Image))
+    Stop,
+    AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)),
+    Encode((Sender<ResizeRequest>,ServerId, MediaId, Image)),
+    ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
 }
 pub enum RendererResponse{
-    Encoded((ServerId,MediaId, ThreadProtocol))
+    Encoded((ServerId,MediaId, ThreadProtocol)),
+    Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 
 pub struct NetCache{
