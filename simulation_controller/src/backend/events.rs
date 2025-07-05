@@ -10,8 +10,7 @@ use wg_2024::network::NodeId;
 use host::{ContentID, FileId, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
-use crate::backend::sc_models::{ChannelStatus, ChatList, LogType, NetCacheMedia, RendererCommand, RendererResponse};
-use crate::backend::sc_models::ChannelStatus::Initialized;
+use crate::backend::sc_models::{ChatList, LogType, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::backend::simulation_controller::SimulationControllerData;
 
 impl SimulationControllerData {
@@ -93,7 +92,8 @@ impl SimulationControllerData {
         match server_to_client {
             ServerToClient::ServerType(server_type)
             => {
-                info!(target: "main", "Server type: {:?}", server_type) },
+                info!(target: "main", "Server type: {:?}", server_type)
+            },
             ServerToClient::FilesList(client_id, server_id, file_list)
             => {
                 let filtered_file_list: Vec<FileId> = file_list
@@ -110,10 +110,10 @@ impl SimulationControllerData {
                     .or_default()
                     .insert(server_id, filtered_file_list.clone());
 
-                info!(target: "main", "Filtered files list from Server {server_id}: {:?}", filtered_file_list);},
+                info!(target: "main", "Filtered files list from Server {server_id}: {:?}", filtered_file_list);
+            },
             ServerToClient::File(server_id, file_id, file)
             => {
-
                 /*let (resize_request_sender, resize_request_receiver) = mpsc::channel();
                 let (render_update_sender, render_update_receiver) = mpsc::channel();
                 let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
@@ -167,7 +167,6 @@ impl SimulationControllerData {
                 }
 
                 return Err((LogType::INFO, format!("File {file_id} received from Server {server_id}")))
-
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
             => {
@@ -187,14 +186,14 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, filtered_media_list.clone());
-                info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list) },
+                info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list)
+            },
             ServerToClient::Media(server_id, media_id, image)
             => {
                 self.update_net_cache_media(server_id, media_id.clone(), Some(image.clone()), None)?;
 
                 // Save in local folder
                 self.save_media(&media_id, &image)?;
-
             },
             ServerToClient::ClientList(client_id, server_id, client_list)
             => {
@@ -204,10 +203,11 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, contacts);
-                info!(target: "main", "Client list from CatServer {server_id} received: {:?}", client_list) },
+                info!(target: "main", "Client list from CatServer {server_id} received: {:?}", client_list)
+            },
             ServerToClient::MessageFrom(server_id, client_id, message)
             => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
-            ServerToClient::FileFrom(server_id, client_id,..)
+            ServerToClient::FileFrom(server_id, client_id, ..)
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
             }
@@ -226,38 +226,6 @@ impl SimulationControllerData {
             => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
         }
         Ok(())
-    }
-
-    /// - Media Renderer Handler
-    pub fn handle_rx_renderer(&mut self){
-        match &self.rx_from_renderer{
-            None => {}
-            Initialized(channel) => {
-                while let Ok(event) = channel.try_recv() {
-                    match event{
-                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
-                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
-                            match self.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {}
-                                Some(hash) => {
-                                    match hash.remove(&enc_media){
-                                        None => {}
-                                        Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
-                                        }
-                                    }
-                                }
-                            }
-                        },
-                        RendererResponse::Computed(_) => {
-                            // todo()!
-                        }
-
-                    }
-                }
-            },
-            _ => {}
-        }
     }
 
     /// - Channel Handler

@@ -11,6 +11,7 @@ use ratatui::{buffer::Buffer, layout::{
 }, widgets::Widget, DefaultTerminal, Frame};
 
 use std::{io, io::Write, thread, time};
+use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver, Sender};
@@ -32,9 +33,11 @@ use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
 use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::RendererCommand::ComputeSetOfTopologies;
+use crate::backend::sc_models::RendererResponse::Computed;
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, ViewedTab1};
-use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use crate::frontend::app::topology_algorithm::alg_models::{TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 /*
   DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
@@ -94,7 +97,7 @@ impl App<'_>{
 
             // Listening to channels
             self.simulation_controller_data.handle_channels();
-            self.simulation_controller_data.handle_rx_renderer();
+            self.handle_rx_renderer();
             self.check_main_topology_status();
 
 
@@ -282,7 +285,7 @@ impl Widget for &mut App<'_>{
     }
 }
 
-fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>), JoinHandle<()>){
+fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>), JoinHandle<()>){
     let (tx_cmd, rx_cmd) = mpsc::channel::<RendererCommand>();
     let (tx_rsp, rx_rsp) = mpsc::channel::<RendererResponse>();
 
@@ -325,8 +328,17 @@ fn renderer_thread_gen()->((Sender<RendererCommand>,Receiver<RendererResponse>),
                     },
                     RendererCommand::ComputeSetOfTopologies((top_algs)) => {
                         let mut ret_vec:Vec<(NodeId,TopologyAlgorithm)> = Vec::new();
-                        for (id,top_alg) in top_algs {
-
+                        for (id, mut top_alg) in top_algs {
+                            while top_alg.status != TopologyStatus::Converged{
+                                top_alg.check_general_node_topology_status();
+                            }
+                            ret_vec.push((id,top_alg));
+                        }
+                        match tx_rsp.send(Computed(ret_vec)){
+                            Ok(_) => (),
+                            Err(err) => {
+                                error!(target: "main", "{}", format!("[RENDERER] - Error sending computed topologies [{:?}]", err.to_string()));
+                            }
                         }
                     }
                 }
