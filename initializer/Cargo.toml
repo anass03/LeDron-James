@@ -16,7 +16,7 @@ simulation_controller = { path = "../simulation_controller"}
 initializer_utils = {path = "../initializer_utils"}
 rolling_drone = { git = "https://github.com/giorebecchi/RollingDrone.git"}
 lockheedrustin-drone = { git = "https://github.com/Lockheed-Rustin/drone.git"}
-bagel_bomber = { git = "https://github.com/daw-dev/bagel-bomber.git" }
+bagel_bomber = { git = "https://github.com/daw-dev/bagel-bomber.git" , default-features = false}
 flyPath = { git = "https://github.com/panigiove/FlyPath.git" }
 wg_2024-rust = { git = "https://github.com/LuigiMiazzo17/unitn-advancedProgramming-WGL_2024-drone.git" }
 rustastic-drone = { git = "https://github.com/Rustastic/RustasticDrone.git" }

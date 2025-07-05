@@ -137,36 +137,10 @@ impl SimulationControllerData {
                 // Construct filename based on file ID and inferred extension
                 let path = self.download_folder.join(&file_id);
 
-                fs::write(&path, &file).expect("file not downloaded");
-
-                // Open with system default application
-                #[cfg(target_os = "windows")]
-                {
-                    let path_str = path.to_str().unwrap();
-                    //let quoted_path = format!("\"{}\"", path_str);
-                    Command::new("cmd")
-                        .args(&["/C", "start", "", &path_str])
-                        .spawn()
-                        .expect("Unable to open file on Windows");
+                match fs::write(&path, &file) {
+                    Ok(_) => {info!(target: "main", "File {file_id} downloaded in : {path:?}");}
+                    Err(e) => {return Err((LogType::INFO, format!("File {file_id} not downloaded")))}
                 }
-
-                #[cfg(target_os = "macos")]
-                {
-                    Command::new("open")
-                        .arg(&path)
-                        .spawn()
-                        .expect("Unable to open file on macOS");
-                }
-
-                #[cfg(target_os = "linux")]
-                {
-                    Command::new("xdg-open")
-                        .arg(&path)
-                        .spawn()
-                        .expect("Unable to open file on Linux");
-                }
-
-                return Err((LogType::INFO, format!("File {file_id} received from Server {server_id}")))
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
             => {
@@ -215,7 +189,6 @@ impl SimulationControllerData {
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
             }
-            ServerToClient::Sending(content_id, d) => {}
             ServerToClient::WrongServer(server_id)
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
@@ -224,6 +197,7 @@ impl SimulationControllerData {
             => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
             ServerToClient::ErrClientId(server_id)
             => return Err((LogType::ERROR, format!("Err Client Id Not Found from Server {server_id}"))),
+            _ => {}
         }
         Ok(())
     }
@@ -357,5 +331,34 @@ fn open_image(path: &str) {
     #[cfg(target_os = "linux")]
     {
         Command::new("xdg-open").arg(path).spawn().ok();
+    }
+}
+
+fn open_file(path: &str) {
+    // Open with system default application
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = path.to_str().unwrap();
+        //let quoted_path = format!("\"{}\"", path_str);
+        Command::new("cmd")
+            .args(&["/C", "start", "", &path_str])
+            .spawn()
+            .expect("Unable to open file on Windows");
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .expect("Unable to open file on macOS");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .expect("Unable to open file on Linux");
     }
 }
