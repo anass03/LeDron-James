@@ -152,6 +152,8 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
         .areas(view_area);
 
     let map_block = Block::default()
+        .title("Neighbours Map")
+        .title_alignment(Alignment::Right)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style( Style::default().fg(
@@ -222,13 +224,7 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
         .block(Block::default().borders(Borders::NONE));
     para.render(text_area, buf);
 
-    for dr in &app.simulation_controller_data.drones{
-        if dr.id == id {
-            render_command_popup(app,area,buf,&set_page.command_popup,dr.pdr);
-            break;
-        }
-    }
-
+    render_command_popup(app,area,buf,&set_page.command_popup,set_page.drone_pdr);
 }
 
 // Popup border color based on status
@@ -280,7 +276,7 @@ fn render_set_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fr
     let block = Block::default()
         .title("Set PDR")
         .title_alignment(Alignment::Center)
-        .title_bottom(Line::from(format!("Old PDR: {}",old_pdr)).alignment(Alignment::Right))
+        .title_bottom(Line::from(format!("Old PDR: {}",old_pdr)).alignment(Alignment::Center))
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(popup_border_color(&cmd.status)));
@@ -360,13 +356,24 @@ fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate:
     let mut nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(MAIN_BLOCK_BORDERS));
+        .border_style(Style::default().fg(
+            if cmd.cursor == 0{
+            app.animation_color()
+        }else{
+            MAIN_BLOCK_BORDERS
+        }));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
     app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
-        .style(Style::default().fg(if app.cache.tab1_data.popup_cursor == 1 { app.animation_color() } else { Color::White }).add_modifier(Modifier::BOLD));
+        .style(Style::default().fg(
+            if cmd.cursor == 1{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ).add_modifier(Modifier::BOLD));
     send_button.render(button_area, buf);
     match &cmd.status {
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
@@ -406,13 +413,25 @@ fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &cra
     let mut nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(MAIN_BLOCK_BORDERS));
+        .border_style(Style::default().fg(
+            if cmd.cursor == 0{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
     app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
-        .style(Style::default().fg(if app.cache.tab1_data.popup_cursor == 1 { app.animation_color() } else { Color::White }).add_modifier(Modifier::BOLD));
+        .style(Style::default().fg(
+            if cmd.cursor == 1{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ).add_modifier(Modifier::BOLD));
     send_button.render(button_area, buf);
     match &cmd.status {
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
@@ -450,7 +469,13 @@ fn render_crash_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fron
         .areas(inner);
     let send_button = Paragraph::new("[ Crash Drone ]")
         .alignment(Alignment::Center)
-        .style(Style::default().fg(if app.cache.tab1_data.popup_cursor == 0 { app.animation_color() } else { Color::White }).add_modifier(Modifier::BOLD));
+        .style(Style::default().fg(
+            if cmd.cursor == 0{
+                app.animation_color()
+            }else{
+                MAIN_BLOCK_BORDERS
+            }
+        ).add_modifier(Modifier::BOLD));
     send_button.render(button_area, buf);
     match &cmd.status {
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {

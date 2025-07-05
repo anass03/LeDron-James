@@ -30,7 +30,7 @@ impl App<'_> {
             }
             KeyCode::Enter => match self.cache.cursor {
                 0 => {
-                    self.app_mode = AppMode::Input;
+                    self.app_mode = AppMode::Input(0);
                 }
                 1 => {
                     // Handle topology selection

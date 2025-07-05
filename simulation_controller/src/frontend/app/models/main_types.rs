@@ -34,7 +34,11 @@ impl Settings{
 
 #[derive(PartialEq)]
 pub(in crate::frontend::app) enum AppMode{
-    Normal, Input, Scrolling, FileExploring
+    Normal,
+    Input(u8),  // u8 represents which input mode I selected:
+                // 0 Chat/TOML, 1 Text Buffer first field
+    Scrolling,
+    FileExploring
 }
 
 

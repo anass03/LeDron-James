@@ -192,7 +192,7 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
             // Now some specific tab gotta have a different message that we will choose
             block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
         }
-        AppMode::Input => {
+        AppMode::Input(_) => {
             block = block.title(" [INPUT MODE] ESC to quit input-mode & save the text | F1 to quit input-mode without saving ")
         }
         AppMode::Scrolling => {

@@ -198,7 +198,7 @@ impl App<'_>{
                         AppMode::Normal => {
                             self.handle_event_normalmode(key);
                         },
-                        AppMode::Input => {
+                        AppMode::Input(_) => {
                             self.handle_event_inputmode(event);
                         },
                         AppMode::Scrolling => {
