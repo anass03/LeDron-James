@@ -1,74 +1,60 @@
-# Star (Decagram) Topology
-# 10 drones in a circle, each connected to its 3rd follower
-# Circle order: 1,2,3,4,5,6,7,8,9,10
-# Connections: 1↔4, 2↔5, 3↔6, 4↔7, 5↔8, 6↔9, 7↔10, 8↔1, 9↔2, 10↔3
+# Personalized topology
 
 [[drone]]
 id = 1
-connected_node_ids = [4, 8, 11]
-pdr = 0.2
+connected_node_ids = [2, 3, 10]
+pdr = 0.41
 
 [[drone]]
 id = 2
-connected_node_ids = [5, 9, 13]
-pdr = 0.3
+connected_node_ids = [1, 4, 10, 13]
+pdr = 0.76
 
 [[drone]]
 id = 3
-connected_node_ids = [6, 10, 14]
-pdr = 0.2
+connected_node_ids = [1, 5, 12, 13]
+pdr = 0.27
 
 [[drone]]
 id = 4
-connected_node_ids = [1, 7, 15]
-pdr = 0.50
+connected_node_ids = [2, 6, 12]
+pdr = 0.53
 
 [[drone]]
 id = 5
-connected_node_ids = [2, 8, 12]
-pdr = 0.12
+connected_node_ids = [3, 7, 11]
+pdr = 0.68
 
 [[drone]]
 id = 6
-connected_node_ids = [3, 9, 14]
-pdr = 0.25
+connected_node_ids = [4, 8, 11]
+pdr = 0.09
 
 [[drone]]
 id = 7
-connected_node_ids = [4, 10, 15]
-pdr = 0.35
+connected_node_ids = [5, 9]
+pdr = 0.34
 
-[[drone]]
+[[client]]
 id = 8
-connected_node_ids = [1, 5]
-pdr = 0.40
+connected_drone_ids = [6]
 
-[[drone]]
+[[client]]
 id = 9
-connected_node_ids = [2, 6, 13]
-pdr = 0.30
+connected_drone_ids = [7]
 
-[[drone]]
+[[client]]
 id = 10
-connected_node_ids = [3, 7]
-pdr = 0.55
+connected_drone_ids = [1, 2]
 
-[[client]]
+[[server]]
 id = 11
-connected_drone_ids = [1]
+connected_drone_ids = [5, 6]
 
-[[client]]
+[[server]]
 id = 12
-connected_drone_ids = [5]
+connected_drone_ids = [3, 4]
 
 [[server]]
 id = 13
-connected_drone_ids = [2, 9]
-
-[[server]]
-id = 14
-connected_drone_ids = [3, 6]
-
-[[server]]
-id = 15
-connected_drone_ids = [4, 7]
+connected_drone_ids = [2, 3]
