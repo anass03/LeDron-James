@@ -10,6 +10,26 @@ use crate::frontend::app::models::main_types::AppMode;
 impl App<'_> {
     pub(crate) fn handle_event_tab3(&mut self, key: KeyCode) {
         match key {
+            KeyCode::Backspace => {
+                // Handle backspace based on current state
+                match self.cache.tab3_data.menu_selection {
+                    Tab3MenuSelection::OptArea => {
+                        // If in settings area, go back to menu area
+                        self.cache.tab3_data.menu_selection = Tab3MenuSelection::MenuArea;
+                        self.simulation_controller_data.logs.push_sc_log(
+                            crate::backend::sc_models::LogType::INFO,
+                            "Backspace: Returned to menu area".to_string()
+                        );
+                    }
+                    Tab3MenuSelection::MenuArea => {
+                        // If in menu area, backspace does nothing (could be used for other purposes)
+                        self.simulation_controller_data.logs.push_sc_log(
+                            crate::backend::sc_models::LogType::INFO,
+                            "Backspace pressed at settings menu level".to_string()
+                        );
+                    }
+                }
+            }
             KeyCode::Up => {
                 match self.cache.tab3_data.menu_selection {
                     Tab3MenuSelection::MenuArea => {

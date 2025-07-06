@@ -406,6 +406,7 @@ pub(super) mod chat_rendering{
     use ratatui_image::StatefulImage;
     use server::Chat;
     use server::MessageSC::{Media, Message};
+    use server::MediaSC;
     use crate::backend::sc_models::{NetCacheFile, NetCacheMedia};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
@@ -743,18 +744,215 @@ pub(super) mod chat_rendering{
     }
 
     fn render_no_contacts_available(app:&App, area: Rect, buf: &mut Buffer){
+        let [top, center, bottom] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(40),
+                Constraint::Percentage(35),
+                Constraint::Percentage(25),
+            ])
+            .areas(area);
 
-        let text = Text::from(vec![
+        // Top: Animated empty contacts icon
+        let icon_canvas = draw_empty_contacts_canvas(app.cache.counter as u64);
+        icon_canvas.render(top, buf);
+
+        // Center: Main message
+        let main_text = Text::from(vec![
             Line::from("No Contacts Available")
-                .style(Style::default().fg(Color::Gray).add_modifier(Modifier::ITALIC | Modifier::BOLD)),
-            Line::from("Press 'r' to send network request to find new contacts")
-                .style(Style::default().fg(Color::DarkGray).add_modifier(Modifier::BOLD)),
+                .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+            Line::from("")
         ]);
-
-        Paragraph::new(text)
+        Paragraph::new(main_text)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true })
-            .render(area, buf);
+            .render(center, buf);
+
+        // Bottom: Tip
+        let tip_text = Text::from(vec![
+            Line::from("💡 Press 'r' to send a network request to find new contacts")
+                .style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD | Modifier::ITALIC)),
+        ]);
+        Paragraph::new(tip_text)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true })
+            .render(bottom, buf);
+    }
+
+    // Draw animated empty contacts icon
+    fn draw_empty_contacts(ctx: &mut Context) {
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis() as f64 * 0.001;
+        
+        // Draw multiple empty contact placeholders
+        for i in 0..3 {
+            let x_offset = 5.0 + i as f64 * 5.0;
+            let y_offset = 10.0;
+            
+            // Animated pulse effect
+            let pulse = (time * 2.0 + i as f64 * 1.5).sin() * 0.3 + 0.7;
+            let radius = 3.0 * pulse;
+            
+            // Draw empty contact circle with animated border
+            let border_color = if i == 0 {
+                // First contact gets rainbow animation
+                let hue = (time * 60.0) % 360.0;
+                let (r, g, b) = hsv_to_rgb(hue, 0.8, 1.0);
+                Color::Rgb(r, g, b)
+            } else {
+                // Others get subtle animation
+                let hue = (time * 30.0 + i as f64 * 60.0) % 360.0;
+                let (r, g, b) = hsv_to_rgb(hue, 0.4, 0.6);
+                Color::Rgb(r, g, b)
+            };
+            
+            // Draw contact circle
+            ctx.draw(&Circle {
+                x: x_offset,
+                y: y_offset,
+                radius,
+                color: Color::DarkGray,
+                ..Default::default()
+            });
+            
+            // Draw animated border
+            ctx.draw(&Circle {
+                x: x_offset,
+                y: y_offset,
+                radius: radius + 0.5,
+                color: border_color,
+                ..Default::default()
+            });
+            
+            // Draw "?" inside the circle
+            let question_color = if i == 0 {
+                let hue = (time * 80.0) % 360.0;
+                let (r, g, b) = hsv_to_rgb(hue, 0.9, 1.0);
+                Color::Rgb(r, g, b)
+            } else {
+                Color::Gray
+            };
+            
+            // Draw question mark using lines
+            let q_scale = 0.8;
+            let q_x = x_offset;
+            let q_y = y_offset;
+            
+            // Question mark shape
+            ctx.draw(&CanvasLine {
+                x1: q_x - 0.5 * q_scale,
+                y1: q_y - 1.0 * q_scale,
+                x2: q_x + 0.5 * q_scale,
+                y2: q_y - 1.0 * q_scale,
+                color: question_color,
+                ..Default::default()
+            });
+            ctx.draw(&CanvasLine {
+                x1: q_x + 0.5 * q_scale,
+                y1: q_y - 1.0 * q_scale,
+                x2: q_x + 0.5 * q_scale,
+                y2: q_y - 0.3 * q_scale,
+                color: question_color,
+                ..Default::default()
+            });
+            ctx.draw(&CanvasLine {
+                x1: q_x + 0.5 * q_scale,
+                y1: q_y - 0.3 * q_scale,
+                x2: q_x - 0.2 * q_scale,
+                y2: q_y + 0.2 * q_scale,
+                color: question_color,
+                ..Default::default()
+            });
+            ctx.draw(&CanvasLine {
+                x1: q_x - 0.2 * q_scale,
+                y1: q_y + 0.2 * q_scale,
+                x2: q_x - 0.2 * q_scale,
+                y2: q_y + 0.8 * q_scale,
+                color: question_color,
+                ..Default::default()
+            });
+            
+            // Draw animated sparkles around the first contact
+            if i == 0 {
+                for s in 0..6 {
+                    let angle = time * 2.0 + s as f64 * 1.0;
+                    let sparkle_radius = 6.0 + (time * 0.5 + s as f64).sin() * 0.5;
+                    let sparkle_x = x_offset + angle.cos() * sparkle_radius;
+                    let sparkle_y = y_offset + angle.sin() * sparkle_radius;
+                    let sparkle_hue = (time * 100.0 + s as f64 * 60.0) % 360.0;
+                    let (r, g, b) = hsv_to_rgb(sparkle_hue, 0.9, 1.0);
+                    
+                    ctx.draw(&Circle {
+                        x: sparkle_x,
+                        y: sparkle_y,
+                        radius: 0.3 + (time * 0.7 + s as f64).sin() * 0.1,
+                        color: Color::Rgb(r, g, b),
+                        ..Default::default()
+                    });
+                }
+            }
+        }
+        
+        // Draw connecting lines between contacts with animation
+        for i in 0..2 {
+            let x1 = 5.0 + i as f64 * 5.0;
+            let x2 = 10.0 + i as f64 * 5.0;
+            let y = 10.0;
+            
+            let line_alpha = (time * 1.5 + i as f64).sin() * 0.5 + 0.5;
+            let line_color = if line_alpha > 0.7 {
+                let hue = (time * 40.0 + i as f64 * 30.0) % 360.0;
+                let (r, g, b) = hsv_to_rgb(hue, 0.6, 0.8);
+                Color::Rgb(r, g, b)
+            } else {
+                Color::DarkGray
+            };
+            
+            ctx.draw(&CanvasLine {
+                x1,
+                y1: y,
+                x2,
+                y2: y,
+                color: line_color,
+                ..Default::default()
+            });
+        }
+        
+        // Draw floating "search" particles
+        for p in 0..8 {
+            let angle = time * 0.5 + p as f64 * 0.8;
+            let radius = 8.0 + (time * 0.3 + p as f64).sin() * 2.0;
+            let x = 10.0 + angle.cos() * radius;
+            let y = 10.0 + angle.sin() * radius;
+            
+            // Keep particles within bounds
+            if x >= 0.0 && x <= 20.0 && y >= 0.0 && y <= 20.0 {
+                let particle_hue = (time * 50.0 + p as f64 * 45.0) % 360.0;
+                let (r, g, b) = hsv_to_rgb(particle_hue, 0.7, 0.6);
+                
+                ctx.draw(&Circle {
+                    x,
+                    y,
+                    radius: 0.2 + (time * 0.5 + p as f64).sin() * 0.1,
+                    color: Color::Rgb(r, g, b),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    fn draw_empty_contacts_canvas<'a>(counter: u64) -> Canvas<'a, fn(&mut Context)> {
+        Canvas::default()
+            .background_color(POPUP_BG_COLOR)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Empty Contacts"))
+            .x_bounds([0.0, 20.0])
+            .y_bounds([0.0, 20.0])
+            .paint(draw_empty_contacts)
     }
 
     // Third Menù rendering ( Message with who you chose )
@@ -1039,15 +1237,22 @@ pub(super) mod chat_rendering{
         let available_width = area.width.saturating_sub(2); // Leave margin for scrollbar
         
         for (msg, _) in msgs.iter() {
-            let content = match msg {
-                Message(text) => text.clone(),
-                Media(_) => "[MEDIA] 🖇️ Select this message to open the file!".to_string(),
+            // Calculate height based on message type
+            let height = match msg {
+                Message(text) => {
+                    let wrap_width = available_width.saturating_sub(8) as usize;
+                    let wrapped = wrap(&text, wrap_width);
+                    let lines = wrapped.len().max(1) as u16;
+                    lines + 3 // 2 padding + 1 timestamp
+                }
+                Media(media_sc) => {
+                    // Media messages have fixed height for the visual representation
+                    match media_sc {
+                        MediaSC::Image(_, _) => 5, // Image preview
+                        MediaSC::File(_, _) => 4,  // File info
+                    }
+                }
             };
-            // Use a smaller width to ensure proper wrapping and prevent horizontal scroll
-            let wrap_width = available_width.saturating_sub(8) as usize; // Leave more margin
-            let wrapped = wrap(&content, wrap_width);
-            let lines = wrapped.len().max(1) as u16;
-            let height = lines + 3; // 2 padding + 1 timestamp
             message_heights.push(height);
             total_height += height;
         }
@@ -1123,37 +1328,93 @@ pub(super) mod chat_rendering{
                 .title_style(Style::default().fg(Color::Gray))
                 .border_style(Style::default().fg(bubble_color));
 
+            // Render message content based on type
+            match msg {
+                Message(text) => {
+                    // Regular text message
+                    let wrap_width = bubble_area.width.saturating_sub(6) as usize;
+                    let wrapped_text = wrap(&text, wrap_width).join("\n");
 
-            // Wrap and render message text with proper width constraint
-            let content = match msg {
-                Message(text) => text.clone(),
-                Media(_) => "[media]".to_string(),
-            };
-            // Use bubble area width minus borders for wrapping
-            let wrap_width = bubble_area.width.saturating_sub(6) as usize;
-            let wrapped_text = wrap(&content, wrap_width).join("\n");
+                    let text_style = if is_selected {
+                        Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(Color::White)
+                    };
 
-            // Apply selection styling to text
-            let text_style = if is_selected {
-                Style::default().fg(Color::White)
-            } else {
-                Style::default().fg(Color::White)
-            };
+                    Paragraph::new(wrapped_text)
+                        .block(bubble_block)
+                        .style(text_style)
+                        .wrap(Wrap { trim: false })
+                        .alignment(if is_sent { Alignment::Right } else { Alignment::Left })
+                        .render(bubble_area, scroll_buf);
+                }
+                Media(media_sc) => {
+                    // Media message with visual representation
+                    match media_sc {
+                        MediaSC::Image(image_id, _) => {
+                            // Image message with preview
+                            let image_content = format!("🖼️  Image: {}", image_id);
+                            let image_style = if is_selected {
+                                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Yellow)
+                            };
 
-            Paragraph::new(wrapped_text)
-                .block(bubble_block)
-                .style(text_style)
-                .wrap(Wrap { trim: false })
-                .alignment(if is_sent { Alignment::Right } else { Alignment::Left })
-                .render(bubble_area, scroll_buf);
+                            Paragraph::new(image_content)
+                                .block(bubble_block)
+                                .style(image_style)
+                                .wrap(Wrap { trim: false })
+                                .alignment(if is_sent { Alignment::Right } else { Alignment::Left })
+                                .render(bubble_area, scroll_buf);
+                        }
+                        MediaSC::File(file_id, _) => {
+                            // File message with file info
+                            let file_content = format!("📄 File: {}", file_id);
+                            let file_style = if is_selected {
+                                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+                            } else {
+                                Style::default().fg(Color::Cyan)
+                            };
+
+                            Paragraph::new(file_content)
+                                .block(bubble_block)
+                                .style(file_style)
+                                .wrap(Wrap { trim: false })
+                                .alignment(if is_sent { Alignment::Right } else { Alignment::Left })
+                                .render(bubble_area, scroll_buf);
+                        }
+                    }
+                }
+            }
         }
 
-        // Scroll state: use ndpage_data.scroll_offset
+        // Calculate scroll position to keep selected message visible
         let mut scroll_state = ScrollViewState::default();
         
-        // Set scroll position based on offset
-        // scroll_offset = 0 means at the top, increasing means scrolled down
-        for _ in 0..third_page_data.scroll_offset {
+        // Calculate the position of the selected message
+        let mut cumulative_height: usize = 0;
+        for i in 0..selected_message_index {
+            cumulative_height += message_heights[i] as usize;
+        }
+        
+        // Scroll to position the selected message in the center of the view
+        let view_height = area.height as usize;
+        let selected_message_height = message_heights[selected_message_index] as usize;
+        let mut target_scroll = cumulative_height.saturating_sub(view_height / 2).saturating_add(selected_message_height / 2);
+        
+        // Ensure first message is fully visible at the top
+        if selected_message_index == 0 {
+            target_scroll = 0;
+        }
+        
+        // Clamp scroll so the last message is always fully visible
+        let max_scroll = total_height.saturating_sub(view_height as u16);
+        if target_scroll > max_scroll as usize {
+            target_scroll = max_scroll as usize;
+        }
+        
+        // Apply scroll
+        for _ in 0..target_scroll {
             scroll_state.scroll_down();
         }
         
