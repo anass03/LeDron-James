@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use wg_2024::config::Config;
-use wg_2024::network::NodeId;
 use std::collections::HashSet;
 
 pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
