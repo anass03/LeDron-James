@@ -36,8 +36,8 @@ impl App<'_> {
                             info!(target: "main", "[LEDRON-CLI] Received media update for: {}", media_id);
                             
                             // Update the media entry in new_downloaded_medias
-                            if let Some(mut entry) = self.simulation_controller_data.net_cache.new_downloaded_medias.get_mut(&media_id) {
-                                entry.update_cache(media_status);
+                            if let Some(mut entry) = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&media_id) {
+                                entry.update_cache_media(media_status);
                                 // Update channels if provided
                                 if let Some(rx) = update_rx {
                                     entry.rx = Some(rx);
@@ -49,7 +49,7 @@ impl App<'_> {
                                 if let Some(rx) = update_rx {
                                     media_entry.rx = Some(rx);
                                 }
-                                self.simulation_controller_data.net_cache.new_downloaded_medias.insert(media_id, media_entry);
+                                self.simulation_controller_data.net_cache.downloaded_medias.insert(media_id, media_entry);
                             }
                         },
                         RendererResponse::EncodedFile((file_id, file_status)) => {
@@ -80,7 +80,7 @@ impl App<'_> {
 
     /// Handle resize requests for rendered media
     pub(crate) fn handle_media_resize_requests(&mut self) {
-        for mut entry in self.simulation_controller_data.net_cache.new_downloaded_medias.iter_mut() {
+        for mut entry in self.simulation_controller_data.net_cache.downloaded_medias.iter_mut() {
             // Collect updates first to avoid double mutable borrow
             let mut updates = Vec::new();
             if let Some(rx) = &mut entry.rx {

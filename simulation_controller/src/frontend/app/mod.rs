@@ -221,7 +221,7 @@ impl App<'_>{
         }
         
         // Check if media exists in new_downloaded_medias
-        if let Some(mut media_entry) = app.simulation_controller_data.net_cache.new_downloaded_medias.get_mut(&data.3) {
+        if let Some(mut media_entry) = app.simulation_controller_data.net_cache.downloaded_medias.get_mut(&data.3) {
             if let NetCacheMedia::Rendered(protocol) = &mut media_entry.cache {
                 // Create a StatefulImage widget and render it properly
                 let image_widget = StatefulImage::new();

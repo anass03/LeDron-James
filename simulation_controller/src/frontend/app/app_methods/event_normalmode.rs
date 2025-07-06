@@ -21,7 +21,7 @@ impl App<'_>{
                 }
                 "q" => self.stay = false,
                 "i" => {
-                    debug!(target:"main", "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.new_downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
+                    debug!(target:"main", "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
                 }
                 _ => {
                     match self.selected_tab {

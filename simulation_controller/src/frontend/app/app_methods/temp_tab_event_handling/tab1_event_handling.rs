@@ -790,7 +790,7 @@ impl App<'_> {
                                                             Ok(_) => {
                                                                 // Create or update the media entry in new_downloaded_medias
                                                                 let media_entry = MediaEntry::new(NetCacheMedia::Downloading(0f32));
-                                                                self.simulation_controller_data.net_cache.new_downloaded_medias.insert(media_id.clone(), media_entry);
+                                                                self.simulation_controller_data.net_cache.downloaded_medias.insert(media_id.clone(), media_entry);
                                                                 ndpage.selected_file = SelectedFileMedia::Media(media_id.clone());
                                                                 self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                     ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))

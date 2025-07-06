@@ -12,6 +12,7 @@ use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
 use crate::backend::sc_models::{ChatList, FileType, LogType, MediaEntry, NetCacheFile, NetCacheMedia, NodeStatistics, RendererCommand, RendererResponse};
 use crate::backend::sc_models::FileType::UTF8;
+use crate::backend::sc_models::NetCacheFile::Downloading;
 use crate::backend::simulation_controller::SimulationControllerData;
 
 impl SimulationControllerData {
@@ -232,10 +233,10 @@ impl SimulationControllerData {
             ContentID::Media(media_id) => {
                 match image {
                     Some(image) => {
-                        // Create or update the media entry in new_downloaded_medias
-                        let media_entry = MediaEntry::new(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
-                        self.net_cache.new_downloaded_medias.insert(media_id.clone(), media_entry);
-                        
+                        // Create or update the media entry in downloaded_medias
+                        //let media_entry = MediaEntry::new(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
+                        //self.net_cache.downloaded_medias.insert(media_id.clone(), media_entry);
+
                         // Send to renderer for processing
                         match self.tx_to_renderer.as_ref() {
                             Some(sender) => {
@@ -251,39 +252,41 @@ impl SimulationControllerData {
                     },
                     None => {
                         // Update downloading progress
-                        if let Some(mut entry) = self.net_cache.new_downloaded_medias.get_mut(&media_id) {
-                            entry.update_cache(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
+                        if let Some(mut entry) = self.net_cache.downloaded_medias.get_mut(&media_id) {
+                            entry.update_cache_media(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
                         } else {
                             // Create new entry if it doesn't exist
                             let media_entry = MediaEntry::new(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
-                            self.net_cache.new_downloaded_medias.insert(media_id, media_entry);
+                            self.net_cache.downloaded_medias.insert(media_id, media_entry);
                         }
                         Ok(())
                     }
                 }
             },
             ContentID::File(file_id) => {
-                let server_map = match self.net_cache.downloaded_files.get_mut(&server_id) {
-                    Some(map) => map,
-                    None => {
-                        return Err((LogType::ERROR, format!("Server ID {server_id} not found in downloaded_files")));
-                    }
-                };
-
-                match server_map.get_mut(&file_id) {
-                    Some(net_cache_file) => {
-                        match file {
-                            Some(file) => *net_cache_file = NetCacheFile::Downloaded(file),
+                match file {
+                    Some(file) => {
+                        // Send to renderer for processing
+                        match self.tx_to_renderer.as_ref() {
+                            Some(sender) => {
+                                if let Err(e) = sender.send(RendererCommand::EncodeFile((file_id, file))) {
+                                    return Err((LogType::ERROR, e.to_string()));
+                                }
+                            },
                             None => {
-                                *net_cache_file = NetCacheFile::Downloading(percentage.unwrap_or(0.0))
-                            }
+                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                            },
                         }
                         Ok(())
-                    }
+                    },
                     None => {
-                        Err((LogType::ERROR, format!("File ID {file_id} entry for NetCacheFile not found")))
+                        // Update downloading progress
+                        self.net_cache.downloaded_files.insert(file_id, Downloading(percentage.unwrap_or(0.0)));
+                        Ok(())
                     }
                 }
+
+
             }
         }
 
@@ -400,21 +403,3 @@ fn open_file(path: &str) {
             .expect("Unable to open file on Linux");
     }
 }
-
-/*fn file_type(file: Vec<u8>) -> FileType {
-    // Check if valid UTF-8
-    match str::from_utf8(&file) {
-        Ok(utf8_str) => {
-            // Split in lines Vec<String>
-            let lines: Vec<String> = utf8_str
-                .lines()
-                .map(|line| line.to_string())
-                .collect();
-
-            UTF8(lines)
-        }
-        Err(e) => {
-            std::fs::File::
-        }
-    }
-}*/

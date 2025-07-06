@@ -1345,7 +1345,7 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                match app.simulation_controller_data.net_cache.new_downloaded_medias.get(id.as_str()){
+                                match app.simulation_controller_data.net_cache.downloaded_medias.get(id.as_str()){
                                     None => {
                                         ListItem::from(format!("{:?}",id)).style(base_style)
                                     }
@@ -1864,7 +1864,7 @@ pub(super) mod net_rendering{
         }
     }
     fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
-        match app.simulation_controller_data.net_cache.new_downloaded_medias.get(&file_id){
+        match app.simulation_controller_data.net_cache.downloaded_medias.get(&file_id){
             None => {
                 error!(target: "main", "[LEDRON-CLI] Couldn't find media id in new_downloaded_medias while rendering")
             }

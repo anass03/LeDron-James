@@ -208,7 +208,7 @@ fn render_download_folder_section(app: &App, area: Rect, buf: &mut Buffer) {
 
     // Current download folder display
     let current_folder = &app.simulation_controller_data.download_folder;
-    let folder_display = Paragraph::new(format!("Current: {}", current_folder))
+    let folder_display = Paragraph::new(format!("Current: {:?}", current_folder))
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
