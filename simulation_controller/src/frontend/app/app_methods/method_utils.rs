@@ -9,16 +9,17 @@ use std::path::Path;
 use std::process::id;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
+use dashmap::mapref::one::Ref;
 use log::{info, LevelFilter};
 use ratatui_image::thread::ResizeRequest;
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
-use crate::backend::sc_models::{FileRendererUpdate, LogType, MediaEntry, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{FileRendererUpdate, LogType, MediaEntry, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use super::super::App;
 use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as ServerConfig};
-use host::{MediaId, ServerId};
+use host::{FileId, MediaId, ServerId};
 
 fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
@@ -55,6 +56,19 @@ impl App<'_> {
                         RendererResponse::EncodedFile((file_id, file_status)) => {
                             info!(target: "main", "[LEDRON-CLI] Received file update for: {}", file_id);
                             // Handle file updates if needed
+                            let mut rendered:bool = false;
+                            match self.simulation_controller_data.net_cache.downloaded_files.get(&file_id){
+                                None => (),
+                                Some(item) => {
+                                    match item.value(){
+                                        NetCacheFile::Rendered(_) => rendered=true,
+                                        _ => (),
+                                    }
+                                }
+                            }
+                            if !rendered{
+                                let _ = self.simulation_controller_data.net_cache.downloaded_files.insert(file_id, file_status);
+                            }
                         }
                         RendererResponse::Computed((ret_vec)) => {
                             for (id,top) in ret_vec{

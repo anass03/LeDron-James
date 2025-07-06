@@ -1398,38 +1398,31 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                match app.simulation_controller_data.net_cache.downloaded_files.get(&ndpage_data.selected_server){
+                                match app.simulation_controller_data.net_cache.downloaded_files.get(id.as_str()){
                                     None => {
                                         ListItem::from(format!("{:?}",id)).style(base_style)
                                     }
-                                    Some(hash) => {
-                                        match hash.get(id.as_str()){
-                                            None => {
-                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                    Some(item) => {
+                                        let load_char = match item.value(){
+                                            NetCacheFile::Downloading(_) | NetCacheFile::Rendering(_) => {
+                                                match app.cache.counter % 4 {
+                                                    0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                }
                                             }
-                                            Some(item) => {
-                                                let load_char = match item{
-                                                    NetCacheFile::Downloading(_) | NetCacheFile::Rendering(_) => {
-                                                        match app.cache.counter % 4 {
-                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                            NetCacheFile::Downloaded(_) => {
+                                                match app.cache.counter % 20 {
+                                                    (num) => {
+                                                        if num<10{
+                                                            '✓'
+                                                        }else{
+                                                            ' '
                                                         }
                                                     }
-                                                    NetCacheFile::Downloaded(_) => {
-                                                        match app.cache.counter % 20 {
-                                                            (num) => {
-                                                                if num<10{
-                                                                    '✓'
-                                                                }else{
-                                                                    ' '
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    NetCacheFile::Rendered(_) => '✓',
-                                                };
-                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                                }
                                             }
-                                        }
+                                            NetCacheFile::Rendered(_) => '✓',
+                                        };
+                                        ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
                                     }
                                 }
                             })
@@ -1823,7 +1816,7 @@ pub(super) mod net_rendering{
                 media_count_para.render(status_left, buf);
             }
             SelectedFileMedia::File(file_id) => {
-
+                render_file_visualizer(app,inner_file_visualizer_block,buf,ndpage_data,selected_node,file_id);
             }
             SelectedFileMedia::Media(media_id) => {
                 render_media_visualizer(app,inner_file_visualizer_block, buf, ndpage_data, selected_node, media_id);
@@ -1834,15 +1827,12 @@ pub(super) mod net_rendering{
         None
     }
     fn render_file_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:FileId){
-        match app.simulation_controller_data.net_cache.downloaded_files.get(&ndpage_data.selected_server) {
+        match app.simulation_controller_data.net_cache.downloaded_files.get(file_id.as_str()) {
             None => {}
-            Some(hash) => {
-                match hash.get(&file_id){
-                    None => {}
-                    Some(file) => {
-                        match file {
-                            NetCacheFile::Downloading(_) => {
-                                render_loading_gauge(app,area,buf,None, Some(file), ndpage_data.selected_server)
+            Some(item) => {
+                match item.value() {
+                            NetCacheFile::Downloading(x) => {
+                                render_loading_gauge(app,area,buf,None, Some(item.value()), ndpage_data.selected_server)
                             }
                             NetCacheFile::Downloaded(_) | NetCacheFile::Rendering(_)=> {
                                 render_file_waiting_for_rendering(app,area,buf);
@@ -1858,8 +1848,6 @@ pub(super) mod net_rendering{
                                 }
                             }
                         }
-                    }
-                }
             }
         }
     }
