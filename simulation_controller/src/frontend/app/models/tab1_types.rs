@@ -28,6 +28,8 @@ pub(in crate::frontend::app) struct Tab1{
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
+
+    pub navigation_history: Vec<ViewedTab1>, // Track navigation history for backspace
 }
 
 #[derive(Clone, Debug, Default)]
@@ -335,12 +337,34 @@ impl Tab1{
             popup_selection: PopupSelection::MenuArea,
             image_rendering_data: RenderingImage::False,
             file_exploring_data: FileExploring::default(),
-            viewing: ViewedTab1::Main
+            viewing: ViewedTab1::Main,
+            navigation_history: Vec::new(), // Track navigation history for backspace
         }
     }
     pub(crate) fn return_to_main(&mut self){
         self.popup_selection = PopupSelection::MenuArea;
         self.popup_cursor = 0;
         self.viewing = ViewedTab1::Main;
+        self.navigation_history.clear(); // Clear history when returning to main
+    }
+
+    /// Push current state to navigation history
+    pub(crate) fn push_navigation_state(&mut self, state: ViewedTab1) {
+        self.navigation_history.push(state);
+    }
+
+    /// Pop the last navigation state (for backspace)
+    pub(crate) fn pop_navigation_state(&mut self) -> Option<ViewedTab1> {
+        self.navigation_history.pop()
+    }
+
+    /// Get the current navigation depth
+    pub(crate) fn navigation_depth(&self) -> usize {
+        self.navigation_history.len()
+    }
+
+    /// Check if we can go back (have navigation history)
+    pub(crate) fn can_go_back(&self) -> bool {
+        !self.navigation_history.is_empty()
     }
 }
