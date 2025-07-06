@@ -286,8 +286,8 @@ impl SimulationControllerData {
                     None => {
                         // Update downloading progress
                         if let Some(mut entry) = self.net_cache.downloaded_files.get_mut(&file_id) {
-                            match entry {
-                                NetCacheMedia::Downloading(_) => {},
+                            match *entry {
+                                Downloading(_) => {},
                                 _ => return Ok(())
                             }
                         }
