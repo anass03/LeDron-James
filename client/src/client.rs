@@ -103,14 +103,14 @@ impl Client {
                     //sending expected pdr to simulation
                      match self.host.controller_send.send(HostEvent::ExpectedPDR(self.host.id, self.host.network.drone_pdr.clone())) {
                          Ok(_) => {}
-                         Err(e) => {self.host.send_logging(LogType::ERROR, LogModule::NETWORK,format!("Error reporting PDR: {}", e));}
+                         Err(e) => {self.host.send_logging(LogType::WARN, LogModule::NETWORK,format!("Error reporting PDR: {}", e));}
                      }
 
                      //sending info on network speed
                      let (up, down) = self.net_metrics.update();
                      self.host.send_logging(
                              LogType::DEBUG, LogModule::NETWORK,
-                             format!("✅ Reporting net speed: {:?}", (up, down))
+                             format!("Reporting net speed: {:?}", (up, down))
                          );
                      if let Err(e) = self.host.controller_send.send(HostEvent::NetSpeed(self.host.id, up, down)) {
                          self.host.send_logging(
