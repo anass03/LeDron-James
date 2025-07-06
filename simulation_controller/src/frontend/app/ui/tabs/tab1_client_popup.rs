@@ -1052,8 +1052,8 @@ pub(super) mod chat_rendering{
             total_height += height;
         }
 
-        // Create a ScrollView with constrained width to prevent horizontal scrolling
-        let mut scroll_view = ScrollView::new(Size::new(available_width, total_height));
+        // Create scroll view with constrained width to prevent horizontal scrolling
+        let mut scroll_view = ScrollView::new(ratatui::layout::Size::new(available_width, total_height));
         let scroll_buf = scroll_view.buf_mut();
 
         // Fill the entire scroll buffer with the popup background color
@@ -1148,20 +1148,15 @@ pub(super) mod chat_rendering{
                 .render(bubble_area, scroll_buf);
         }
 
-        // Create scroll state and set it to show the selected message
+        // Scroll state: use ndpage_data.scroll_offset
         let mut scroll_state = ScrollViewState::default();
         
-        // Calculate scroll position to show the selected message
-        if third_page_data.scroll_offset > 0 {
-            // For now, just scroll to top since we can't scroll to specific positions
-            // The selected message will be highlighted visually
-            scroll_state.scroll_to_top();
-        } else {
-            // If scroll_offset is 0, show the last message
-        scroll_state.scroll_to_bottom();
+        // Set scroll position based on offset
+        // scroll_offset = 0 means at the top, increasing means scrolled down
+        for _ in 0..third_page_data.scroll_offset {
+            scroll_state.scroll_down();
         }
-
-        // Render the scroll view into the main buffer
+        
         ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
     }
 }
@@ -1173,7 +1168,7 @@ pub(super) mod net_rendering{
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
     use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage, SelectedFileMedia};
-    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect, Size};
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Position, Rect, Size};
     use ratatui::buffer::{Buffer, Cell};
 
     use ratatui::prelude::{Color, Line, Modifier, Style, Text, Widget};
@@ -1826,56 +1821,6 @@ pub(super) mod net_rendering{
         }
         None
     }
-    fn render_file_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:FileId){
-        match app.simulation_controller_data.net_cache.downloaded_files.get(file_id.as_str()) {
-            None => {}
-            Some(item) => {
-                match item.value() {
-                            NetCacheFile::Downloading(x) => {
-                                render_loading_gauge(app,area,buf,None, Some(item.value()), ndpage_data.selected_server)
-                            }
-                            NetCacheFile::Downloaded(_) | NetCacheFile::Rendering(_)=> {
-                                render_file_waiting_for_rendering(app,area,buf);
-                            }
-                            NetCacheFile::Rendered(file) => {
-                                match file {
-                                    FileType::UTF8(lines) => {
-                                        render_file_utf8(app, area, buf, lines);
-                                    }
-                                    FileType::Other(file) => {
-                                        render_file_not_viewable(app,area,buf);
-                                    }
-                                }
-                            }
-                        }
-            }
-        }
-    }
-    fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
-        match app.simulation_controller_data.net_cache.downloaded_medias.get(&file_id){
-            None => {
-                error!(target: "main", "[LEDRON-CLI] Couldn't find media id in new_downloaded_medias while rendering")
-            }
-            Some(media_entry) => {
-                match &media_entry.cache{
-                    NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
-                        // Rendering Bar status widget
-                        render_loading_gauge(app,area,buf,Some(&media_entry.cache),None, ndpage_data.selected_server)
-                    }
-                    NetCacheMedia::Downloaded(vec) => {
-                        render_media_waiting_for_rendering(app, area, buf);
-                    }
-                    NetCacheMedia::Rendered(image_protocol) => {
-                        // I render it externally ddso no need to do it again here,
-                        // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
-                    }
-                    NetCacheMedia::FatalErrorRendering() => {
-                        render_fatal_rendering_error(app, area, buf);
-                    }
-                }
-            }
-        }
-    }
     fn render_loading_gauge(app: &App, area: Rect, buf: &mut Buffer, net_cache_media: Option<&NetCacheMedia>, net_cache_file: Option<&NetCacheFile>, server_id: ServerId) {
         // Split area vertically: [top, gauge, info, bottom]
         let [top_area, gauge_area, info_area, bottom_area] = Layout::default()
@@ -1938,15 +1883,15 @@ pub(super) mod net_rendering{
         let info_lines = match net_cache_media {
             Some(media) => {
                 match media {
-            NetCacheMedia::Downloading(_) => vec![
-                Line::from("Downloading media from server...").style(Style::default().fg(Color::Gray)),
-                Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
-            ],
-            NetCacheMedia::Rendering(_) => vec![
-                Line::from("Rendering image, please wait...").style(Style::default().fg(Color::Gray)),
-                Line::from("Rendering time depends on image size.").style(Style::default().fg(Color::Gray)),
-            ],
-            _ => vec![],
+                    NetCacheMedia::Downloading(_) => vec![
+                        Line::from("Downloading media from server...").style(Style::default().fg(Color::Gray)),
+                        Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
+                    ],
+                    NetCacheMedia::Rendering(_) => vec![
+                        Line::from("Rendering image, please wait...").style(Style::default().fg(Color::Gray)),
+                        Line::from("Rendering time depends on image size.").style(Style::default().fg(Color::Gray)),
+                    ],
+                    _ => vec![],
                 }
             }
             None => {
@@ -1969,7 +1914,7 @@ pub(super) mod net_rendering{
                 }
             }
         };
-        
+
         // Wrap the info lines to fit the available width
         let mut wrapped_info_lines = Vec::new();
         for line in info_lines {
@@ -1979,7 +1924,7 @@ pub(super) mod net_rendering{
                 wrapped_info_lines.push(Line::from(wrapped_line.to_string()).style(Style::default().fg(Color::Gray)));
             }
         }
-        
+
         let info_para = Paragraph::new(wrapped_info_lines)
             .alignment(Alignment::Center)
             .block(Block::default().borders(Borders::NONE))
@@ -1998,17 +1943,70 @@ pub(super) mod net_rendering{
         ];
         // Make the tip change 4-5x slower
         let tip = tips[(app.cache.counter as usize / 25) % tips.len()];
-        
+
         // Wrap the tip text to fit the available width
         let wrapped_tip = wrap(&tip, bottom_area.width.saturating_sub(2) as usize);
         let tip_lines: Vec<Line> = wrapped_tip.iter()
             .map(|line| Line::from(line.to_string()).style(Style::default().fg(Color::Cyan)))
             .collect();
-        
+
         let tip_para = Paragraph::new(tip_lines)
             .alignment(Alignment::Center)
             .wrap(Wrap { trim: true });
         tip_para.render(bottom_area, buf);
+    }
+
+    fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
+        match app.simulation_controller_data.net_cache.downloaded_medias.get(&file_id){
+            None => {
+                error!(target: "main", "[LEDRON-CLI] Couldn't find media id in new_downloaded_medias while rendering")
+            }
+            Some(media_entry) => {
+                match &media_entry.cache{
+                    NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
+                        // Rendering Bar status widget
+                        render_loading_gauge(app,area,buf,Some(&media_entry.cache),None, ndpage_data.selected_server)
+                    }
+                    NetCacheMedia::Downloaded(vec) => {
+                        render_media_waiting_for_rendering(app, area, buf);
+                    }
+                    NetCacheMedia::Rendered(image_protocol) => {
+                        // I render it externally ddso no need to do it again here,
+                        // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
+                    }
+                    NetCacheMedia::FatalErrorRendering() => {
+                        render_fatal_rendering_error(app, area, buf);
+                    }
+                }
+            }
+        }
+    }
+
+
+    fn render_file_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:FileId){
+        match app.simulation_controller_data.net_cache.downloaded_files.get(file_id.as_str()) {
+            None => {}
+            Some(item) => {
+                match item.value() {
+                            NetCacheFile::Downloading(x) => {
+                                render_loading_gauge(app,area,buf,None, Some(item.value()), ndpage_data.selected_server)
+                            }
+                            NetCacheFile::Downloaded(_) | NetCacheFile::Rendering(_)=> {
+                                render_file_waiting_for_rendering(app,area,buf);
+                            }
+                            NetCacheFile::Rendered(file) => {
+                                match file {
+                                    FileType::UTF8(lines) => {
+                                        render_file_utf8(app, area, buf, lines, ndpage_data);
+                                    }
+                                    FileType::Other(file) => {
+                                        render_file_not_viewable(app,area,buf);
+                                    }
+                                }
+                            }
+                        }
+            }
+        }
     }
     fn render_file_not_viewable(app:&App,area:Rect, buf: &mut Buffer) {
         let [top_area, center_area, bottom_area] = Layout::default()
@@ -2190,104 +2188,113 @@ pub(super) mod net_rendering{
             .alignment(Alignment::Center);
         action_para.render(action_right, buf);
     }
-    fn render_file_utf8(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
-        use ratatui::widgets::{Table, Row, Cell};
+    fn render_file_utf8(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>, ndpage_data: &NetSecondPage) {
         use tui_scrollview::{ScrollView, ScrollViewState};
-        
-        // Detect if the content looks like a table
-        let is_table = detect_table_format(lines);
-        
-        if is_table {
-            render_table_view(app, area, buf, lines);
-        } else {
-            render_text_view(app, area, buf, lines);
+        use ratatui::widgets::{Table, Row, Cell, Paragraph, Block, Borders, BorderType, Wrap};
+        use ratatui::style::{Style, Color, Modifier};
+        use ratatui::layout::{Constraint, Rect, Alignment};
+        use textwrap::wrap;
+
+        // --- Block Parsing ---
+        #[derive(Debug)]
+        enum BlockType {
+            Table(Vec<Vec<String>>),
+            Text(Vec<String>),
         }
-    }
-    
-    fn detect_table_format(lines: &Vec<String>) -> bool {
-        if lines.is_empty() {
-            return false;
+
+        // Helper: is a line a table line?
+        fn is_table_line(line: &str) -> bool {
+            let seps = [',', '|', ';', '\t'];
+            seps.iter().any(|&sep| line.contains(sep))
         }
-        
-        // Check if we have at least 2 lines and they contain separators
-        let separators = ['|', '\t', ',', ';'];
-        let mut table_score = 0;
-        let mut total_lines = 0;
-        
-        for line in lines.iter().take(10) { // Check first 10 lines
-            if line.trim().is_empty() {
-                continue;
-            }
-            
-            total_lines += 1;
-            let mut has_separator = false;
-            
-            for &sep in &separators {
-                if line.contains(sep) {
-                    has_separator = true;
-                    break;
+
+        // Parse lines into blocks (table or text)
+        let mut blocks = Vec::new();
+        let mut current_block: Option<BlockType> = None;
+        let mut push_block = |block: Option<BlockType>| {
+            if let Some(b) = block {
+                match &b {
+                    BlockType::Table(rows) if rows.is_empty() => {},
+                    BlockType::Text(lines) if lines.is_empty() => {},
+                    _ => blocks.push(b),
                 }
             }
-            
-            if has_separator {
-                table_score += 1;
+        };
+        for line in lines {
+            let trimmed = line.trim_end();
+            if trimmed.is_empty() {
+                // Empty line: always a block break
+                push_block(current_block.take());
+                continue;
+            }
+            let is_table = is_table_line(trimmed);
+            match &mut current_block {
+                Some(BlockType::Table(rows)) if is_table => {
+                    // Parse row
+                    let row = if trimmed.contains('|') {
+                        trimmed.split('|').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                    } else if trimmed.contains('\t') {
+                        trimmed.split('\t').map(|s| s.trim().to_string()).collect()
+                    } else if trimmed.contains(',') {
+                        trimmed.split(',').map(|s| s.trim().to_string()).collect()
+                    } else if trimmed.contains(';') {
+                        trimmed.split(';').map(|s| s.trim().to_string()).collect()
+                    } else {
+                        vec![trimmed.to_string()]
+                    };
+                    rows.push(row);
+                }
+                Some(BlockType::Text(lines)) if !is_table => {
+                    lines.push(trimmed.to_string());
+                }
+                _ => {
+                    // Block type switch
+                    push_block(current_block.take());
+                    if is_table {
+                        let row = if trimmed.contains('|') {
+                            trimmed.split('|').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                        } else if trimmed.contains('\t') {
+                            trimmed.split('\t').map(|s| s.trim().to_string()).collect()
+                        } else if trimmed.contains(',') {
+                            trimmed.split(',').map(|s| s.trim().to_string()).collect()
+                        } else if trimmed.contains(';') {
+                            trimmed.split(';').map(|s| s.trim().to_string()).collect()
+                        } else {
+                            vec![trimmed.to_string()]
+                        };
+                        current_block = Some(BlockType::Table(vec![row]));
+                    } else {
+                        current_block = Some(BlockType::Text(vec![trimmed.to_string()]));
+                    }
+                }
             }
         }
-        
-        // If more than 60% of non-empty lines have separators, consider it a table
-        total_lines > 0 && (table_score as f64 / total_lines as f64) > 0.6
-    }
-    
-    fn render_table_view(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
-        use ratatui::widgets::{Table, Row, Cell};
-        use tui_scrollview::{ScrollView, ScrollViewState};
-        
-        // Parse table data
-        let table_data = parse_table_data(lines);
-        
-        if table_data.is_empty() {
-            render_text_view(app, area, buf, lines);
-            return;
-        }
-        
-        // Create table rows
-        let rows: Vec<Row> = table_data.iter().map(|row| {
-            let cells: Vec<Cell> = row.iter().map(|cell| {
-                Cell::from(cell.as_str())
-                    .style(Style::default().fg(Color::White))
-            }).collect();
-            Row::new(cells)
-        }).collect();
+        push_block(current_block.take());
 
-        let rows_len = rows.len();
+        // --- Rendering ---
+        // Account for border width (2 characters on each side)
+        let available_width = area.width.saturating_sub(4); // 2 for left border, 2 for right border
+        let view_height = area.height.saturating_sub(2); // Account for potential borders
+        let mut total_height = 0u16;
         
-        // Determine the maximum number of columns in the table
-        let max_columns = table_data.iter()
-            .map(|row| row.len())
-            .max()
-            .unwrap_or(1)
-            .max(1); // Ensure at least 1 column
-        
-        // Create dynamic column constraints
-        let column_width = 100 / max_columns;
-        let mut constraints = Vec::new();
-        for _ in 0..max_columns {
-            constraints.push(Constraint::Percentage(column_width as u16));
+        // Precompute all block heights and ensure content fits width
+        for block in &blocks {
+            let h = match block {
+                BlockType::Table(rows) => rows.len() as u16 + 2, // header + border
+                BlockType::Text(lines) => {
+                    let mut h = 0u16;
+                    for l in lines {
+                        let wrapped = wrap(l, available_width as usize);
+                        h += wrapped.len() as u16;
+                    }
+                    h
+                }
+            };
+            total_height += h;
         }
-        
-        // Create table with styling
-        let table = Table::new(rows, &constraints)
-            .block(Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title("📊 Table View")
-                .title_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
-            .style(Style::default().fg(Color::White))
-            //.header_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-            .row_highlight_style(Style::default().bg(Color::Rgb(50, 50, 100)));
-        
-        // Create scroll view for the table
-        let mut scroll_view = ScrollView::new(Size::new(area.width, rows_len as u16 + 2));
+
+        // Create scroll view with constrained width to prevent horizontal scrolling
+        let mut scroll_view = ScrollView::new(ratatui::layout::Size::new(available_width, total_height));
         let scroll_buf = scroll_view.buf_mut();
         
         // Fill background
@@ -2296,120 +2303,66 @@ pub(super) mod net_rendering{
                 scroll_buf.get_mut(x, y).set_style(Style::default().bg(POPUP_BG_COLOR));
             }
         }
-        
-        // Render table into scroll buffer
-        let table_area = Rect::new(0, 0, scroll_buf.area.width, scroll_buf.area.height);
-        table.render(table_area, scroll_buf);
-        
-        // Create scroll state and render
-        let mut scroll_state = ScrollViewState::default();
-        scroll_state.scroll_to_top();
-        
-        ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
-    }
-    
-    fn parse_table_data(lines: &Vec<String>) -> Vec<Vec<String>> {
-        let mut table_data = Vec::new();
-        
-        for line in lines {
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            
-            // Try different separators
-            let columns = if trimmed.contains('|') {
-                // Markdown table format
-                trimmed.split('|')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect()
-            } else if trimmed.contains('\t') {
-                // Tab-separated
-                trimmed.split('\t')
-                    .map(|s| s.trim().to_string())
-                    .collect()
-            } else if trimmed.contains(',') {
-                // CSV format
-                trimmed.split(',')
-                    .map(|s| s.trim().to_string())
-                    .collect()
-            } else if trimmed.contains(';') {
-                // Semicolon-separated
-                trimmed.split(';')
-                    .map(|s| s.trim().to_string())
-                    .collect()
-            } else {
-                // Single column
-                vec![trimmed.to_string()]
-            };
-            
-            if !columns.is_empty() {
-                table_data.push(columns);
-            }
-        }
-        
-        table_data
-    }
-    
-    fn render_text_view(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
-        use tui_scrollview::{ScrollView, ScrollViewState};
-        
-        // Calculate total height needed
-        let total_height = lines.len() as u16;
-        
-        // Create scroll view
-        let mut scroll_view = ScrollView::new(Size::new(area.width.saturating_sub(2), total_height));
-        let scroll_buf = scroll_view.buf_mut();
-        
-        // Fill background with popup color
-        for y in 0..scroll_buf.area.height {
-            for x in 0..scroll_buf.area.width {
-                scroll_buf.get_mut(x, y).set_style(Style::default().bg(POPUP_BG_COLOR));
-            }
-        }
-        
-        // Render each line
-        for (y, line) in lines.iter().enumerate() {
-            if y >= scroll_buf.area.height as usize {
-                break;
-            }
-            
-            // Wrap long lines
-            let wrapped_lines = wrap(line, scroll_buf.area.width.saturating_sub(2) as usize);
-            
-            for (wrapped_y, wrapped_line) in wrapped_lines.iter().enumerate() {
-                let actual_y = y + wrapped_y;
-                if actual_y >= scroll_buf.area.height as usize {
-                    break;
+
+        // Render blocks into scroll buffer
+        let mut y = 0u16;
+        for block in &blocks {
+            match block {
+                BlockType::Table(rows) => {
+                    // Compute max columns and ensure they fit
+                    let max_cols = rows.iter().map(|r| r.len()).max().unwrap_or(1).max(1);
+                    let col_width = 100 / max_cols;
+                    let constraints: Vec<_> = (0..max_cols).map(|_| Constraint::Percentage(col_width as u16)).collect();
+                    
+                    // Truncate cell content to fit available width
+                    let table_rows: Vec<Row> = rows.iter().map(|row| {
+                        let cells: Vec<Cell> = row.iter().map(|cell| {
+                            let truncated = if cell.len() > available_width as usize / max_cols {
+                                format!("{}...", &cell[..(available_width as usize / max_cols - 3)])
+                            } else {
+                                cell.clone()
+                            };
+                            Cell::from(truncated).style(Style::default().fg(Color::White))
+                        }).collect();
+                        Row::new(cells)
+                    }).collect();
+                    
+                    let table = Table::new(table_rows, &constraints)
+                        .block(Block::default().borders(Borders::ALL).border_type(BorderType::Rounded))
+                        .style(Style::default().fg(Color::White));
+                    let table_area = Rect::new(0, y, available_width, rows.len() as u16 + 2);
+                    table.render(table_area, scroll_buf);
+                    y += rows.len() as u16 + 2;
                 }
-                
-                // Create paragraph for this line
-                let line_para = Paragraph::new(wrapped_line.to_string())
-                    .style(Style::default().fg(Color::White))
-                    .wrap(Wrap { trim: true });
-                
-                let line_area = Rect::new(1, actual_y as u16, scroll_buf.area.width.saturating_sub(2), 1);
-                line_para.render(line_area, scroll_buf);
+                BlockType::Text(lines) => {
+                    for l in lines {
+                        let wrapped = wrap(l, available_width as usize);
+                        for w in wrapped {
+                            let para = Paragraph::new(w.to_string())
+                                .style(Style::default().fg(Color::White))
+                                .wrap(Wrap { trim: true });
+                            let line_area = Rect::new(0, y, available_width, 1);
+                            para.render(line_area, scroll_buf);
+                            y += 1;
+                        }
+                    }
+                }
             }
         }
-        
-        // Create scroll state
+
+        // Scroll state: use ndpage_data.scroll_offset
         let mut scroll_state = ScrollViewState::default();
-        scroll_state.scroll_to_top();
         
-        // Render the scroll view
+        // Set scroll position based on offset
+        // scroll_offset = 0 means at the top, increasing means scrolled down
+        for _ in 0..ndpage_data.scroll_offset {
+            scroll_state.scroll_down();
+        }
+        
         ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
-        
-        // Add a subtle border/indicator
-        let border_block = Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .title("📄 Text File")
-            .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
-        
-        border_block.render(area, buf);
     }
+
+    
     fn render_media_waiting_for_rendering(app: &App, area: Rect, buf: &mut Buffer) {
         let [top_area, center_area, bottom_area] = Layout::default()
             .direction(Direction::Vertical)
