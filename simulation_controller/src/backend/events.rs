@@ -106,7 +106,15 @@ impl SimulationControllerData {
                         ..Default::default()
                     });
             },
-            HostEvent::Route(host_id, route) => {},
+            HostEvent::Route(host_id, route) => {
+                self.stats.node_statistic
+                    .entry(host_id)
+                    .and_modify(|node_stat| node_stat.routh = route.clone())
+                    .or_insert_with(|| NodeStatistics {
+                        routh: route,
+                        ..Default::default()
+                    });
+            },
         }
         Ok(())
     }
@@ -229,43 +237,37 @@ impl SimulationControllerData {
                     }
                 };
 
-                let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                let (render_update_sender, render_update_receiver) = mpsc::channel();
-                let media_channels = (Some(resize_request_sender.clone()), Some(render_update_receiver));
-                let renderer_channels = (render_update_sender, resize_request_receiver);
-
                 match server_map.get_mut(&media_id) {
                     Some((channels, net_cache_media)) => {
-                        if let (None, None) = channels {
+                        let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                        let (render_update_sender, render_update_receiver) = mpsc::channel();
+                        let media_channels = (Some(resize_request_sender.clone()), Some(render_update_receiver));
+                        let renderer_channels = (render_update_sender, resize_request_receiver);
                             match self.tx_to_renderer.as_ref() {
                                 Some(mut sender) => {
-                                    if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
-                                        return Err((LogType::ERROR, e.to_string()));
+                                    if let (None, None) = channels {
+                                        if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
+                                            return Err((LogType::ERROR, e.to_string()));
+                                        }
+                                        *channels = media_channels;
+                                    }
+                                    match image {
+                                        Some(image) => {
+                                            if let Err(e) = sender.send(RendererCommand::EncodeMedia((resize_request_sender, server_id, media_id, image))) {
+                                                return Err((LogType::ERROR, e.to_string()));
+                                            }
+                                        },
+                                        None => {
+                                            *net_cache_media = NetCacheMedia::Downloading(percentage.unwrap_or(0.0))
+                                        }
                                     }
                                 },
                                 None => {
                                     self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
                                 },
                             }
-                            *channels = media_channels;
-                        }
-                        match image {
-                            Some(image) => {
-                                match self.tx_to_renderer.as_ref() {
-                                    Some(mut sender) => {
-                                        if let Err(e) = sender.send(RendererCommand::EncodeMedia((resize_request_sender, server_id, media_id, image))) {
-                                            return Err((LogType::ERROR, e.to_string()));
-                                        }
-                                    },
-                                    None => {
-                                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
-                                    },
-                                }
-                            },
-                            None => {
-                                *net_cache_media = NetCacheMedia::Downloading(percentage.unwrap_or(0.0))
-                            }
-                        }
+
+
                         Ok(())
 
                     }
@@ -314,7 +316,7 @@ impl SimulationControllerData {
     fn save_media(&self, media_id: &MediaId, image: &Image) -> Result<(), (LogType, String)> {
         // Get file extension
         let extension = get_extension(media_id)
-            .ok_or_else(|| (LogType::INFO, format!("Unknown extension for file {media_id}")))?;
+            .ok_or_else(|| return (LogType::INFO, format!("Unknown extension for file {media_id}")))?;
 
         // Construct path safely
         let path = self.download_folder.join(media_id);
