@@ -304,13 +304,13 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                     RendererCommand::AddChannel((tx,rx)) => {
                         channels.push((tx, rx));
                     },
-                    RendererCommand::Encode((tx_to_renderer, server_id,media_id,image))=> {
+                    RendererCommand::EncodeMedia((tx_to_renderer, server_id,media_id,image))=> {
                         if let Some(rgb_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
                             let dynamic_image = DynamicImage::ImageRgba8(rgb_buffer);
                             match Picker::from_query_stdio(){
                                 Ok(pick) => {
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
-                                    match tx_rsp.send(RendererResponse::Encoded((server_id,media_id,return_item))){
+                                    match tx_rsp.send(RendererResponse::EncodedMedia((server_id, media_id, return_item))){
                                         Ok(_) => {
                                             info!(target: "main", "[RENDERER] - Successfully sent an Encoded response");
                                         }

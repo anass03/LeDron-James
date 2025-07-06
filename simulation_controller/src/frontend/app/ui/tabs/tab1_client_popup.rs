@@ -160,7 +160,7 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
 
     // Use the appropriate cursor based on whether we're in MenuArea or OptArea
     let server_cursor = match app.cache.tab1_data.popup_selection {
-        PopupSelection::MenuArea => app.cache.tab1_data.popup_cursor,
+        PopupSelection::MenuArea => 0,
         PopupSelection::OptArea => app.cache.tab1_data.popup_cursor, // In OptArea, popup_cursor is already the server cursor
     };
 

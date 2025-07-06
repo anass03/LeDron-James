@@ -24,6 +24,7 @@ fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
 }
 impl App<'_> {
+
     /// - Media Renderer Handler
     pub fn handle_rx_renderer(&mut self){
         match &self.simulation_controller_data.rx_from_renderer{
@@ -31,7 +32,7 @@ impl App<'_> {
             Some(channel) => {
                 while let Ok(event) = channel.try_recv() {
                     match event{
-                        RendererResponse::Encoded((enc_server, enc_media, enc_proto)) => {
+                        RendererResponse::EncodedMedia((enc_server, enc_media, enc_proto)) => {
                             info!(target: "main", "[LEDRON-CLI] Received encoded Response");
                             match self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&enc_server) {
                                 None => {}
@@ -39,7 +40,7 @@ impl App<'_> {
                                     match hash.remove(&enc_media){
                                         None => {}
                                         Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), NetCacheMedia::Rendered(enc_proto)));
+                                            hash.insert(enc_media, ((ch1,ch2), enc_proto));
                                         }
                                     }
                                 }
@@ -85,7 +86,7 @@ impl App<'_> {
                                     Some(ch_to_renderer) => {
                                         // Clone the image data for sending to renderer
                                         if let NetCacheMedia::Downloaded(image_data) = media {
-                                            match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req.clone(), server_id.clone(), media_id.clone(), image_data.clone()))) {
+                                            match ch_to_renderer.send(RendererCommand::EncodeMedia((ch_resize_req.clone(), server_id.clone(), media_id.clone(), image_data.clone()))) {
                                                 Ok(_) => {
                                                     self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent encode request to the renderer".to_string());
                                                     // Mark for removal and re-addition as Rendering
