@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::atomic::{Ordering};
 use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, ClientNetCommand, ContentID, FileId, MediaId, Image, ServerId};
+use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, ClientNetCommand, ContentID, FileId, MediaId, Image, ServerId, SendingCodes};
 use host::network::Edge;
 use host::ServerTypes::{Content, Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer, Sending};
@@ -904,6 +904,9 @@ impl Client {
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let pkt = Packet::new_fragment(header, message.session_id, frag.clone());
             let res = self.host.send_packet(pkt, None);
+            if matches!(res,SendingCodes::NoNextHop(_)) {
+                self.host.initiate_flood();
+            }
             on_fragment_sent(chunk.len());
             self.host.send_logging(
                 LogType::DEBUG,

@@ -11,6 +11,7 @@ use host::logging::{LogControl, LogModule, LogType};
 use host::network::{Edge};
 use host::session::{RecSessionData, generate_unique_session_id, SentSessionData};
 use zstd::{decode_all, encode_all};
+use host::flood::FloodControl;
 use crate::delegate_genserver_host_ref;
 
 /// Generic Server structure used to implement Content or Communication servers.
@@ -271,6 +272,9 @@ impl GenServer {
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
             let result = self.send_packet(packet, None);
+            if matches!(result,SendingCodes::NoNextHop(_)) {
+                self.host.initiate_flood();
+            }
 
             self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("Send result host={} session={} fragment={} result={}", self.host.id, message.session_id, i, result));
         }
