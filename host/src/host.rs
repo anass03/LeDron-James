@@ -116,9 +116,9 @@ pub enum HostEvent {
     ///Servers discovered, response at ServerType
     ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
     ///Expected pdr from client
-    ExpectedPDR(HashMap<NodeId, f64>),
+    ExpectedPDR(ClientId, HashMap<NodeId, f64>),
     ///Network speed
-    NetSpeed(Upload, Download),
+    NetSpeed(ClientId, Upload, Download),
     ///Info on downloading/uploading the entire data
     DownloadingInfo(ServerId, ContentID, f32),
     UploadingInfo(ServerId, ContentID, f32),

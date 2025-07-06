@@ -77,10 +77,10 @@ impl SimulationControllerData {
                 self.update_net_cache(server_id, content_id, None, None, Some(percentage))?
             },
             HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
-            HostEvent::ExpectedPDR(expected_pdr) => {
-                //self.stats.node_statistic.
+            HostEvent::ExpectedPDR(client_id, expected_pdr) => {
+                //self.stats.node_statistic.insert
             },
-            HostEvent::NetSpeed(upload, download) => {},
+            HostEvent::NetSpeed(client_id, upload, download) => {},
             HostEvent::Route(host_id, route) => {},
         }
         Ok(())
