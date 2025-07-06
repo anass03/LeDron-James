@@ -10,7 +10,8 @@ use wg_2024::network::NodeId;
 use host::{ContentID, FileId, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
-use crate::backend::sc_models::{ChatList, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{ChatList, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::FileType::UTF8;
 use crate::backend::simulation_controller::SimulationControllerData;
 
 impl SimulationControllerData {
@@ -76,7 +77,9 @@ impl SimulationControllerData {
                 self.update_net_cache(server_id, content_id, None, None, Some(percentage))?
             },
             HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
-            HostEvent::ExpectedPDR(expected_pdr) => {},
+            HostEvent::ExpectedPDR(expected_pdr) => {
+                //self.stats.node_statistic.
+            },
             HostEvent::NetSpeed(upload, download) => {},
             HostEvent::Route(host_id, route) => {},
         }
@@ -111,13 +114,7 @@ impl SimulationControllerData {
             => {
                 self.update_net_cache(server_id, ContentID::File(file_id.clone()), None, Some(file.clone()), None)?;
 
-                // Construct filename based on file ID and inferred extension
-                let path = self.download_folder.join(&file_id);
-
-                match fs::write(&path, &file) {
-                    Ok(_) => {info!(target: "main", "File {file_id} downloaded in : {path:?}");}
-                    Err(e) => {return Err((LogType::INFO, format!("File {file_id} not downloaded: {e}")))}
-                }
+                //self.save_file(file, file_id)?
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
             => {
@@ -144,7 +141,7 @@ impl SimulationControllerData {
                 self.update_net_cache(server_id, ContentID::Media(media_id.clone()), Some(image.clone()), None, None)?;
 
                 // Save in local folder
-                self.save_media(&media_id, &image)?;
+                //self.save_media(&media_id, &image)?;
             },
             ServerToClient::ClientList(client_id, server_id, client_list)
             => {
@@ -250,7 +247,7 @@ impl SimulationControllerData {
                 };
 
                 match server_map.get_mut(&file_id) {
-                    Some((_, net_cache_file)) => {
+                    Some(net_cache_file) => {
                         match file {
                             Some(file) => *net_cache_file = NetCacheFile::Downloaded(file),
                             None => {
@@ -318,6 +315,17 @@ impl SimulationControllerData {
         info!(target: "main", "Image saved: {}", path.display());
         Ok(())
     }
+
+    fn save_file(&self, file: Vec<u8>, file_id: FileId) -> Result<(), (LogType, String)> {
+        // Construct filename based on file ID and inferred extension
+        let path = self.download_folder.join(&file_id);
+
+        match fs::write(&path, &file) {
+            Ok(_) => info!(target: "main", "File {file_id} downloaded in : {path:?}"),
+            Err(e) => return Err((LogType::INFO, format!("File {file_id} not downloaded: {e}")))
+        }
+        Ok(())
+    }
 }
 
 #[inline]
@@ -368,3 +376,21 @@ fn open_file(path: &str) {
             .expect("Unable to open file on Linux");
     }
 }
+
+/*fn file_type(file: Vec<u8>) -> FileType {
+    // Check if valid UTF-8
+    match str::from_utf8(&file) {
+        Ok(utf8_str) => {
+            // Split in lines Vec<String>
+            let lines: Vec<String> = utf8_str
+                .lines()
+                .map(|line| line.to_string())
+                .collect();
+
+            UTF8(lines)
+        }
+        Err(e) => {
+            std::fs::File::
+        }
+    }
+}*/

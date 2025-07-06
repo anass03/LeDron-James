@@ -276,7 +276,7 @@ impl SimulationControllerData {
     }
 
     pub fn request_client_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        // Check if client is registered to chat in a more efficient way
+        // Check if client is registered to chat
         let should_register = self.chat_cache.known_contacts
             .get(&client_id)
             .and_then(|contact_map| contact_map.get(&server_id))
