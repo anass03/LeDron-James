@@ -1,15 +1,15 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::Cursor;
 use std::time::Instant;
 use crossbeam_channel::{Receiver, Sender};
-use wg_2024::network::NodeId;
+use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
 use host::{HostCommand, Message, Host, ServerTypes, HostEvent, ServerToClient, ContentID, SendingCodes};
 use host::{functionality::Functionality};
 use host::logging::{LogControl, LogModule, LogType};
 use host::network::{Edge};
-use host::session::{RecSessionData,generate_unique_session_id};
+use host::session::{RecSessionData, generate_unique_session_id, SentSessionData};
 use zstd::{decode_all, encode_all};
 use crate::delegate_genserver_host_ref;
 
@@ -156,7 +156,7 @@ impl GenServer {
             if let Some((content_type, id)) = meta {
                 self.send_download(destination, total, content_type, id);
             }
-            if let Err(e) = self.host.build_msg_fragment(destination, msg, |_| {}) {
+            if let Err(e) = self.build_msg_fragment(destination, msg) {
                 self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to send response to {}: {}", destination, e));
             }
         } else {
@@ -192,6 +192,109 @@ impl GenServer {
         };
 
         Some((msg, meta,total))
+    }
+
+
+    fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
+        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
+            "Starting fragmentation host={} session={} dest={}",
+            self.host.id,
+            message.session_id,
+            destination,
+        ));
+        // Trova percorso
+        let route = match self.host.network.find_best_route(self.host.id, destination) {
+            Some(r) => r,
+            None => {
+                let err = format!("No route to {}", destination);
+                self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("{} host={} session={}", err, self.host.id, message.session_id));
+                return Err(err);
+            }
+        };
+        //self.send_logging(format!("✅💥💥 Route found for fragmentation: {:?}", route.clone()));
+
+        // Calcola numero totale di frammenti
+        let bytes = &message.content;
+        //self.send_logging(format!("❤️❤️ vettore di byte: {:?}", bytes.clone()));
+        let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+
+        // Prepara o aggiorna SentSessionData
+        {
+            let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+            let session = sent.entry(message.session_id).or_insert_with(|| {
+                let host = self.host.id;
+                let session = message.session_id;
+                self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
+                    "New SentSessionData host={} session={} total={}",
+                    host,
+                    session,
+                    total,
+                ));
+                SentSessionData {
+                    buffer: vec![None; total],
+                    last_activity: Instant::now(),
+                    route: route.clone(),
+                    destination,
+                    pending: total,
+                    banned_nodes: HashSet::new()
+                }
+            });
+
+            session.pending = total;
+            session.last_activity = Instant::now();
+            if session.buffer.len() < total {
+                session.buffer.resize(total, None);
+            }
+        }
+
+        // Invio frammenti
+        for (i, chunk) in bytes.chunks(FRAGMENT_DSIZE).enumerate() {
+            let frag = Fragment {
+                fragment_index: i as u64,
+                total_n_fragments: total as u64,
+                length: chunk.len() as u8,
+                data: {
+                    let mut d = [0; FRAGMENT_DSIZE];
+                    d[..chunk.len()].copy_from_slice(chunk);
+                    d
+                },
+            };
+
+            // Aggiorna buffer
+            {
+                let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+                if let Some(session) = sent.get_mut(&message.session_id) {
+                    session.buffer[i] = Some(frag.clone());
+                } else {
+                    return Err("Missing session in sent_fragments".to_string());
+                }
+            }
+
+            // Costruisci e invia pacchetto
+            let header = SourceRoutingHeader::new(route.clone(), 1);
+            let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
+
+            // self.send_logging(format!(
+            //     "Sending fragment host={} session={} fragment={}",
+            //     self.id,
+            //     message.session_id,
+            //     i,
+            //));
+            let result = self.send_packet(packet, None);
+
+             self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
+                 "Send result host={} session={} fragment={} result={}",
+                 self.host.id, message.session_id, i, result
+             ));
+
+        }
+
+        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
+            "Fragmentation completed host={} session={}",
+            self.host.id,
+            message.session_id,
+        ));
+        Ok(())
     }
 }
 

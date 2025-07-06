@@ -16,7 +16,7 @@ pub struct SentSessionData {
     pub destination: NodeId,        // Destinatario della sessione
     pub route: Vec<NodeId>,        // percorso pre-calcolato
     pub pending: usize,  // quanti frammenti ancora in attesa di ACK
-    pub(crate) banned_nodes: HashSet<NodeId>,
+    pub banned_nodes: HashSet<NodeId>,
 }
 pub fn generate_unique_session_id() -> u64 {
     let mut rng: ThreadRng = rand::rng();  // messo rng al posto di thread_rng pk quest'ultimo dalla prossima versione verrà rinominato in rng! [thread_rng --> rng]
