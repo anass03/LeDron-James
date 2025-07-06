@@ -13,7 +13,7 @@ use log::{info, LevelFilter};
 use ratatui_image::thread::ResizeRequest;
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
-use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{FileRendererUpdate, LogType, MediaEntry, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use super::super::App;
@@ -32,26 +32,29 @@ impl App<'_> {
             Some(channel) => {
                 while let Ok(event) = channel.try_recv() {
                     match event{
-                        RendererResponse::EncodedMediaSteps((step,enc_server, enc_media, enc_proto)) => {
-                            match step{
-                                0 => info!(target: "main", "[LEDRON-CLI] Received encoded Response"),
-                                1 => info!(target: "main", "[LEDRON-CLI] Received SavedInPath"),
-                                _ => (),
-                            }
-                            match self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&enc_server) {
-                                None => {}
-                                Some(hash) => {
-                                    match hash.remove(&enc_media){
-                                        None => {}
-                                        Some(((ch1,ch2),net)) => {
-                                            hash.insert(enc_media, ((ch1,ch2), enc_proto));
-                                        }
-                                    }
+                        RendererResponse::EncodedMedia((media_id, media_status,update_rx)) => {
+                            info!(target: "main", "[LEDRON-CLI] Received media update for: {}", media_id);
+                            
+                            // Update the media entry in new_downloaded_medias
+                            if let Some(mut entry) = self.simulation_controller_data.net_cache.new_downloaded_medias.get_mut(&media_id) {
+                                entry.update_cache(media_status);
+                                // Update channels if provided
+                                if let Some(rx) = update_rx {
+                                    entry.rx = Some(rx);
                                 }
+                            } else {
+                                // Create new entry if it doesn't exist
+                                let mut media_entry = MediaEntry::new(media_status);
+                                // Set channels if provided
+                                if let Some(rx) = update_rx {
+                                    media_entry.rx = Some(rx);
+                                }
+                                self.simulation_controller_data.net_cache.new_downloaded_medias.insert(media_id, media_entry);
                             }
                         },
-                        RendererResponse::EncodedFileSteps(_) => {
-
+                        RendererResponse::EncodedFile((file_id, file_status)) => {
+                            info!(target: "main", "[LEDRON-CLI] Received file update for: {}", file_id);
+                            // Handle file updates if needed
                         }
                         RendererResponse::Computed((ret_vec)) => {
                             for (id,top) in ret_vec{
@@ -74,88 +77,31 @@ impl App<'_> {
             }
         }
     }
-    pub(crate) fn handle_downloaded_medias(&mut self){
- /*       // Collect media IDs to remove after processing to avoid borrowing issues
-        let mut media_to_remove: Vec<(ServerId, MediaId)> = Vec::new();
-        let mut media_to_add_rendering: Vec<(ServerId, MediaId)> = Vec::new();*/
 
-        for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
-            for (media_id, (channels, media)) in values.iter_mut() {
-                match media {
-                    /*NetCacheMedia::Downloaded(_) => {
-                        match &channels.0 {
-                            None => {}
-                            Some(ch_resize_req) => {
-                                match self.simulation_controller_data.tx_to_renderer.clone() {
-                                    None => {
-                                        // Impossible
-                                    }
-                                    Some(ch_to_renderer) => {
-                                        // Clone the image data for sending to renderer
-                                        if let NetCacheMedia::Downloaded(image_data) = media {
-                                            match ch_to_renderer.send(RendererCommand::EncodeMedia((ch_resize_req.clone(), server_id.clone(), media_id.clone(), image_data.clone()))) {
-                                                Ok(_) => {
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent encode request to the renderer".to_string());
-                                                    // Mark for removal and re-addition as Rendering
-                                                    media_to_remove.push((server_id.clone(), media_id.clone()));
-                                                    media_to_add_rendering.push((server_id.clone(), media_id.clone()));
-                                                }
-                                                Err(str) => {
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+    /// Handle resize requests for rendered media
+    pub(crate) fn handle_media_resize_requests(&mut self) {
+        for mut entry in self.simulation_controller_data.net_cache.new_downloaded_medias.iter_mut() {
+            // Collect updates first to avoid double mutable borrow
+            let mut updates = Vec::new();
+            if let Some(rx) = &mut entry.rx {
+                while let Ok(update) = rx.try_recv() {
+                    updates.push(update);
+                }
+            }
+            for update in updates {
+                if let NetCacheMedia::Rendered(protocol) = &mut entry.cache {
+                    match update {
+                        FileRendererUpdate::Redraw(resize_response) => {
+                            protocol.update_resized_protocol(resize_response);
+                            self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Updated resized protocol".to_string());
                         }
-                    }*/
-                    NetCacheMedia::Rendered(rendered) => {
-                        match &channels.1 {
-                            None => {
-                                // Should have a channel
-                            }
-                            Some(channel) => {
-                                while let Ok(event) = channel.try_recv() {
-                                    match event {
-                                        FileRendererUpdate::Redraw(redraw) => {
-                                            rendered.update_resized_protocol(redraw);
-                                            self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Updated resized protocol".to_string());
-                                        }
-                                        FileRendererUpdate::Error(err) => {
-                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err)
-                                        }
-                                    }
-                                }
-                            }
+                        FileRendererUpdate::Error(err) => {
+                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err);
                         }
                     }
-                    NetCacheMedia::FatalErrorRendering() => {
-                        // Recovery mode?
-                    }
-                    _ => (),
                 }
             }
         }
-
-    /*    // Remove the downloaded media entries and store their channels
-        let mut channels_to_restore: Vec<(ServerId, MediaId, (Option<mpsc::Sender<ResizeRequest>>, Option<mpsc::Receiver<FileRendererUpdate>>))> = Vec::new();
-        
-        for (server_id, media_id) in media_to_remove {
-            if let Some(server_map) = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&server_id) {
-                if let Some((channels, _)) = server_map.remove(&media_id) {
-                    channels_to_restore.push((server_id, media_id, channels));
-                }
-            }
-        }*/
-/*
-        // Add them back as Rendering status
-        for (server_id, media_id, channels) in channels_to_restore {
-            self.simulation_controller_data.net_cache.downloaded_medias
-                .entry(server_id)
-                .or_default()
-                .insert(media_id, (channels, NetCacheMedia::Rendering(0f32)));
-        }*/
     }
 
     pub(crate) fn check_lists_initialized(&mut self){

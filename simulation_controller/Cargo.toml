@@ -23,6 +23,7 @@ ratatui-explorer = "0.2.0"
 tui-scrollview = "0.5.1"
 tui-logger = "0.17.3"
 textwrap = "0.16.2"
+dashmap = "6.1.0"
 
 wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"]}
 wg_internal = { git = "https://github.com/WGL-2024/WGL_repo_2024"}

@@ -38,48 +38,40 @@ pub(crate) enum RenderingImage{
 pub(crate) struct MediaListRenderUtils{
     pub list_len: usize,
     pub selected: u8,
-    pub state: ListState,
 }
 impl MediaListRenderUtils{
     fn default()->Self{
         Self{
             list_len: 0,
             selected: 0,
-            state: Default::default(),
         }
     }
     pub(crate) fn increase(&mut self){
         self.selected += 1;
-        self.state.select_next();
     }
     pub(crate) fn decrease(&mut self){
         if self.selected > 0 {
             self.selected -= 1;
-            self.state.select_previous();
         }
     }
 }
 pub(crate) struct FileListRenderUtils{
     pub list_len: usize,
     pub selected: u8,
-    pub state: ListState,
 }
 impl FileListRenderUtils{
     fn default()->Self{
         Self{
             list_len: 0,
             selected: 0,
-            state: Default::default(),
         }
     }
     pub(crate) fn increase(&mut self){
         self.selected += 1;
-        self.state.select_next();
     }
     pub(crate) fn decrease(&mut self){
         if self.selected > 0 {
             self.selected -= 1;
-            self.state.select_previous();
         }
     }
 }

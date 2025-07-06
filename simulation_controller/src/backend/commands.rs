@@ -289,7 +289,7 @@ impl SimulationControllerData {
         }
 
         debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
-        for client in self.clients {
+        for client in &self.clients {
             let command = Net(ClientList(server_id));
             self.send_client_command(client.id, command)?
         }

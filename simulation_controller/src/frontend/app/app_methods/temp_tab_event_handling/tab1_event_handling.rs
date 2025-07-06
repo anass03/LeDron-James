@@ -1,3 +1,4 @@
+use crate::backend::sc_models::MediaEntry;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
@@ -603,6 +604,7 @@ impl App<'_> {
                                         match hash.get(&ndpage.selected_server){
                                             None => (), // Do nothing
                                             Some(vecfiles) => {
+                                                // todo()!
                                                 if (self.cache.tab1_data.file_list_render_utils.selected as usize) + 1 < vecfiles.len(){
                                                     self.cache.tab1_data.file_list_render_utils.increase();
                                                 }
@@ -786,30 +788,9 @@ impl App<'_> {
                                                         // Request the media
                                                         match self.simulation_controller_data.request_media(id, ndpage.selected_server, media_id.clone()){
                                                             Ok(_) => {
-                                                                let ret_values = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&ndpage.selected_server);
-                                                                match ret_values{
-                                                                    None => {
-                                                                        self.simulation_controller_data.net_cache.downloaded_medias.insert(
-                                                                            ndpage.selected_server,
-                                                                            {
-                                                                                let mut ret_hash = HashMap::new();
-                                                                                ret_hash.insert(
-                                                                                    media_id.clone(),
-                                                                                    ((None,None), NetCacheMedia::Downloading(0f32))
-                                                                                );
-                                                                                ret_hash
-                                                                            }
-                                                                        );
-                                                                    }
-                                                                    Some(hash_mut) => {
-                                                                        if !hash_mut.contains_key(&media_id.clone()){
-                                                                            hash_mut.insert(
-                                                                                media_id.clone(),
-                                                                                ((None,None), NetCacheMedia::Downloading(0f32))
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                }
+                                                                // Create or update the media entry in new_downloaded_medias
+                                                                let media_entry = MediaEntry::new(NetCacheMedia::Downloading(0f32));
+                                                                self.simulation_controller_data.net_cache.new_downloaded_medias.insert(media_id.clone(), media_entry);
                                                                 ndpage.selected_file = SelectedFileMedia::Media(media_id.clone());
                                                                 self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                     ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))

@@ -9,6 +9,7 @@ use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
 use std::path::PathBuf;
+use dashmap::DashMap;
 use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use client::ClientCommand;
@@ -127,15 +128,40 @@ impl Statistics{
 
 pub enum RendererCommand{
     Stop,
-    AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)),
-    EncodeMedia((Sender<ResizeRequest>, ServerId, MediaId, Image)),
-    EncodeFile((Sender<ResizeRequest>, ServerId, MediaId, Image)),
+    EncodeMedia((MediaId, Image)),
+    EncodeFile((FileId, Vec<u8>)),
     ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
 }
 pub enum RendererResponse{
-    EncodedMediaSteps((u8,ServerId, MediaId, NetCacheMedia)),
-    EncodedFileSteps((u8,ServerId, MediaId, NetCacheFile)),
+    EncodedMedia((MediaId, NetCacheMedia, Option<Receiver<FileRendererUpdate>>)),
+    EncodedFile((FileId, NetCacheFile)),
     Computed(Vec<(NodeId,TopologyAlgorithm)>)
+}
+
+#[derive(Debug)]
+pub struct MediaEntry {
+    pub rx: Option<Receiver<FileRendererUpdate>>,
+    pub cache: NetCacheMedia,
+}
+
+impl MediaEntry {
+    pub fn new(cache: NetCacheMedia) -> Self {
+        Self {
+            rx: None,
+            cache,
+        }
+    }
+
+    pub fn with_channels(tx: Sender<ResizeRequest>, rx: Receiver<FileRendererUpdate>, cache: NetCacheMedia) -> Self {
+        Self {
+            rx: Some(rx),
+            cache,
+        }
+    }
+
+    pub fn update_cache(&mut self, new_cache: NetCacheMedia) {
+        self.cache = new_cache;
+    }
 }
 
 pub struct NetCache{
@@ -145,9 +171,7 @@ pub struct NetCache{
     pub known_file_list: HashMap<ClientId, HashMap<ServerId, Vec<FileId>>>,
     pub known_media_list: HashMap<ClientId, HashMap<ServerId, Vec<MediaId>>>,
 
-    pub downloaded_medias: HashMap<ServerId,
-        HashMap<MediaId,
-            ((Option<std::sync::mpsc::Sender<ResizeRequest>>,Option<std::sync::mpsc::Receiver<FileRendererUpdate>>), NetCacheMedia)>>,
+    pub new_downloaded_medias: DashMap<MediaId,MediaEntry>,
     pub downloaded_files: HashMap<ServerId, HashMap<FileId,(NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //
@@ -163,7 +187,7 @@ impl NetCache{
             known_content_servers: Default::default(),
             known_file_list: Default::default(),
             known_media_list: Default::default(),
-            downloaded_medias: Default::default(),
+            new_downloaded_medias: Default::default(),
             downloaded_files: Default::default(),
         }
     }
