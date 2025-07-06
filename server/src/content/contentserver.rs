@@ -84,6 +84,7 @@ impl ContentServer {
     pub fn run(&mut self){
         self.initiate_flood();
         self.send_logging(LogType::INFO,LogModule::MEDIA,"Starting Content Server...".into());
+        self.send_logging(LogType::INFO,LogModule::MEDIA,format!("This is the PrivateDir: {}",self.private_dir.path().display()));
         loop {
             crossbeam_channel::select_biased! {
                 recv(self.info.controller_recv) -> cmd => match cmd {
@@ -103,10 +104,20 @@ impl ContentServer {
     fn handling_packets(&mut self, packet: Packet) {
         use PacketType::*;
         match packet.clone().pack_type {
-            Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
-            FloodResponse(_) => self.process_flood_response(packet),
-            FloodRequest(r) => self.process_flood_request(r, packet),
+            Nack(nack) => {
+                if let Some(generator) = packet.routing_header.source() {
+                    self.handle_nack(nack, generator, packet.session_id)
+                }
+            },
+            Ack(ack) => {
+                self.handle_ack(ack, &packet.routing_header.hops, packet.session_id)
+            },
+            FloodResponse(_) => {
+                self.process_flood_response(packet)
+            },
+            FloodRequest(r) => {
+                self.process_flood_request(r, packet)
+            },
             MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
@@ -127,13 +138,27 @@ impl ContentServer {
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         use ClientNetCommand::*;
         match cmd {
-            ServerType => self.send_server_type(source),
-            FilesList(id) => self.handle_files_list(id, source),
-            File(id, file_id) => self.handle_file_request(id, file_id, source),
-            MediaList(id) => self.handle_media_list(id, source),
-            Media(id, media_id) => self.handle_media_request(id, media_id, source),
-            NewMedia(id, file_id, image) => self.handle_new_media(id, file_id, image, source),
-            NewFile(id, file_id, data) => self.handle_new_file(id, file_id, data, source),
+            ServerType => {
+                self.send_server_type(source)
+            },
+            FilesList(id) => {
+                self.handle_files_list(id, source)
+            },
+            File(id, file_id) => {
+                self.handle_file_request(id, file_id, source)
+            },
+            MediaList(id) => {
+                self.handle_media_list(id, source)
+            },
+            Media(id, media_id) => {
+                self.handle_media_request(id, media_id, source)
+            },
+            NewMedia(id, file_id, image) => {
+                self.handle_new_media(id, file_id, image, source)
+            },
+            NewFile(id, file_id, data) => {
+                self.handle_new_file(id, file_id, data, source)
+            },
             _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
         }
     }
@@ -142,7 +167,7 @@ impl ContentServer {
     fn send_server_type(&mut self, source: NodeId) {
         match self.servertype() {
             Ok(server_type) => {
-                //self.send_logging("Sending server type".to_string());
+                self.send_logging(LogType::INFO,LogModule::NETWORK,"Sending server type".to_string());
                 self.send_response(ServerToClient::ServerType(server_type), source);
             }
             Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Error in getting ServerType: {}", e)),
@@ -155,7 +180,7 @@ impl ContentServer {
             self.file_map = self.scan_text_files(&self.private_files_dir);
             self.files = self.file_map.keys().cloned().collect();
             self.files.sort();
-            //self.send_logging("Checking file IDs".to_string());
+            self.send_logging(LogType::INFO,LogModule::FILE,"Checking file IDs".to_string());
             self.send_response(ServerToClient::FilesList(source, self.info.host.id, self.files.clone()), source);
         } else {
             self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
@@ -170,7 +195,7 @@ impl ContentServer {
         match self.file_map.get(&file_id) {
             Some(path) => match Self::convert_file_path(path) {
                 Ok(data) => {
-                    //self.send_logging("Sending file".to_string());
+                    self.send_logging(LogType::INFO,LogModule::FILE,"Sending file".to_string());
                     self.send_response(ServerToClient::File(self.info.host.id, file_id, data), source);
                 }
                 Err(e) => {
@@ -186,10 +211,9 @@ impl ContentServer {
     fn handle_media_list(&mut self, receiver_id: NodeId, source: NodeId) {
         if receiver_id == self.info.host.id {
             self.media_map = self.scan_media_files(&self.private_images_dir);
-            self.send_logging(LogType::INFO,LogModule::MEDIA,format!(" media map , {:?}" , self.media_map.clone()));
             self.media = self.media_map.keys().cloned().collect();
             self.media.sort();
-            //self.send_logging("Checking media IDs".to_string());
+            self.send_logging(LogType::INFO,LogModule::MEDIA,"Checking media IDs".to_string());
             self.send_response(ServerToClient::MediaList(source, self.info.host.id, self.media.clone()), source);
         } else {
             self.send_response(ServerToClient::WrongServer(self.info.host.id), source);
@@ -204,7 +228,6 @@ impl ContentServer {
         match self.media_map.get(&media_id) {
             Some(path) => match Self::process_image_path(path) {
                 Ok(image) => {
-                    //self.send_logging(format!("Image {} loaded: {}x{}", media_id, image.width, image.height));
                     self.send_response(ServerToClient::Media(self.info.host.id, media_id, image), source);
                 }
                 Err(e) => {
@@ -243,7 +266,6 @@ impl ContentServer {
                 }
             }
             Some("txt") | Some("md") | Some("json") | Some("toml") | Some("pdf") => {
-                //self.send_logging(format!( "Detected text file extension '{}', delegating to handle_new_file.", ext_opt.unwrap()));
                 self.handle_new_file(receiver_id, file_id, image.data.clone(), source);
             }
             Some(ext) => {
@@ -268,7 +290,6 @@ impl ContentServer {
 
         match ext_opt.as_deref() {
             Some("png") | Some("jpg") | Some("jpeg") => {
-                //self.send_logging(format!("Detected image extension '{}', delegating to handle_new_media.", ext_opt.unwrap()));
                 match image::load_from_memory(&data) {
                     Ok(img) => {
                         let image = Image {
@@ -299,10 +320,7 @@ impl ContentServer {
                 }
             }
             Some(ext) => {
-                self.send_logging(LogType::ERROR,LogModule::FILE,format!(
-                    "Unsupported file extension '{}', skipping save.",
-                    ext
-                ));
+                self.send_logging(LogType::ERROR,LogModule::FILE,format!("Unsupported file extension '{}', skipping save.", ext));
             }
             None => {
                 self.send_logging(LogType::ERROR,LogModule::FILE,"No extension found in file_id, skipping save.".to_string());

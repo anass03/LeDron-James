@@ -91,10 +91,20 @@ impl ChatServer {
     fn handling_packets(&mut self, packet: Packet) {
         use PacketType::*;
         match packet.clone().pack_type {
-            Nack(nack) => self.handle_nack(nack, packet.routing_header.hops[0], packet.session_id),
-            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
-            FloodRequest(r) => self.process_flood_request(r, packet),
-            FloodResponse(_) => self.process_flood_response(packet),
+            Nack(nack) => {
+                if let Some(generator) = packet.routing_header.source() {
+                    self.handle_nack(nack, generator, packet.session_id)
+                }
+            },
+            Ack(ack) => {
+                self.handle_ack(ack, &packet.routing_header.hops, packet.session_id)
+            },
+            FloodRequest(r) => {
+                self.process_flood_request(r, packet)
+            },
+            FloodResponse(_) => {
+                self.process_flood_response(packet)
+            },
             MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
@@ -102,7 +112,7 @@ impl ChatServer {
                         Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Deserialization error: {e}")),
                     }
                 } else {
-                    // self.send_logging("Waiting for complete message fragment.".into());
+                    self.send_logging(LogType::WARN,LogModule::PACKET,"The packet is not complete; server is waiting.".to_string());
                 }
             }
         }
@@ -112,13 +122,27 @@ impl ChatServer {
     fn handle_command(&mut self, cmd: ClientNetCommand, source: NodeId) {
         use ClientNetCommand::*;
         match cmd {
-            ServerType => self.send_server_type(source),
-            RegistrationToChat(id) => self.register_client(id, source),
-            ClientList(id) => self.send_client_list(id, source),
-            MessageFor(to, recv, msg) => self.handle_chat_message(to, recv, msg, source),
-            FileFor(to, recv, fid, msg) => self.handle_file_transfer(to, recv, fid, msg, source),
-            MediaFor(to, recv, mid, msg) => self.handle_media_transfer(to, recv, mid, msg, source),
-            _ => self.send_response(ServerToClient::WrongServer(self.info.host.id), source),
+            ServerType => {
+                self.send_server_type(source)
+            },
+            RegistrationToChat(id) => {
+                self.register_client(id, source)
+            },
+            ClientList(id) => {
+                self.send_client_list(id, source)
+            },
+            MessageFor(to, recv, msg) => {
+                self.handle_chat_message(to, recv, msg, source)
+            },
+            FileFor(to, recv, fid, msg) => {
+                self.handle_file_transfer(to, recv, fid, msg, source)
+            },
+            MediaFor(to, recv, mid, msg) => {
+                self.handle_media_transfer(to, recv, mid, msg, source)
+            },
+            _ => {
+                self.send_response(ServerToClient::WrongServer(self.info.host.id), source)
+            },
         }
     }
 
@@ -177,7 +201,7 @@ impl ChatServer {
     fn register_client(&mut self, receiver: NodeId, source: NodeId) {
         if self.is_right_receiver(receiver) && !self.client_list.contains(&source) {
             self.client_list.push(source);
-            // self.send_logging(format!("Client {} registered", source));
+            self.send_logging(LogType::INFO,LogModule::CHAT,format!("Client {} registered", source));
         }
     }
 
@@ -185,7 +209,7 @@ impl ChatServer {
     fn send_server_type(&mut self, source: NodeId) {
         match self.servertype() {
             Ok(server_type) => {
-                // self.send_logging("Sending server type".to_string());
+                self.send_logging(LogType::INFO,LogModule::NETWORK,"Sending server type".to_string());
                 self.send_response(ServerToClient::ServerType(server_type), source);
             }
             Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Error in getting ServerType: {}", e)),
@@ -208,7 +232,7 @@ impl ChatServer {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::MessageFor(destination, receiver_id, msg.clone()), source);
-                    // self.send_logging(format!("Sending message to {}: {}", destination, msg));
+                    self.send_logging(LogType::INFO,LogModule::CHAT,format!("Sending message to {}: {}", destination, msg));
                     self.send_response(ServerToClient::MessageFrom(self.info.host.id, source, msg), destination);
                 } else {
                     self.send_logging(LogType::WARN,LogModule::CHAT,format!("Destination {} not registered", destination));
@@ -228,7 +252,7 @@ impl ChatServer {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
-                    // self.send_logging(format!("Sending file to {}", destination));
+                    self.send_logging(LogType::INFO,LogModule::CHAT,format!("Sending file to {}", destination));
                     self.send_response(ServerToClient::FileFrom(self.info.host.id, source,destination, file_id, message), destination);
                 } else {
                     self.send_logging(LogType::WARN,LogModule::CHAT,format!("Destination {} not registered", destination));
@@ -248,7 +272,7 @@ impl ChatServer {
             if self.client_list.contains(&source) {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
-                    // self.send_logging(format!("Sending media to {}", destination));
+                    self.send_logging(LogType::INFO,LogModule::CHAT,format!("Sending media to {}", destination));
                     self.send_response(ServerToClient::MediaFrom(self.info.host.id, source,destination, media_id, message), destination);
                 } else {
                     self.send_logging(LogType::WARN,LogModule::CHAT,"Destination client not registered".into());

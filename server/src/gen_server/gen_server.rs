@@ -1,8 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::Cursor;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
@@ -48,7 +47,7 @@ impl GenServer {
         match cmd {
             HostCommand::AddSender(id, sender) => {
                 if self.host.packet_send.contains_key(&id) {
-                    // self.send_logging("Channel already present!".to_string());
+                     self.send_logging(LogType::WARN,LogModule::NETWORK,"Channel already present!".to_string());
                 } else if self.host.packet_send.len() >= 2 {
                     self.send_logging(LogType::WARN,LogModule::PACKET,"Cannot add more than 2 channels.".to_string());
                 } else {
@@ -59,7 +58,7 @@ impl GenServer {
                     self.host.network.nodes.entry(id)
                         .or_insert_with(|| (NodeType::Drone, Vec::new()))
                         .1.push(Edge { to: self.host.id, weight: 0.0 });
-                    // self.send_logging("Sender added successfully.".to_string());
+                     self.send_logging(LogType::INFO,LogModule::NETWORK,"Sender added successfully.".to_string());
                 }
             }
             HostCommand::RemoveSender(id) => {
@@ -70,7 +69,7 @@ impl GenServer {
                     if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
                         edges.retain(|e| e.to != self.host.id);
                     }
-                    // self.send_logging("Sender removed successfully.".to_string());
+                     self.send_logging(LogType::INFO,LogModule::NETWORK,"Sender removed successfully.".to_string());
                 } else {
                     self.send_logging(LogType::WARN,LogModule::PACKET,"Sender not found.".to_string());
                 }
@@ -154,25 +153,17 @@ impl GenServer {
     /// Sends a high-level response to a client.
     pub fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         if let Some((msg, meta, total)) = self.prepare_message(&response) {
-            // Se c'è metadata, ma non siamo già in un Sending, invio la notifica di download
             if let Some((content_type, id)) = meta {
                 if !matches!(response, ServerToClient::Sending(_, _)) {
                     self.send_download(destination, total, content_type, id);
                 }
             }
-            // Poi frammento e mando il messaggio vero e proprio
             if let Err(e) = self.build_msg_fragment(destination, msg) {
-                self.send_logging(
-                    LogType::ERROR,
-                    LogModule::PACKET,
-                    format!("Failed to send response to {}: {}", destination, e),
+                self.send_logging(LogType::ERROR, LogModule::PACKET, format!("Failed to send response to {}: {}", destination, e),
                 );
             }
         } else {
-            self.send_logging(
-                LogType::ERROR,
-                LogModule::PACKET,
-                "prepare_message returned None".to_string(),
+            self.send_logging(LogType::ERROR, LogModule::PACKET, "prepare_message returned None".to_string(),
             );
         }
     }
@@ -184,8 +175,6 @@ impl GenServer {
             ContentType::File  => ContentID::File(id),
             ContentType::Media => ContentID::Media(id),
         };
-        // Questa chiamata ricade su send_response, ma con un Sending(...):
-        // grazie al guard in send_response non ricondurrà send_download.
         self.send_response(ServerToClient::Sending(cid, total), destination);
     }
 
@@ -211,40 +200,33 @@ impl GenServer {
 
 
     fn build_msg_fragment(&mut self, destination: NodeId, message: Message) -> Result<(), String> {
-        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
-            "Starting fragmentation host={} session={} dest={}",
-            self.host.id,
-            message.session_id,
-            destination,
-        ));
-        // Trova percorso
-        let route = match self.host.network.find_best_route(self.host.id, destination) {
-            Some(r) => r,
-            None => {
+        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("Starting fragmentation host={} session={} dest={}", self.host.id, message.session_id, destination, ));
+        //Find Route
+        let route = self.host.network
+            .find_best_route(self.host.id, destination)
+            .ok_or_else(|| {
                 let err = format!("No route to {}", destination);
-                self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("{} host={} session={}", err, self.host.id, message.session_id));
-                return Err(err);
+                self.send_logging(LogType::ERROR, LogModule::FRAGMENT, format!("Fragmentation error: {}", err), );
+                err
+            })?;
+        match self.host.controller_send.send(HostEvent::Route(self.host.id, route.clone())){
+            Ok(_) => {},
+            Err(err) => {
+                self.send_logging(LogType::WARN, LogModule::SESSION, format!("error sending route to controller {}", err), );
             }
-        };
-        //self.send_logging(format!("✅💥💥 Route found for fragmentation: {:?}", route.clone()));
+        }
 
-        // Calcola numero totale di frammenti
+        // Total fragment number
         let bytes = &message.content;
-        //self.send_logging(format!("❤️❤️ vettore di byte: {:?}", bytes.clone()));
         let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
 
-        // Prepara o aggiorna SentSessionData
+        // Prepare/Update SessionData
         {
             let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
             let session = sent.entry(message.session_id).or_insert_with(|| {
                 let host = self.host.id;
                 let session = message.session_id;
-                self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
-                    "New SentSessionData host={} session={} total={}",
-                    host,
-                    session,
-                    total,
-                ));
+                self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("New SentSessionData host={} session={} total={}", host, session, total, ));
                 SentSessionData {
                     buffer: vec![None; total],
                     last_activity: Instant::now(),
@@ -262,7 +244,7 @@ impl GenServer {
             }
         }
 
-        // Invio frammenti
+        //Sending Fragments
         for (i, chunk) in bytes.chunks(FRAGMENT_DSIZE).enumerate() {
             let frag = Fragment {
                 fragment_index: i as u64,
@@ -275,7 +257,7 @@ impl GenServer {
                 },
             };
 
-            // Aggiorna buffer
+            //Update Buffer
             {
                 let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
                 if let Some(session) = sent.get_mut(&message.session_id) {
@@ -285,30 +267,15 @@ impl GenServer {
                 }
             }
 
-            // Costruisci e invia pacchetto
+            //Build and Send Packet
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let packet = Packet::new_fragment(header.clone(), message.session_id, frag.clone());
-
-            // self.send_logging(format!(
-            //     "Sending fragment host={} session={} fragment={}",
-            //     self.id,
-            //     message.session_id,
-            //     i,
-            //));
             let result = self.send_packet(packet, None);
 
-             self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
-                 "Send result host={} session={} fragment={} result={}",
-                 self.host.id, message.session_id, i, result
-             ));
-
+            self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("Send result host={} session={} fragment={} result={}", self.host.id, message.session_id, i, result));
         }
 
-        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!(
-            "Fragmentation completed host={} session={}",
-            self.host.id,
-            message.session_id,
-        ));
+        self.send_logging(LogType::INFO,LogModule::FRAGMENT,format!("Fragmentation completed host={} session={}", self.host.id, message.session_id, ));
         Ok(())
     }
 }
