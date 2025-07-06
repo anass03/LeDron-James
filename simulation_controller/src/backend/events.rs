@@ -137,7 +137,7 @@ impl SimulationControllerData {
             },
             ServerToClient::File(server_id, file_id, file)
             => {
-                self.update_net_cache(server_id, ContentID::File(file_id.clone()), None, Some(file.clone()), None)?;
+                self.update_net_cache(server_id, ContentID::File(file_id), None, Some(file), None)?;
 
                 //self.save_file(file, file_id)?
             },
@@ -163,7 +163,7 @@ impl SimulationControllerData {
             },
             ServerToClient::Media(server_id, media_id, image)
             => {
-                self.update_net_cache(server_id, ContentID::Media(media_id.clone()), Some(image.clone()), None, None)?;
+                self.update_net_cache(server_id, ContentID::Media(media_id), Some(image), None, None)?;
 
                 // Save in local folder
                 //self.save_media(&media_id, &image)?;
