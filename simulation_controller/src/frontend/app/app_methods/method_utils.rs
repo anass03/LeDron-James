@@ -44,7 +44,7 @@ impl App<'_> {
                         },
                         RendererResponse::Computed((ret_vec)) => {
                             for (id,top) in ret_vec{
-                                for (node,act,ref mut current_alg) in &mut self.cache.tab1_data.netnode_list.items{
+                                'inner: for (node,act,ref mut current_alg) in &mut self.cache.tab1_data.netnode_list.items{
                                     let maybe_target = match node {
                                         Node::Client(cl) => cl.id,
                                         Node::Server(sr) => sr.id,
@@ -53,7 +53,7 @@ impl App<'_> {
 
                                     if maybe_target == id{
                                         *current_alg = top;
-                                        break;
+                                        break 'inner;
                                     }
                                 }
                             }
@@ -67,7 +67,7 @@ impl App<'_> {
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (id,(channels,media)) in values{
                 match media{
-                    /*NetCacheMedia::Downloaded(vec) => {
+                    NetCacheMedia::Downloaded(vec) => {
                         match channels.0.clone(){
                             None => {}
                             Some(ch_resize_req) => {
@@ -88,7 +88,7 @@ impl App<'_> {
                                 }
                             }
                         }
-                    }*/
+                    }
                     NetCacheMedia::Rendered(ref mut rendered) => {
                         match &channels.1{
                             None => {
@@ -126,13 +126,6 @@ impl App<'_> {
 
             self.initialize_netnodelist(dronec, serverc, clientc);
 
-            for (node,act,top) in self.cache.tab1_data.netnode_list.items.clone(){
-                match node{
-                    Node::Client(cl) => {self.initialize_node_pop_map(cl.id);}
-                    Node::Server(sr) => {self.initialize_node_pop_map(sr.id);}
-                    Node::Drone(dr) => {self.initialize_node_pop_map(dr.id);}
-                }
-            }
         }
 
         if !self.cache.main_log_state.0{
@@ -152,26 +145,36 @@ impl App<'_> {
     pub(in crate::frontend::app) fn initialize_netnodelist(&mut self, drones: Vec<DroneConfig>, servers: Vec<ServerConfig>, clients: Vec<ClientConfig>){
 
         let mut nodes = Vec::new();
-
+        let mut ids = Vec::new();
         for d in drones{
-            let id = d.id;
+            ids.push(d.id);
             nodes.push((Node::Drone(d),true, TopologyAlgorithm::default()));
-            self.initialize_node_pop_map(id)
         }
         for s in servers{
-            let id = s.id;
+            ids.push(s.id);
             nodes.push((Node::Server(s),true, TopologyAlgorithm::default()));
-            self.initialize_node_pop_map(id)
         }
         for c in clients{
-            let id = c.id;
+            ids.push(c.id);
             nodes.push((Node::Client(c),true, TopologyAlgorithm::default()));
-            self.initialize_node_pop_map(id)
         }
+
+        // Set the items first
         self.cache.tab1_data.netnode_list.items = nodes;
         self.cache.tab1_data.netnode_list.selected= 0;
         self.cache.tab1_data.netnode_list.state.select(Some(self.cache.tab1_data.netnode_list.selected as usize));
         self.cache.tab1_data.netnode_list.initialized= true;
+
+        // Debug logging for running_network
+        info!(target: "main", "[INIT] - Running network contains {} nodes", self.simulation_controller_data.running_network.len());
+        for (netnode, connections) in &self.simulation_controller_data.running_network {
+            info!(target: "main", "[INIT] - Node {:?} has {} connections: {:?}", netnode, connections.len(), connections);
+        }
+
+        // Now initialize the topology maps for each node
+        for id in ids{
+            self.initialize_node_pop_map(id);
+        }
     }
     pub(super) fn save_text_buffer(&mut self) {
         let lines = self.cache.text_buffer.toml_text_area.clone().into_lines();

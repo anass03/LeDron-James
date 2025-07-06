@@ -15,7 +15,9 @@ impl App<'_>{
                     self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
                 },
                 "o" => {
-                    info!(target: "main", "Links: {:?}\n{:?}", self.simulation_controller_data.topology_algorithm_data.map_links, self.simulation_controller_data.topology_algorithm_data.map)
+                    for (x,y,z) in self.cache.tab1_data.netnode_list.items.clone(){
+                        error!(target: "main", "{:?}\n{:?}",z.map, z.map_links)
+                    }
                 }
                 "q" => self.stay = false,
                 "i" => {

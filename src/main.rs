@@ -43,6 +43,5 @@ fn main() -> std::io::Result<()> {
         handle.join().unwrap();
         println!("[Simulation Controller] - Closing thread of node: {:?}", node_id);
     }
-
     app_result
 }

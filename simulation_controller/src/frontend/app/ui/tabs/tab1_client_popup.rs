@@ -15,7 +15,7 @@ use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas}
 use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_chat_options;
 use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
-use crate::frontend::app::ui::tabs::tab1_client_popup::settings_rendering::render_sett_options;
+use crate::frontend::app::ui::tabs::tab1_client_popup::settings_rendering::render_settings_page;
 
 pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId) ->Option<Rect>{
     /*    let [area] = Layout::default()
@@ -136,8 +136,8 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
         ClientPopup::DataPage(data_page_data) => {
             render_cl_sr_data_options(app, area, buf, *selected_node);
         }
-        ClientPopup::SettingsPage(_) => {
-            render_sett_options(app,area,buf)
+        ClientPopup::SettingsPage(cmd) => {
+            render_settings_page(app,area,buf,*selected_node,cmd);
         }
     }
     None
@@ -1827,11 +1827,160 @@ pub(super) mod net_rendering{
 }
 pub(super) mod settings_rendering{
     use ratatui::buffer::Buffer;
-    use ratatui::layout::Rect;
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+    use ratatui::style::{Color, Modifier, Style};
+    use ratatui::text::Line;
+    use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Paragraph, Widget};
+    use wg_2024::network::NodeId;
     use crate::frontend::app::App;
+    use crate::frontend::app::models::general_types::Node;
+    use crate::frontend::app::models::tab1_types::{ClientSettingsCommandsPopup, ClientSettingsPopup, DroneSettingsPopup};
+    use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
+    use crate::frontend::app::ui::tabs::tab1::{draw_map, render_add_sender_popup, render_remove_sender_popup};
 
-    pub(super) fn render_sett_options(app:&App, area:Rect, buf:&mut Buffer){
+    pub(super) fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_page:&ClientSettingsPopup) {
+        let [sett_area, view_area] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
+            .spacing(1)
+            .areas(area);
+
+        let commands_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style( Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 0 {
+                    app.animation_color()
+                }else {
+                    MAIN_BLOCK_BORDERS
+                }
+            ))
+            .title(" Commands ")
+            .title_alignment(Alignment::Left);
+
+        let inner_commands_block = commands_block
+            .inner(sett_area);
+
+        commands_block.render(sett_area, buf);
+
+        // Command selection list (styled like other lists)
+        let commands = [
+            "Add Sender",
+            "Remove Sender",
+            "Recompute Neighbours Map",
+        ];
+        let items: Vec<ListItem> = commands.iter().enumerate().map(|(idx, cmd)| {
+            let base_style = if idx % 2 == 0 {
+                Style::default().bg(crate::frontend::app::ui::tabs::BG_COLOR)
+            } else {
+                Style::default().bg(crate::frontend::app::ui::tabs::ALTERNATE_LIST_COLOR)
+            };
+            ListItem::new(cmd.to_string()).style(base_style)
+        }).collect();
+        let list = List::new(items)
+            .block(Block::default().borders(Borders::NONE))
+            .highlight_style(
+                Style::default()
+                    .bg(crate::frontend::app::ui::tabs::SELECTED_LIST_COLOR)
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .highlight_symbol("> ")
+            .highlight_spacing(ratatui::widgets::HighlightSpacing::Always);
+        let mut state = ratatui::widgets::ListState::default();
+        state.select(Some(set_page.command_offset as usize));
+        ratatui::widgets::StatefulWidget::render(
+            list,
+            inner_commands_block,
+            buf,
+            &mut state,
+        );
+
+        let [text_area, map_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+            .spacing(1)
+            .areas(view_area);
+
+        let map_block = Block::default()
+            .title("Neighbours Map")
+            .title_alignment(Alignment::Right)
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style( Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 1 {
+                    app.animation_color()
+                }else {
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+
+        for (node,_,top_alg) in &app.cache.tab1_data.netnode_list.items{
+            match node{
+                Node::Client(id_1) => {
+                    if id_1.id.eq(&id) {
+                        draw_map(top_alg, map_area, buf, map_block.clone());
+                        break;
+                    }
+                }
+                Node::Server(id_1) => {
+                    if id_1.id.eq(&id){
+                        draw_map(top_alg,map_area,buf,map_block.clone());
+                        break;
+                    }
+                }
+                Node::Drone(id_1) => {
+                    if id_1.id.eq(&id){
+                        draw_map(top_alg,map_area,buf,map_block.clone());
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Animated LeDron James character
+        let le_dron_frames = ["< 🤖 >", "<  🤖  >", "<   🤖   >", "<    🤖    >", "<   🤖   >", "<  🤖  >", "< 🤖 >"];
+        let le_dron = le_dron_frames[(app.cache.counter as usize) % le_dron_frames.len()];
+        let le_dron_colored = Line::from(le_dron).style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD));
+
+        let command_names = [
+            "Add Sender",
+            "Remove Sender",
+            "Recompute Neighbours Map",
+        ];
+        let explanations = [
+            "Add a new sender node to this drone.\nExpands the network topology.",
+            "Remove a sender node from this drone.\nPrune connections or simulate failures.",
+            "Recalculate the network map for this drone.\nUseful after topology changes.",
+        ];
+        let selected = set_page.command_offset as usize;
+        let command_line = Line::from(command_names[selected])
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        let desc_line = Line::from(explanations[selected])
+            .style(Style::default().fg(Color::Cyan));
+
+        let lines = vec![
+            le_dron_colored,
+            Line::from("LeDron James says:").style(Style::default().fg(Color::Magenta)),
+            Line::from(""),
+            command_line,
+            desc_line,
+        ];
+        let para = Paragraph::new(lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE));
+        para.render(text_area, buf);
+
+        render_command_popup(app,area,buf,&set_page.command_popup);
     }
+    fn render_command_popup(app: &App, area: Rect, buf: &mut Buffer, popup: &ClientSettingsCommandsPopup) {
+        match popup {
+            ClientSettingsCommandsPopup::AddSender(cmd) => render_add_sender_popup(app, area, buf, cmd),
+            ClientSettingsCommandsPopup::RemoveSender(cmd) => render_remove_sender_popup(app, area, buf, cmd),
+            ClientSettingsCommandsPopup::None => {},
+        }
+    }
+
 }
 
 // Helper function to convert HSV to RGB, I'm tired of converting palettes manually to rgb manually.
