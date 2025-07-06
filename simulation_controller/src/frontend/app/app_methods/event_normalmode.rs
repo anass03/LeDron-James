@@ -4,6 +4,33 @@ use super::super::App;
 use super::super::ui;
 use std::io::Write;
 use log::*;
+fn wrap_text(text: &str, min: usize, max: usize) -> String {
+    let mut result = String::new();
+    let mut buffer = String::new();
+
+    for word in text.split_whitespace() {
+        if !buffer.is_empty() {
+            if buffer.len() + 1 + word.len() <= max {
+                buffer.push(' ');
+                buffer.push_str(word);
+            } else {
+                result.push_str(buffer.trim_end());
+                result.push('\n');
+                buffer.clear();
+                buffer.push_str(word);
+            }
+        } else {
+            buffer.push_str(word);
+        }
+    }
+
+    if !buffer.is_empty() {
+        result.push_str(buffer.trim_end());
+        result.push('\n');
+    }
+
+    result
+}
 impl App<'_>{
     pub(crate) fn handle_event_normalmode(&mut self, key: KeyEvent){
         if key.kind == KeyEventKind::Press {
@@ -15,7 +42,7 @@ impl App<'_>{
                     self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
                 },
                 "o" => {
-                    error!(target:"main", "{:?}",self.simulation_controller_data.chat_cache.local_chats)
+                    error!(target:"main", "{:?}", wrap_text(format!("{:?}", self.simulation_controller_data.chat_cache.local_chats).as_str(),30,40 ))
                 }
                 "q" => self.stay = false,
                 "i" => {
