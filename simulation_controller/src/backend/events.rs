@@ -344,7 +344,7 @@ fn open_file(path: &str) {
     // Open with system default application
     #[cfg(target_os = "windows")]
     {
-        let path_str = path.to_str().unwrap();
+        let path_str = path.to_string();
         //let quoted_path = format!("\"{}\"", path_str);
         Command::new("cmd")
             .args(&["/C", "start", "", &path_str])

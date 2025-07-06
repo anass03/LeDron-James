@@ -195,9 +195,6 @@ impl App<'_>{
                         AppMode::FileExploring => {
                             self.handle_event_file_exploringmode(event)
                         },
-                        _ => {
-                            self.handle_event_normalmode(key);
-                        }
                     }
                 },
                 _ => {}
