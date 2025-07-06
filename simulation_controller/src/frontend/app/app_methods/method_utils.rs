@@ -221,35 +221,4 @@ impl App<'_> {
         self.selected_tab = self.selected_tab.prev()
     }
 
-    /*pub(crate) fn play_sound(&mut self) -> io::Result<()>{
-        std::process::Command::new("osascript")
-            .arg("-e")
-            .arg("set volume output volume 75") // 0 to 100
-            .status()?;
-
-        if let Ok((_stream, handle)) = OutputStream::try_default() {
-            let sink = Sink::try_new(&handle).unwrap();
-            sink.set_volume(75.0);
-            let file = File::open("assets/beep.mp3").unwrap(); // your audio file here
-            let source = Decoder::new(BufReader::new(file)).unwrap();
-            sink.append(source);
-            sink.detach(); // allows it to play asynchronously
-           // Thread::slee
-        }
-
-        self.simulation_controller_data.logs.push_log(LogType::DEBUG, "play_sound");
-
-        Ok(())
-    }*/
-
-    // Early version of the compiler, just calls parse_config from the ledron git
-    // branch and pushes it directly to the compiler
-    /*pub(crate) fn compiler_beta(file_path: &str) -> Result<(), String> {
-        match parse_config(file_path) {
-            Ok(config) => { check_config(&config) }
-            Err(e) => {
-                Err(e.to_string())
-            }
-        }
-    }*/
 }
