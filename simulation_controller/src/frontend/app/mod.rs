@@ -217,15 +217,13 @@ impl App<'_>{
     ///
     /// Gotta add a refresher that based on the currently selected option does some requests / refreshes.
     fn tick_refresh(&mut self) {
-        /*if self.cache.tab0_data.charts_data.sentmessages.len()>=100{
-            self.cache.tab0_data.charts_data.sentmessages.pop();
-            self.cache.tab0_data.charts_data.sentmessages.insert(0,rand::rng().random_range(0..230));
-        }else{ self.cache.tab0_data.charts_data.sentmessages.insert(0,rand::rng().random_range(0..230)); }*/
-        // Update dropped packets chartd
+        // Update dropped packets chart
         let total_paket_dropped =  self.simulation_controller_data.stats.total_packet_dropped;
         let graph_width = self.cache.tab0_data.charts_data.dropped_packets_chart_width;
         self.cache.tab0_data.charts_data.update_dropped_per_tick(total_paket_dropped, graph_width);
 
+        let total_packets_sent = self.simulation_controller_data.stats.total_packet_exchanged;
+        self.cache.tab0_data.charts_data.update_sent_per_tick(total_packets_sent, graph_width);
 
         // We initialize the TOML buffer with the file indicated in the settings
         match self.cache.tab2_data.compiler_buf{

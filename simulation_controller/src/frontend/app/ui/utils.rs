@@ -19,28 +19,12 @@ pub(super) mod chart_rendering{
     }
 
     // Network Reliability
-    pub(crate) fn render_chart_2(chdata:&Vec<(f64,f64)>, chdata2: Option<&Vec<(f64,f64)>>, theme: u8 ,area:Rect, buf:&mut Buffer){
-        let datasets = vec![
-            Dataset::default()
-                .name("data2")
-                .marker(symbols::Marker::Dot)
-                .style(Style::default().fg(Color::Cyan))
-                .data(chdata.as_slice()),
-        ];
-        let chart = Chart::new(datasets)
-            .block(Block::bordered())
-            .x_axis(
-                Axis::default()
-                    .title("X Axis")
-                    .style(Style::default().fg(Color::Gray))
-            )
-            .y_axis(
-                Axis::default()
-                    .title("Y Axis")
-                    .style(Style::default().fg(Color::Gray))
-                    .labels(["-20".bold(), "0".into(), "20".bold()])
-                    .bounds([-20.0, 20.0]),
-            );
+    pub(crate) fn render_sparkline_2(chdata: &mut ChartsData, mut block:Block, area:Rect, buf:&mut Buffer){
+        Sparkline::default()
+            .style(Style::default().fg(Color::White))  // Different color from dropped messages
+            .block(block)
+            .data(&chdata.sentmessages)
+            .render(area,buf);
     }
 
     // Distribuzione dei tipi di pacchetti che girano nella network,

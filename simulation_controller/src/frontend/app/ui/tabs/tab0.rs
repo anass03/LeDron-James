@@ -64,7 +64,7 @@ pub(super) fn render_tab0(app: &mut App, area: Rect, buf : &mut Buffer){
                 MAIN_BLOCK_BORDERS
             }
         ));
-    chart2_block.render(graph2,buf);
+    chart_rendering::render_sparkline_2(&mut app.cache.tab0_data.charts_data, chart2_block, graph2, buf);
 
     let mut chart3_block = Block::default()
         .title(" Most active nodes ")
