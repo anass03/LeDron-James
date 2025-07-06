@@ -1,303 +1,272 @@
 use ratatui::crossterm::event::KeyCode;
 use crate::frontend::app::App;
-use crate::frontend::app::models::tab3_types::{LogLevel, NavigationLevel};
+use crate::frontend::app::models::tab3_types::{
+    Tab3MenuSelection, ViewedTab3, Tab3SettingsPage, 
+    DownloadSettingsItems, LoggingSettingsItems, NetworkSettingsItems, AppSettingsItems,
+    LogLevel
+};
 use crate::frontend::app::models::main_types::AppMode;
 
 impl App<'_> {
     pub(crate) fn handle_event_tab3(&mut self, key: KeyCode) {
         match key {
             KeyCode::Up => {
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::OuterBoxes => {
-                        // Navigate between outer boxes (Download Folder <-> Logging Preferences)
-                        if self.cache.tab3_data.selected_outer_box > 0 {
-                            self.cache.tab3_data.selected_outer_box -= 1;
-                        }
+                match self.cache.tab3_data.menu_selection {
+                    Tab3MenuSelection::MenuArea => {
+                        self.cache.tab3_data.menu_up();
                     }
-                    NavigationLevel::MiddleBoxes => {
-                        // Navigate between middle boxes (Target <-> Log Type)
-                        if self.cache.tab3_data.selected_middle_box > 0 {
-                            self.cache.tab3_data.selected_middle_box -= 1;
-                        }
-                    }
-                    NavigationLevel::Categories => {
-                        // Navigate categories (right panel)
-                        if self.cache.tab3_data.selected_category > 0 {
-                            self.cache.tab3_data.selected_category -= 1;
-                        }
+                    Tab3MenuSelection::OptArea => {
+                        self.cache.tab3_data.opt_up();
                     }
                 }
             }
             KeyCode::Down => {
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::OuterBoxes => {
-                        // Navigate between outer boxes (max 1: 0=Download Folder, 1=Logging Preferences)
-                        if self.cache.tab3_data.selected_outer_box < 1 {
-                            self.cache.tab3_data.selected_outer_box += 1;
-                        }
+                match self.cache.tab3_data.menu_selection {
+                    Tab3MenuSelection::MenuArea => {
+                        self.cache.tab3_data.menu_down();
                     }
-                    NavigationLevel::MiddleBoxes => {
-                        // Navigate between middle boxes (max 1: 0=Target, 1=Log Type)
-                        if self.cache.tab3_data.selected_middle_box < 1 {
-                            self.cache.tab3_data.selected_middle_box += 1;
-                        }
-                    }
-                    NavigationLevel::Categories => {
-                        // Navigate categories (max 6: 0-6)
-                        if self.cache.tab3_data.selected_category < 6 {
-                            self.cache.tab3_data.selected_category += 1;
-                        }
+                    Tab3MenuSelection::OptArea => {
+                        self.cache.tab3_data.opt_down();
                     }
                 }
             }
             KeyCode::Left => {
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::MiddleBoxes => {
-                        match self.cache.tab3_data.selected_middle_box {
-                            0 => {
-                                // Navigate left in targets
-                                if self.cache.tab3_data.target_cursor > 0 {
-                                    self.cache.tab3_data.target_cursor -= 1;
-                                }
-                            }
-                            1 => {
-                                // Navigate left in log levels
-                                if self.cache.tab3_data.log_level_cursor > 0 {
-                                    self.cache.tab3_data.log_level_cursor -= 1;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {
-                        // Original left navigation (move to categories)
-                        self.cache.tab3_data.navigation_level = NavigationLevel::Categories;
-                    }
+                // Move from OptArea to MenuArea
+                if self.cache.tab3_data.menu_selection == Tab3MenuSelection::OptArea {
+                    self.cache.tab3_data.menu_selection = Tab3MenuSelection::MenuArea;
                 }
             }
             KeyCode::Right => {
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::MiddleBoxes => {
-                        match self.cache.tab3_data.selected_middle_box {
-                            0 => {
-                                // Navigate right in targets
-                                if self.cache.tab3_data.target_cursor < self.cache.tab3_data.available_targets.len() - 1 {
-                                    self.cache.tab3_data.target_cursor += 1;
-                                }
-                            }
-                            1 => {
-                                // Navigate right in log levels
-                                let log_levels = LogLevel::all_levels();
-                                if self.cache.tab3_data.log_level_cursor < log_levels.len() - 1 {
-                                    self.cache.tab3_data.log_level_cursor += 1;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                    _ => {
-                        // Original right navigation (move to settings content)
-                        self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
+                // Move from MenuArea to OptArea (only if we're in a settings page)
+                if self.cache.tab3_data.menu_selection == Tab3MenuSelection::MenuArea {
+                    if let ViewedTab3::SettingsPage(_) = self.cache.tab3_data.viewing {
+                        self.cache.tab3_data.menu_selection = Tab3MenuSelection::OptArea;
                     }
                 }
             }
             KeyCode::Enter => {
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::OuterBoxes => {
-                        match self.cache.tab3_data.selected_outer_box {
+                match self.cache.tab3_data.menu_selection {
+                    Tab3MenuSelection::MenuArea => {
+                        // Navigate to the selected settings page
+                        match self.cache.tab3_data.menu_cursor {
                             0 => {
-                                // Download Folder selected - trigger folder browser
-                                self.simulation_controller_data.logs.push_sc_log(
-                                    crate::backend::sc_models::LogType::INFO,
-                                    "Opening folder browser...".to_string()
+                                // Download Settings
+                                self.cache.tab3_data.viewing = ViewedTab3::SettingsPage(
+                                    Tab3SettingsPage::DownloadPage(Default::default())
                                 );
-                                // Set the tab3 data so we know we're browsing for download folder
-                                self.cache.tab3_data.browsing_for_download_folder = true;
-                                // Enter file exploring mode
-                                self.app_mode = AppMode::FileExploring;
                             }
                             1 => {
-                                // Logging Preferences selected - enter middle boxes level
-                                self.cache.tab3_data.navigation_level = NavigationLevel::MiddleBoxes;
-                                self.cache.tab3_data.selected_middle_box = 0; // Start at first middle box
+                                // Logging Settings
+                                self.cache.tab3_data.viewing = ViewedTab3::SettingsPage(
+                                    Tab3SettingsPage::LoggingPage(Default::default())
+                                );
+                            }
+                            2 => {
+                                // Network Settings
+                                self.cache.tab3_data.viewing = ViewedTab3::SettingsPage(
+                                    Tab3SettingsPage::NetworkPage(Default::default())
+                                );
+                            }
+                            3 => {
+                                // App Settings
+                                self.cache.tab3_data.viewing = ViewedTab3::SettingsPage(
+                                    Tab3SettingsPage::AppPage(Default::default())
+                                );
                             }
                             _ => {}
                         }
+                        // Move to OptArea when entering a settings page
+                        self.cache.tab3_data.menu_selection = Tab3MenuSelection::OptArea;
                     }
-                    NavigationLevel::MiddleBoxes => {
-                        match self.cache.tab3_data.selected_middle_box {
-                            0 => {
-                                // Choose Target - toggle selection of current cursor target
-                                let cursor_target = &self.cache.tab3_data.available_targets[self.cache.tab3_data.target_cursor].clone();
-
-                                if self.cache.tab3_data.selected_targets.contains(cursor_target) {
-                                    // Deselect: remove from selected list
-                                    self.cache.tab3_data.selected_targets.retain(|t| t != cursor_target);
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        crate::backend::sc_models::LogType::INFO,
-                                        format!("Deselected target: {}", cursor_target)
-                                    );
-                                } else {
-                                    // Select: add to selected list
-                                    self.cache.tab3_data.selected_targets.push(cursor_target.clone());
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        crate::backend::sc_models::LogType::INFO,
-                                        format!("Selected target: {}", cursor_target)
-                                    );
+                    Tab3MenuSelection::OptArea => {
+                        // Handle specific settings actions
+                        if let ViewedTab3::SettingsPage(page) = &mut self.cache.tab3_data.viewing {
+                            match page {
+                                Tab3SettingsPage::DownloadPage(download_page) => {
+                                    match download_page.opt_cursor {
+                                        0 => {
+                                            // Download Folder - trigger folder browser
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Opening folder browser for download folder...".to_string()
+                                            );
+                                            // Set the tab3 data so we know we're browsing for download folder
+                                            self.cache.tab3_data.browsing_for_download_folder = true;
+                                            // Enter file exploring mode
+                                            self.app_mode = AppMode::FileExploring;
+                                        }
+                                        1 => {
+                                            // AutoDownload toggle
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Toggling auto download...".to_string()
+                                            );
+                                            // TODO: Implement auto download toggle
+                                        }
+                                        2 => {
+                                            // Download Limit
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting download limit...".to_string()
+                                            );
+                                            // TODO: Implement download limit setting
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Tab3SettingsPage::LoggingPage(logging_page) => {
+                                    match logging_page.opt_cursor {
+                                        0 => {
+                                            // Log Targets - toggle selection
+                                            let cursor_target = &logging_page.available_targets[logging_page.target_cursor].clone();
+                                            if logging_page.selected_targets.contains(cursor_target) {
+                                                logging_page.selected_targets.retain(|t| t != cursor_target);
+                                                self.simulation_controller_data.logs.push_sc_log(
+                                                    crate::backend::sc_models::LogType::INFO,
+                                                    format!("Deselected log target: {}", cursor_target)
+                                                );
+                                            } else {
+                                                logging_page.selected_targets.push(cursor_target.clone());
+                                                self.simulation_controller_data.logs.push_sc_log(
+                                                    crate::backend::sc_models::LogType::INFO,
+                                                    format!("Selected log target: {}", cursor_target)
+                                                );
+                                            }
+                                        }
+                                        1 => {
+                                            // Log Levels - toggle selection
+                                            let log_levels = LogLevel::all_levels();
+                                            let cursor_log_level = &log_levels[logging_page.log_level_cursor].clone();
+                                            if logging_page.selected_log_levels.contains(cursor_log_level) {
+                                                logging_page.selected_log_levels.retain(|l| l != cursor_log_level);
+                                                self.simulation_controller_data.logs.push_sc_log(
+                                                    crate::backend::sc_models::LogType::INFO,
+                                                    format!("Deselected log level: {}", cursor_log_level.to_string())
+                                                );
+                                            } else {
+                                                logging_page.selected_log_levels.push(cursor_log_level.clone());
+                                                self.simulation_controller_data.logs.push_sc_log(
+                                                    crate::backend::sc_models::LogType::INFO,
+                                                    format!("Selected log level: {}", cursor_log_level.to_string())
+                                                );
+                                            }
+                                        }
+                                        2 => {
+                                            // Log File
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting log file path...".to_string()
+                                            );
+                                            // TODO: Implement log file setting
+                                        }
+                                        3 => {
+                                            // Log Format
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting log format...".to_string()
+                                            );
+                                            // TODO: Implement log format setting
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Tab3SettingsPage::NetworkPage(network_page) => {
+                                    match network_page.opt_cursor {
+                                        0 => {
+                                            // Connection Timeout
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting connection timeout...".to_string()
+                                            );
+                                            // TODO: Implement connection timeout setting
+                                        }
+                                        1 => {
+                                            // Retry Attempts
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting retry attempts...".to_string()
+                                            );
+                                            // TODO: Implement retry attempts setting
+                                        }
+                                        2 => {
+                                            // Max Connections
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting max connections...".to_string()
+                                            );
+                                            // TODO: Implement max connections setting
+                                        }
+                                        3 => {
+                                            // Network Interface
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting network interface...".to_string()
+                                            );
+                                            // TODO: Implement network interface setting
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                                Tab3SettingsPage::AppPage(app_page) => {
+                                    match app_page.opt_cursor {
+                                        0 => {
+                                            // Theme
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting theme...".to_string()
+                                            );
+                                            // TODO: Implement theme setting
+                                        }
+                                        1 => {
+                                            // Language
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Setting language...".to_string()
+                                            );
+                                            // TODO: Implement language setting
+                                        }
+                                        2 => {
+                                            // Auto Save
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Toggling auto save...".to_string()
+                                            );
+                                            // TODO: Implement auto save toggle
+                                        }
+                                        3 => {
+                                            // Notifications
+                                            self.simulation_controller_data.logs.push_sc_log(
+                                                crate::backend::sc_models::LogType::INFO,
+                                                "Toggling notifications...".to_string()
+                                            );
+                                            // TODO: Implement notifications toggle
+                                        }
+                                        _ => {}
+                                    }
                                 }
                             }
-                            1 => {
-                                // Choose Log Type - toggle selection of current cursor log level
-                                let log_levels = LogLevel::all_levels();
-                                let cursor_log_level = &log_levels[self.cache.tab3_data.log_level_cursor].clone();
-
-                                if self.cache.tab3_data.selected_log_levels.contains(cursor_log_level) {
-                                    // Deselect: remove from selected list
-                                    self.cache.tab3_data.selected_log_levels.retain(|l| l != cursor_log_level);
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        crate::backend::sc_models::LogType::INFO,
-                                        format!("Deselected log level: {}", cursor_log_level.to_string())
-                                    );
-                                } else {
-                                    // Select: add to selected list
-                                    self.cache.tab3_data.selected_log_levels.push(cursor_log_level.clone());
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        crate::backend::sc_models::LogType::INFO,
-                                        format!("Selected log level: {}", cursor_log_level.to_string())
-                                    );
-                                }
-                            }
-                            _ => {}
                         }
-                    }
-                    NavigationLevel::Categories => {
-                        // Categories selected - could implement category-specific actions
-                        self.simulation_controller_data.logs.push_sc_log(
-                            crate::backend::sc_models::LogType::INFO,
-                            format!("Category {} selected", self.cache.tab3_data.selected_category)
-                        );
                     }
                 }
             }
             KeyCode::Esc => {
                 // Go back one level
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::MiddleBoxes => {
-                        // Go back to outer boxes level
-                        self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
+                match self.cache.tab3_data.viewing {
+                    ViewedTab3::SettingsPage(_) => {
+                        // Go back to main settings page
+                        self.cache.tab3_data.viewing = ViewedTab3::Main;
+                        self.cache.tab3_data.menu_selection = Tab3MenuSelection::MenuArea;
                     }
-                    NavigationLevel::Categories => {
-                        // Go back to outer boxes level (or could go to middle if we were there before)
-                        self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
-                    }
-                    NavigationLevel::OuterBoxes => {
-                        // Already at top level, maybe show a message or do nothing
+                    ViewedTab3::Main => {
+                        // Already at main level, maybe show a message
                         self.simulation_controller_data.logs.push_sc_log(
                             crate::backend::sc_models::LogType::INFO,
-                            "Already at top navigation level".to_string()
+                            "Already at main settings level".to_string()
                         );
                     }
                 }
             }
-            KeyCode::Char('b') | KeyCode::Char('B') => {
-                if self.cache.tab3_data.navigation_level == NavigationLevel::OuterBoxes
-                    && self.cache.tab3_data.selected_outer_box == 0 {
-                    // Browse for folder when Download Folder is selected
-                    self.simulation_controller_data.logs.push_sc_log(
-                        crate::backend::sc_models::LogType::INFO,
-                        "Opening folder browser...".to_string()
-                    );
-                    // Set the tab3 data so we know we're browsing for download folder
-                    self.cache.tab3_data.browsing_for_download_folder = true;
-                    // Enter file exploring mode
-                    self.app_mode = AppMode::FileExploring;
-                }
-            }
-            KeyCode::Char('[') => {
-                // Keep the old bracket navigation for backwards compatibility (if needed)
-                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
-                    && self.cache.tab3_data.selected_middle_box == 1 {
-                    // Navigate left in log levels (alternative to Left arrow)
-                    if self.cache.tab3_data.log_level_cursor > 0 {
-                        self.cache.tab3_data.log_level_cursor -= 1;
-                    }
-                }
-            }
-            KeyCode::Char(']') => {
-                // Keep the old bracket navigation for backwards compatibility (if needed)
-                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
-                    && self.cache.tab3_data.selected_middle_box == 1 {
-                    // Navigate right in log levels (alternative to Right arrow)
-                    let log_levels = LogLevel::all_levels();
-                    if self.cache.tab3_data.log_level_cursor < log_levels.len() - 1 {
-                        self.cache.tab3_data.log_level_cursor += 1;
-                    }
-                }
-            }
-            KeyCode::Tab => {
-                // Toggle between left panel (categories) and right panel (settings)
-                match self.cache.tab3_data.navigation_level {
-                    NavigationLevel::Categories => {
-                        self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
-                    }
-                    _ => {
-                        self.cache.tab3_data.navigation_level = NavigationLevel::Categories;
-                    }
-                }
-            }
-            KeyCode::Char('c') | KeyCode::Char('C') => {
-                // Clear all selections in current section (optional feature)
-                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes {
-                    match self.cache.tab3_data.selected_middle_box {
-                        0 => {
-                            // Clear all selected targets
-                            let count = self.cache.tab3_data.selected_targets.len();
-                            self.cache.tab3_data.selected_targets.clear();
-                            self.simulation_controller_data.logs.push_sc_log(
-                                crate::backend::sc_models::LogType::INFO,
-                                format!("Cleared {} selected targets", count)
-                            );
-                        }
-                        1 => {
-                            // Clear all selected log levels
-                            let count = self.cache.tab3_data.selected_log_levels.len();
-                            self.cache.tab3_data.selected_log_levels.clear();
-                            self.simulation_controller_data.logs.push_sc_log(
-                                crate::backend::sc_models::LogType::INFO,
-                                format!("Cleared {} selected log levels", count)
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            KeyCode::Char('a') | KeyCode::Char('A') => {
-                // Select all in current section (optional feature)
-                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes {
-                    match self.cache.tab3_data.selected_middle_box {
-                        0 => {
-                            // Select all targets
-                            self.cache.tab3_data.selected_targets = self.cache.tab3_data.available_targets.clone();
-                            self.simulation_controller_data.logs.push_sc_log(
-                                crate::backend::sc_models::LogType::INFO,
-                                format!("Selected all {} targets", self.cache.tab3_data.selected_targets.len())
-                            );
-                        }
-                        1 => {
-                            // Select all log levels
-                            self.cache.tab3_data.selected_log_levels = LogLevel::all_levels();
-                            self.simulation_controller_data.logs.push_sc_log(
-                                crate::backend::sc_models::LogType::INFO,
-                                format!("Selected all {} log levels", self.cache.tab3_data.selected_log_levels.len())
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            _ => {
-                // Handle other keys if needed
-            }
+            _ => {}
         }
     }
 }
