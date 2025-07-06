@@ -1,5 +1,5 @@
 use std::cmp::PartialEq;
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect, Size};
 use ratatui::buffer::Buffer;
 use wg_2024::network::NodeId;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
@@ -16,6 +16,7 @@ use crate::frontend::app::ui::tabs::tab1_client_popup::chat_rendering::render_ch
 use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::net_rendering::render_net_options;
 use crate::frontend::app::ui::tabs::tab1_client_popup::settings_rendering::render_settings_page;
+use tui_scrollview::{ScrollView, ScrollViewState};
 
 pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Rect, buf : &mut Buffer, client_popup: &ClientPopup, id:NodeId) ->Option<Rect>{
     /*    let [area] = Layout::default()
@@ -157,10 +158,16 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
         .horizontal_margin(1)
         .areas(first_second);
 
+    // Use the appropriate cursor based on whether we're in MenuArea or OptArea
+    let server_cursor = match app.cache.tab1_data.popup_selection {
+        PopupSelection::MenuArea => app.cache.tab1_data.popup_cursor,
+        PopupSelection::OptArea => app.cache.tab1_data.popup_cursor, // In OptArea, popup_cursor is already the server cursor
+    };
+
     let mut first_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
-    if app.cache.tab1_data.popup_cursor % 2 == 0{
+    if server_cursor % 2 == 0{
         first_block = first_block.border_style(Style::default().fg(app.animation_color()));
     }
 
@@ -174,13 +181,13 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
 
     let vec_len = known_servers.len();
     // Now depending on how many server do we have we scroll the tabs.
-    if usize::from(app.cache.tab1_data.popup_cursor)>=vec_len{
+    if usize::from(server_cursor)>=vec_len{
         // Very buggy.
         // Idea: Add a different cursor for Opt area
         // We're overflowing the Vec
         // Should be unreachable as increasing / decreasing cursor is pretty firm.
     }else{
-        let tab_num = app.cache.tab1_data.popup_cursor / 2;
+        let tab_num = server_cursor / 2;
         let total_tabs_num = (known_servers.len()-1)/2;
 
         let [left_last,right_last] = Layout::default()
@@ -218,11 +225,11 @@ fn render_servers_available(app:&App, area:Rect, buf:&mut Buffer, known_servers:
 
 
         // Siamo in una lista di lunghezza dispari!
-        if (vec_len % 2 == 0 && app.cache.tab1_data.popup_cursor.add(1) as usize == vec_len) || app.cache.tab1_data.popup_cursor as usize +1<vec_len{
+        if (vec_len % 2 == 0 && server_cursor.add(1) as usize == vec_len) || server_cursor as usize +1<vec_len{
             let mut second_block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded);
-            if app.cache.tab1_data.popup_cursor % 2 == 1{
+            if server_cursor % 2 == 1{
                 second_block = second_block.border_style(Style::default().fg(app.animation_color()));
             }
             let [second_canvas_area, second_paragraph_area] = Layout::default()
@@ -782,10 +789,10 @@ pub(super) mod chat_rendering{
             .border_type(BorderType::Rounded)
             .borders(Borders::ALL)
             .border_style(
-                match app.cache.tab1_data.chat_third_page_selection{
+                match third_page_data.selected_item{
                     ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
                     ChatThirdPageSelection::BottomTab => {
-                        if app.cache.tab1_data.popup_cursor==0{
+                        if third_page_data.scroll_offset==0{
                             Style::default().fg(app.animation_color())
                         }else{
                             Style::default().fg(Color::Rgb(89, 72, 198))
@@ -802,10 +809,10 @@ pub(super) mod chat_rendering{
             .block(Block::default().borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .border_style(
-                    match app.cache.tab1_data.chat_third_page_selection{
+                    match third_page_data.selected_item{
                         ChatThirdPageSelection::ScrollingMessages => Style::default().fg(Color::Rgb(89, 72, 198)),
                         ChatThirdPageSelection::BottomTab => {
-                            if app.cache.tab1_data.popup_cursor==1{
+                            if third_page_data.scroll_offset==1{
                                 Style::default().fg(app.animation_color())
                             }else{
                                 Style::default().fg(Color::Rgb(89, 72, 198))
@@ -831,12 +838,12 @@ pub(super) mod chat_rendering{
                                 render_empty_chat(app,chat_area,buf);
                             }
                             Some(ch) => {
-                                render_chats(app,chat_area,buf,selected_cl,third_page_data,ch)
+                                render_chats_2(app,chat_area,buf,selected_cl,third_page_data,ch)
                             }
                         }
                     }
                     Some(ch) => {
-                        render_chats(app,chat_area,buf,selected_cl,third_page_data,ch)
+                        render_chats_2(app,chat_area,buf,selected_cl,third_page_data,ch)
                     }
                 }
             }
@@ -1008,6 +1015,155 @@ pub(super) mod chat_rendering{
         }
 
     }
+
+    fn render_chats_2(app: &App, area: Rect, buf: &mut Buffer, selected_cl: NodeId, third_page_data: &ChThirdPage, ch: &Chat) {
+        use textwrap::wrap;
+        use ratatui::widgets::{Block, Borders, BorderType, Paragraph, Wrap};
+        use ratatui::style::{Color, Style, Modifier};
+        use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect, Size};
+        use tui_scrollview::{ScrollView, ScrollViewState};
+
+        // Get all messages from the chat
+        let msgs = &ch.chat;
+        let total = msgs.len();
+        if total == 0 {
+            // No messages to display
+            return;
+        }
+
+        // Calculate total height needed for all messages
+        let mut total_height = 0;
+        let mut message_heights = Vec::with_capacity(total);
+        
+        // Use a more conservative width to prevent horizontal scrolling
+        let available_width = area.width.saturating_sub(2); // Leave margin for scrollbar
+        
+        for (msg, _) in msgs.iter() {
+            let content = match msg {
+                Message(text) => text.clone(),
+                Media(_) => "[MEDIA] 🖇️ Select this message to open the file!".to_string(),
+            };
+            // Use a smaller width to ensure proper wrapping and prevent horizontal scroll
+            let wrap_width = available_width.saturating_sub(8) as usize; // Leave more margin
+            let wrapped = wrap(&content, wrap_width);
+            let lines = wrapped.len().max(1) as u16;
+            let height = lines + 3; // 2 padding + 1 timestamp
+            message_heights.push(height);
+            total_height += height;
+        }
+
+        // Create a ScrollView with constrained width to prevent horizontal scrolling
+        let mut scroll_view = ScrollView::new(Size::new(available_width, total_height));
+        let scroll_buf = scroll_view.buf_mut();
+
+        // Fill the entire scroll buffer with the popup background color
+        for y in 0..scroll_buf.area.height {
+            for x in 0..scroll_buf.area.width {
+                scroll_buf.get_mut(x, y).set_style(Style::default().bg(POPUP_BG_COLOR));
+            }
+        }
+
+        // Calculate which message is selected based on scroll_offset
+        // scroll_offset = 0 means the last message (most recent) is selected
+        let selected_message_index = if third_page_data.scroll_offset == 0 {
+            total.saturating_sub(1) // Last message
+        } else {
+            total.saturating_sub(third_page_data.scroll_offset as usize + 1)
+        };
+
+        // Render each message bubble into the scroll buffer
+        let mut current_y = 0;
+        for (i, (msg, meta)) in msgs.iter().enumerate() {
+            let row_height = message_heights[i];
+            let row_area = Rect::new(0, current_y, available_width, row_height);
+            current_y += row_height;
+
+            // Determine if sent or received and if this message is selected
+            let is_sent = meta.id == selected_cl;
+            let is_selected = (i == selected_message_index || third_page_data.selected_item == ChatThirdPageSelection::ScrollingMessages);
+
+            // Split left/right for bubble with more conservative margins
+            let cols = if is_sent {
+                [Constraint::Percentage(20), Constraint::Percentage(80)]
+            } else {
+                [Constraint::Percentage(80), Constraint::Percentage(20)]
+            };
+            let parts = Layout::default()
+                .direction(Direction::Horizontal)
+                .constraints(cols)
+                .split(row_area);
+            let bubble_area = if is_sent { parts[1] } else { parts[0] };
+
+            // Format timestamp
+            let time_str = meta.timestamp
+                .time
+                .map(|t| format!("{:02}:{:02}", t.hour, t.minute))
+                .unwrap_or_default();
+
+            // Create bubble block with timestamp and selection styling
+            let bubble_color = if is_sent { 
+                if is_selected {
+                    app.animation_color() // Purple for selected sent messages
+                } else {
+                    Color::Rgb(117, 147, 175) // Original blue for sent messages
+                }
+            } else { 
+                if is_selected {
+                    app.animation_color()// Purple for selected received messages
+                } else {
+                    Color::Rgb(163, 183, 202) // Original gray for received messages
+                }
+            };
+
+            let mut bubble_block = Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title_bottom(time_str)
+                .title_alignment(if is_sent { Alignment::Left } else { Alignment::Right })
+                .title_style(Style::default().fg(Color::Gray))
+                .border_style(Style::default().fg(bubble_color));
+
+
+            // Wrap and render message text with proper width constraint
+            let content = match msg {
+                Message(text) => text.clone(),
+                Media(_) => "[media]".to_string(),
+            };
+            // Use bubble area width minus borders for wrapping
+            let wrap_width = bubble_area.width.saturating_sub(6) as usize;
+            let wrapped_text = wrap(&content, wrap_width).join("\n");
+
+            // Apply selection styling to text
+            let text_style = if is_selected {
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            Paragraph::new(wrapped_text)
+                .block(bubble_block)
+                .style(text_style)
+                .wrap(Wrap { trim: false })
+                .alignment(if is_sent { Alignment::Right } else { Alignment::Left })
+                .render(bubble_area, scroll_buf);
+        }
+
+        // Create scroll state and set it to show the selected message
+        let mut scroll_state = ScrollViewState::default();
+        
+        // Calculate scroll position to show the selected message
+        if third_page_data.scroll_offset > 0 {
+            // For now, just scroll to top since we can't scroll to specific positions
+            // The selected message will be highlighted visually
+            scroll_state.scroll_to_top();
+        } else {
+            // If scroll_offset is 0, show the last message
+            scroll_state.scroll_to_bottom();
+        }
+
+        // Render the scroll view into the main buffer
+        ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
+    }
 }
 
 /// All the functions needed to render the internet opt page
@@ -1017,7 +1173,7 @@ pub(super) mod net_rendering{
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
     use crate::frontend::app::models::tab1_types::{ChatThirdPageSelection, ClientChatPopup, ClientNetPopup, NetFirstPage, NetSecondPage, SelectedFileMedia};
-    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect};
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Margin, Rect, Size};
     use ratatui::buffer::{Buffer, Cell};
 
     use ratatui::prelude::{Color, Line, Modifier, Style, Text, Widget};
@@ -1036,7 +1192,7 @@ pub(super) mod net_rendering{
     use ratatui::text::{ToSpan, ToText};
     use ratatui_image::protocol::StatefulProtocol;
     use ratatui_image::StatefulImage;
-    use crate::backend::sc_models::{NetCacheFile, NetCacheMedia};
+    use crate::backend::sc_models::{FileType, NetCacheFile, NetCacheMedia};
     use crate::frontend::app::models::main_types::AppMode;
     use crate::frontend::app::models::tab1_types::{ChSecondPage, ChThirdPage};
     use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, MAIN_BLOCK_BORDERS, POPUP_BG_COLOR, SELECTED_LIST_COLOR};
@@ -1259,7 +1415,7 @@ pub(super) mod net_rendering{
                                                 ListItem::from(format!("{:?}",id)).style(base_style)
                                             }
                                             Some(item) => {
-                                                let load_char = match item.1{
+                                                let load_char = match item{
                                                     NetCacheFile::Downloading(_) | NetCacheFile::Rendering(_) => {
                                                         match app.cache.counter % 4 {
                                                             0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
@@ -1669,7 +1825,7 @@ pub(super) mod net_rendering{
                     .alignment(Alignment::Center);
                 media_count_para.render(status_left, buf);
             }
-            SelectedFileMedia::File(_) => {
+            SelectedFileMedia::File(file_id) => {
 
             }
             SelectedFileMedia::Media(media_id) => {
@@ -1679,6 +1835,36 @@ pub(super) mod net_rendering{
             }
         }
         None
+    }
+    fn render_file_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:FileId){
+        match app.simulation_controller_data.net_cache.downloaded_files.get(&ndpage_data.selected_server) {
+            None => {}
+            Some(hash) => {
+                match hash.get(&file_id){
+                    None => {}
+                    Some(file) => {
+                        match file {
+                            NetCacheFile::Downloading(_) => {
+                                render_loading_gauge(app,area,buf,None, Some(file), ndpage_data.selected_server)
+                            }
+                            NetCacheFile::Downloaded(_) | NetCacheFile::Rendering(_)=> {
+                                render_file_waiting_for_rendering(app,area,buf);
+                            }
+                            NetCacheFile::Rendered(file) => {
+                                match file {
+                                    FileType::UTF8(lines) => {
+                                        render_file_utf8(app, area, buf, lines);
+                                    }
+                                    FileType::Other(file) => {
+                                        render_file_not_viewable(app,area,buf);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
     fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
         match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
@@ -1694,10 +1880,10 @@ pub(super) mod net_rendering{
                         match file_status{
                             NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
                                 // Rendering Bar status widget
-                                render_loading_gauge(app,area,buf,file_status, ndpage_data.selected_server)
+                                render_loading_gauge(app,area,buf,Some(file_status),None, ndpage_data.selected_server)
                             }
                             NetCacheMedia::Downloaded(vec) => {
-                                render_waiting_for_rendering(app, area, buf);
+                                render_media_waiting_for_rendering(app, area, buf);
                             }
                             NetCacheMedia::Rendered(image_protocol) => {
                                 // I render it externally ddso no need to do it again here,
@@ -1712,7 +1898,7 @@ pub(super) mod net_rendering{
             }
         }
     }
-    fn render_loading_gauge(app: &App, area: Rect, buf: &mut Buffer, net_cache_media: &NetCacheMedia, server_id: ServerId) {
+    fn render_loading_gauge(app: &App, area: Rect, buf: &mut Buffer, net_cache_media: Option<&NetCacheMedia>, net_cache_file: Option<&NetCacheFile>, server_id: ServerId) {
         // Split area vertically: [top, gauge, info, bottom]
         let [top_area, gauge_area, info_area, bottom_area] = Layout::default()
             .direction(Direction::Vertical)
@@ -1734,12 +1920,30 @@ pub(super) mod net_rendering{
         spinner_para.render(top_area, buf);
 
         // Gauge: Centered, smaller
-        let (label, ratio) = match net_cache_media {
-            NetCacheMedia::Downloading(status) | NetCacheMedia::Rendering(status) => {
-                (format!("{:.1}%", status), *status as f64 / 100.0)
+        let (label, ratio) = match net_cache_media{
+            None => {
+                match net_cache_file{
+                    None => ("0%".to_string(), 0.0),
+                    Some(net) => {
+                        match net {
+                            NetCacheFile::Downloading(status) | NetCacheFile::Rendering(status) => {
+                                (format!("{:.1}%", status), *status as f64 / 100.0)
+                            }
+                            _ => ("0%".to_string(), 0.0),
+                        }
+                    }
+                }
             }
-            _ => ("0%".to_string(), 0.0),
+            Some(net) => {
+                match net {
+                    NetCacheMedia::Downloading(status) | NetCacheMedia::Rendering(status) => {
+                        (format!("{:.1}%", status), *status as f64 / 100.0)
+                    }
+                    _ => ("0%".to_string(), 0.0),
+                }
+            }
         };
+
         let gauge_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -1754,6 +1958,8 @@ pub(super) mod net_rendering{
 
         // Info: Show what is happening
         let info_lines = match net_cache_media {
+            Some(media) => {
+                match media {
             NetCacheMedia::Downloading(_) => vec![
                 Line::from("Downloading media from server...").style(Style::default().fg(Color::Gray)),
                 Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
@@ -1763,10 +1969,43 @@ pub(super) mod net_rendering{
                 Line::from("Rendering time depends on image size.").style(Style::default().fg(Color::Gray)),
             ],
             _ => vec![],
+                }
+            }
+            None => {
+                // It's a file, not media
+                match net_cache_file {
+                    Some(file) => {
+                        match file {
+                            NetCacheFile::Downloading(_) => vec![
+                                Line::from("Downloading file from server...").style(Style::default().fg(Color::Gray)),
+                                Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
+                            ],
+                            NetCacheFile::Rendering(_) => vec![
+                                Line::from("Processing file, please wait...").style(Style::default().fg(Color::Gray)),
+                                Line::from("Processing time depends on file size.").style(Style::default().fg(Color::Gray)),
+                            ],
+                            _ => vec![],
+                        }
+                    }
+                    None => vec![],
+                }
+            }
         };
-        let info_para = Paragraph::new(info_lines)
+        
+        // Wrap the info lines to fit the available width
+        let mut wrapped_info_lines = Vec::new();
+        for line in info_lines {
+            let text = line.to_string();
+            let wrapped_text = wrap(&text, info_area.width.saturating_sub(2) as usize);
+            for wrapped_line in wrapped_text {
+                wrapped_info_lines.push(Line::from(wrapped_line.to_string()).style(Style::default().fg(Color::Gray)));
+            }
+        }
+        
+        let info_para = Paragraph::new(wrapped_info_lines)
             .alignment(Alignment::Center)
-            .block(Block::default().borders(Borders::NONE));
+            .block(Block::default().borders(Borders::NONE))
+            .wrap(Wrap { trim: true });
         info_para.render(info_area, buf);
 
         // Bottom: Fun tip or status
@@ -1777,16 +2016,423 @@ pub(super) mod net_rendering{
             "💡 Tip: Try uploading smaller images for faster preview.",
             "🐛 Fun Fact: Bugs travel faster in production",
             "💡 Tip: The spinner is animated!",
-            "🎭 Wisdom: There are 10 kinds of people: those who understand binary and those who don’t."
+            "🎭 Wisdom: There are 10 kinds of people: those who understand binary and those who don't."
         ];
         // Make the tip change 4-5x slower
         let tip = tips[(app.cache.counter as usize / 25) % tips.len()];
-        let tip_line = Line::from(tip).style(Style::default().fg(Color::Cyan));
-        let tip_para = Paragraph::new(tip_line)
-            .alignment(Alignment::Center);
+        
+        // Wrap the tip text to fit the available width
+        let wrapped_tip = wrap(&tip, bottom_area.width.saturating_sub(2) as usize);
+        let tip_lines: Vec<Line> = wrapped_tip.iter()
+            .map(|line| Line::from(line.to_string()).style(Style::default().fg(Color::Cyan)))
+            .collect();
+        
+        let tip_para = Paragraph::new(tip_lines)
+            .alignment(Alignment::Center)
+            .wrap(Wrap { trim: true });
         tip_para.render(bottom_area, buf);
     }
-    fn render_waiting_for_rendering(app: &App, area: Rect, buf: &mut Buffer) {
+    fn render_file_not_viewable(app:&App,area:Rect, buf: &mut Buffer) {
+        let [top_area, center_area, bottom_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+            ])
+            .areas(area);
+
+        // Top: Animated file icon with "not viewable" styling
+        let file_icon_canvas = Canvas::default()
+            .background_color(POPUP_BG_COLOR)
+            .x_bounds([0.0, 40.0])
+            .y_bounds([0.0, 40.0])
+            .paint(|ctx| {
+                let time = app.cache.counter as f64 * 0.15;
+
+                // Warning/error color scheme (red/orange tones)
+                let warning_color = Color::Rgb(255, 100, 100);
+                let error_color = Color::Rgb(200, 50, 50);
+                let accent_color = Color::Rgb(255, 150, 50);
+
+                // Pulsing warning ring
+                let ring_radius = 20.0 + (time * 0.8).sin() * 3.0;
+                let ring_alpha = (100 + (time * 50.0).sin() as u8).min(200);
+                ctx.draw(&Circle {
+                    x: 20.0, y: 20.0, radius: ring_radius,
+                    color: Color::Rgb(ring_alpha, ring_alpha / 3, ring_alpha / 3),
+                    ..Default::default()
+                });
+
+                // Main file icon with warning styling
+                let scale = 0.8 + (time * 0.3).sin() * 0.1;
+                let center_x = 20.0;
+                let center_y = 20.0;
+
+                // File body with warning colors
+                let points = [
+                    (8.0, 5.0), (32.0, 5.0), (32.0, 35.0), (8.0, 35.0)
+                ];
+
+                for i in 0..4 {
+                    let (x1, y1) = points[i];
+                    let (x2, y2) = points[(i + 1) % 4];
+
+                    // Apply scaling
+                    let scale_x1 = center_x + (x1 - center_x) * scale;
+                    let scale_y1 = center_y + (y1 - center_y) * scale;
+                    let scale_x2 = center_x + (x2 - center_x) * scale;
+                    let scale_y2 = center_y + (y2 - center_y) * scale;
+
+                    // Warning color cycling
+                    let color_intensity = (150 + (time * 30.0 + i as f64 * 20.0).sin() as u8).min(255);
+                    ctx.draw(&CanvasLine {
+                        x1: scale_x1, y1: scale_y1, x2: scale_x2, y2: scale_y2,
+                        color: Color::Rgb(color_intensity, color_intensity / 3, color_intensity / 3),
+                        ..Default::default()
+                    });
+                }
+
+                // Warning triangle overlay
+                let triangle_points = [
+                    (20.0, 8.0), (15.0, 18.0), (25.0, 18.0)
+                ];
+                for i in 0..3 {
+                    let (x1, y1) = triangle_points[i];
+                    let (x2, y2) = triangle_points[(i + 1) % 3];
+
+                    let scale_x1 = center_x + (x1 - center_x) * scale;
+                    let scale_y1 = center_y + (y1 - center_y) * scale;
+                    let scale_x2 = center_x + (x2 - center_x) * scale;
+                    let scale_y2 = center_y + (y2 - center_y) * scale;
+
+                    ctx.draw(&CanvasLine {
+                        x1: scale_x1, y1: scale_y1, x2: scale_x2, y2: scale_y2,
+                        color: warning_color,
+                        ..Default::default()
+                    });
+                }
+
+                // Exclamation mark in triangle
+                let exclamation_y = 14.0 + (time * 0.5).sin() * 0.5;
+                let scale_exclamation_y = center_y + (exclamation_y - center_y) * scale;
+                ctx.draw(&CanvasLine {
+                    x1: 20.0, y1: scale_exclamation_y, x2: 20.0, y2: scale_exclamation_y + 2.0,
+                    color: Color::White,
+                    ..Default::default()
+                });
+                ctx.draw(&Circle {
+                    x: 20.0, y: scale_exclamation_y + 3.5, radius: 0.3,
+                    color: Color::White,
+                    ..Default::default()
+                });
+
+                // Animated "X" marks around the file
+                for i in 0..4 {
+                    let angle = time * 0.5 + i as f64 * 1.57; // 90 degrees apart
+                    let radius = 25.0 + (time * 0.3).sin() * 2.0;
+                    let x = center_x + angle.cos() * radius;
+                    let y = center_y + angle.sin() * radius;
+                    let size = 0.8 + (time + i as f64).sin() * 0.3;
+
+                    // Draw X mark
+                    ctx.draw(&CanvasLine {
+                        x1: x - size, y1: y - size, x2: x + size, y2: y + size,
+                        color: error_color,
+                        ..Default::default()
+                    });
+                    ctx.draw(&CanvasLine {
+                        x1: x + size, y1: y - size, x2: x - size, y2: y + size,
+                        color: error_color,
+                        ..Default::default()
+                    });
+                }
+
+                // Sparkle effects with warning colors
+                for sparkle in 0..6 {
+                    let sparkle_angle = time * 0.7 + sparkle as f64 * 1.047; // 60 degrees apart
+                    let sparkle_radius = 15.0 + (time * 0.3).sin() * 2.0;
+                    let sparkle_x = center_x + sparkle_angle.cos() * sparkle_radius;
+                    let sparkle_y = center_y + sparkle_angle.sin() * sparkle_radius;
+                    let sparkle_size = 0.3 + (time + sparkle as f64).sin() * 0.2;
+
+                    let sparkle_hue = (time * 40.0 + sparkle as f64 * 60.0) % 60.0; // Red to orange range
+                    let (r, g, b) = hsv_to_rgb(sparkle_hue, 0.9, 1.0);
+
+                    ctx.draw(&Circle {
+                        x: sparkle_x, y: sparkle_y, radius: sparkle_size,
+                        color: Color::Rgb(r, g, b),
+                        ..Default::default()
+                    });
+                }
+            });
+
+        file_icon_canvas.render(top_area, buf);
+
+        // Center: Main message with wrapped text
+        let main_message_lines = vec![
+            Line::from("⚠️  File Not Viewable in Terminal").style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Line::from(""),
+            Line::from("This file type cannot be displayed").style(Style::default().fg(Color::Gray)),
+            Line::from("directly in the terminal interface.").style(Style::default().fg(Color::Gray)),
+            Line::from(""),
+            Line::from("💡 To view this file:").style(Style::default().fg(Color::Cyan)),
+            Line::from("   1. Select the file in the list").style(Style::default().fg(Color::Cyan)),
+            Line::from("   2. Press Enter to open it").style(Style::default().fg(Color::Cyan)),
+            Line::from("   3. It will open in your default app").style(Style::default().fg(Color::Cyan)),
+            Line::from(""),
+            Line::from("📁 Supported terminal formats:").style(Style::default().fg(Color::Green)),
+            Line::from("   • Text files (.txt, .md, .log)").style(Style::default().fg(Color::Green)),
+            Line::from("   • Images (.jpg, .png, .gif)").style(Style::default().fg(Color::Green)),
+        ];
+
+        let main_para = Paragraph::new(main_message_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE))
+            .wrap(Wrap { trim: true });
+        main_para.render(center_area, buf);
+
+        // Bottom: Action prompt
+        let [action_left, action_right] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .areas(bottom_area);
+
+        // Left: File type info
+        let file_type_text = "📄 Binary/Executable File";
+        let file_type_para = Paragraph::new(file_type_text)
+            .style(Style::default().fg(Color::Magenta))
+            .alignment(Alignment::Center);
+        file_type_para.render(action_left, buf);
+
+        // Right: Action button hint
+        let action_text = "🖱️  Press Enter to Open";
+        let action_para = Paragraph::new(action_text)
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center);
+        action_para.render(action_right, buf);
+    }
+    fn render_file_utf8(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
+        use ratatui::widgets::{Table, Row, Cell};
+        use tui_scrollview::{ScrollView, ScrollViewState};
+        
+        // Detect if the content looks like a table
+        let is_table = detect_table_format(lines);
+        
+        if is_table {
+            render_table_view(app, area, buf, lines);
+        } else {
+            render_text_view(app, area, buf, lines);
+        }
+    }
+    
+    fn detect_table_format(lines: &Vec<String>) -> bool {
+        if lines.is_empty() {
+            return false;
+        }
+        
+        // Check if we have at least 2 lines and they contain separators
+        let separators = ['|', '\t', ',', ';'];
+        let mut table_score = 0;
+        let mut total_lines = 0;
+        
+        for line in lines.iter().take(10) { // Check first 10 lines
+            if line.trim().is_empty() {
+                continue;
+            }
+            
+            total_lines += 1;
+            let mut has_separator = false;
+            
+            for &sep in &separators {
+                if line.contains(sep) {
+                    has_separator = true;
+                    break;
+                }
+            }
+            
+            if has_separator {
+                table_score += 1;
+            }
+        }
+        
+        // If more than 60% of non-empty lines have separators, consider it a table
+        total_lines > 0 && (table_score as f64 / total_lines as f64) > 0.6
+    }
+    
+    fn render_table_view(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
+        use ratatui::widgets::{Table, Row, Cell};
+        use tui_scrollview::{ScrollView, ScrollViewState};
+        
+        // Parse table data
+        let table_data = parse_table_data(lines);
+        
+        if table_data.is_empty() {
+            render_text_view(app, area, buf, lines);
+            return;
+        }
+        
+        // Create table rows
+        let rows: Vec<Row> = table_data.iter().map(|row| {
+            let cells: Vec<Cell> = row.iter().map(|cell| {
+                Cell::from(cell.as_str())
+                    .style(Style::default().fg(Color::White))
+            }).collect();
+            Row::new(cells)
+        }).collect();
+
+        let rows_len = rows.len();
+        
+        // Determine the maximum number of columns in the table
+        let max_columns = table_data.iter()
+            .map(|row| row.len())
+            .max()
+            .unwrap_or(1)
+            .max(1); // Ensure at least 1 column
+        
+        // Create dynamic column constraints
+        let column_width = 100 / max_columns;
+        let mut constraints = Vec::new();
+        for _ in 0..max_columns {
+            constraints.push(Constraint::Percentage(column_width as u16));
+        }
+        
+        // Create table with styling
+        let table = Table::new(rows, &constraints)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("📊 Table View")
+                .title_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
+            .style(Style::default().fg(Color::White))
+            //.header_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            .row_highlight_style(Style::default().bg(Color::Rgb(50, 50, 100)));
+        
+        // Create scroll view for the table
+        let mut scroll_view = ScrollView::new(Size::new(area.width, rows_len as u16 + 2));
+        let scroll_buf = scroll_view.buf_mut();
+        
+        // Fill background
+        for y in 0..scroll_buf.area.height {
+            for x in 0..scroll_buf.area.width {
+                scroll_buf.get_mut(x, y).set_style(Style::default().bg(POPUP_BG_COLOR));
+            }
+        }
+        
+        // Render table into scroll buffer
+        let table_area = Rect::new(0, 0, scroll_buf.area.width, scroll_buf.area.height);
+        table.render(table_area, scroll_buf);
+        
+        // Create scroll state and render
+        let mut scroll_state = ScrollViewState::default();
+        scroll_state.scroll_to_top();
+        
+        ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
+    }
+    
+    fn parse_table_data(lines: &Vec<String>) -> Vec<Vec<String>> {
+        let mut table_data = Vec::new();
+        
+        for line in lines {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            
+            // Try different separators
+            let columns = if trimmed.contains('|') {
+                // Markdown table format
+                trimmed.split('|')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
+            } else if trimmed.contains('\t') {
+                // Tab-separated
+                trimmed.split('\t')
+                    .map(|s| s.trim().to_string())
+                    .collect()
+            } else if trimmed.contains(',') {
+                // CSV format
+                trimmed.split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect()
+            } else if trimmed.contains(';') {
+                // Semicolon-separated
+                trimmed.split(';')
+                    .map(|s| s.trim().to_string())
+                    .collect()
+            } else {
+                // Single column
+                vec![trimmed.to_string()]
+            };
+            
+            if !columns.is_empty() {
+                table_data.push(columns);
+            }
+        }
+        
+        table_data
+    }
+    
+    fn render_text_view(app: &App, area: Rect, buf: &mut Buffer, lines: &Vec<String>) {
+        use tui_scrollview::{ScrollView, ScrollViewState};
+        
+        // Calculate total height needed
+        let total_height = lines.len() as u16;
+        
+        // Create scroll view
+        let mut scroll_view = ScrollView::new(Size::new(area.width.saturating_sub(2), total_height));
+        let scroll_buf = scroll_view.buf_mut();
+        
+        // Fill background with popup color
+        for y in 0..scroll_buf.area.height {
+            for x in 0..scroll_buf.area.width {
+                scroll_buf.get_mut(x, y).set_style(Style::default().bg(POPUP_BG_COLOR));
+            }
+        }
+        
+        // Render each line
+        for (y, line) in lines.iter().enumerate() {
+            if y >= scroll_buf.area.height as usize {
+                break;
+            }
+            
+            // Wrap long lines
+            let wrapped_lines = wrap(line, scroll_buf.area.width.saturating_sub(2) as usize);
+            
+            for (wrapped_y, wrapped_line) in wrapped_lines.iter().enumerate() {
+                let actual_y = y + wrapped_y;
+                if actual_y >= scroll_buf.area.height as usize {
+                    break;
+                }
+                
+                // Create paragraph for this line
+                let line_para = Paragraph::new(wrapped_line.to_string())
+                    .style(Style::default().fg(Color::White))
+                    .wrap(Wrap { trim: true });
+                
+                let line_area = Rect::new(1, actual_y as u16, scroll_buf.area.width.saturating_sub(2), 1);
+                line_para.render(line_area, scroll_buf);
+            }
+        }
+        
+        // Create scroll state
+        let mut scroll_state = ScrollViewState::default();
+        scroll_state.scroll_to_top();
+        
+        // Render the scroll view
+        ratatui::widgets::StatefulWidget::render(scroll_view, area, buf, &mut scroll_state);
+        
+        // Add a subtle border/indicator
+        let border_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title("📄 Text File")
+            .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD));
+        
+        border_block.render(area, buf);
+    }
+    fn render_media_waiting_for_rendering(app: &App, area: Rect, buf: &mut Buffer) {
         let [top_area, center_area, bottom_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
@@ -1819,6 +2465,44 @@ pub(super) mod net_rendering{
 
         // Bottom: Status
         let status_line = Line::from("Renderer is busy. Please wait...")
+            .style(Style::default().fg(Color::Magenta));
+        let status_para = Paragraph::new(status_line)
+            .alignment(Alignment::Center);
+        status_para.render(bottom_area, buf);
+    }
+    fn render_file_waiting_for_rendering(app: &App, area: Rect, buf: &mut Buffer) {
+        let [top_area, center_area, bottom_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+            ])
+            .areas(area);
+
+        // Top: Animated spinner
+        let spinner_chars = ['|', '/', '-', '\\'];
+        let spinner = spinner_chars[(app.cache.counter as usize) % spinner_chars.len()];
+        let spinner_line = Line::from(format!("  {}  Waiting for file rendering...", spinner))
+            .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD));
+        let spinner_para = Paragraph::new(spinner_line)
+            .alignment(Alignment::Center);
+        spinner_para.render(top_area, buf);
+
+        // Center: Info
+        let info_lines = vec![
+            Line::from("File downloaded, waiting for renderer thread...").style(Style::default().fg(Color::Gray)),
+            Line::from("This may take a few seconds for large files.").style(Style::default().fg(Color::Gray)),
+            Line::from(""),
+            Line::from("💡 Tip: Try smaller files for faster preview.").style(Style::default().fg(Color::Cyan)),
+        ];
+        let info_para = Paragraph::new(info_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE));
+        info_para.render(center_area, buf);
+
+        // Bottom: Status
+        let status_line = Line::from("File renderer is busy. Please wait...")
             .style(Style::default().fg(Color::Magenta));
         let status_para = Paragraph::new(status_line)
             .alignment(Alignment::Center);

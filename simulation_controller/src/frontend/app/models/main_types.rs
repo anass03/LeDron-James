@@ -7,11 +7,12 @@ use ratatui::Frame;
 use ratatui_explorer::{FileExplorer, Theme};
 use ratatui_image::thread::ResizeRequest;
 use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
+use wg_2024::network::NodeId;
 use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
 use crate::frontend::app::models::general_types::TextBuffer;
 use crate::frontend::app::models::tab0_types::Tab0;
-use crate::frontend::app::models::tab1_types::Tab1;
+use crate::frontend::app::models::tab1_types::{ChThirdPage, Tab1};
 
 pub(in crate::frontend::app) struct Settings{
     pub toml_path: String,
@@ -27,10 +28,14 @@ impl Settings{
 #[derive(PartialEq)]
 pub(in crate::frontend::app) enum AppMode{
     Normal,
-    Input(u8),  // u8 represents which input mode I selected:
+    Input(InputMode),  // u8 represents which input mode I selected:
                 // 0 Chat/TOML, 1 Text Buffer first field
     Scrolling,
     FileExploring
+}
+#[derive(PartialEq)]
+pub(crate) enum InputMode{
+    Zero, One, Two(NodeId, ChThirdPage)
 }
 
 

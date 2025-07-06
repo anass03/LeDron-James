@@ -145,7 +145,7 @@ pub struct NetCache{
     pub downloaded_medias: HashMap<ServerId,
         HashMap<MediaId,
             ((Option<std::sync::mpsc::Sender<ResizeRequest>>,Option<std::sync::mpsc::Receiver<FileRendererUpdate>>), NetCacheMedia)>>,
-    pub downloaded_files: HashMap<ServerId, HashMap<FileId,((),NetCacheFile)>>
+    pub downloaded_files: HashMap<ServerId, HashMap<FileId,(NetCacheFile)>>
     // Each file has its own communication channel to identify it in a univocal way in the renderer thread.
     //
 }
@@ -190,7 +190,11 @@ pub enum NetCacheFile{
     Downloading(f32), // f32 € [0,100] representing client loading status.
     Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32),
-    Rendered((bool,File)) // (is UTF-8, File)
+    Rendered(FileType)
+}
+pub enum FileType{
+    UTF8(Vec<String>),
+    Other(File)
 }
 
 

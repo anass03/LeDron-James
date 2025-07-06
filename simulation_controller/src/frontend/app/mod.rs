@@ -180,7 +180,8 @@ impl App<'_>{
                     Some(media) => {
                         match &mut media.1{
                             NetCacheMedia::Rendered(protocol) => {
-                                f.render_stateful_widget(StatefulImage::new(), data.0, protocol)
+                                //f.render_stateful_widget(StatefulImage::new(), data.0, protocol)
+                                ratatui::widgets::StatefulWidget::render(StatefulImage::new(),data.0, f.buffer_mut(), protocol);
                             }
                             _ => (),
                         }
@@ -304,8 +305,8 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                         channels.push((tx, rx));
                     },
                     RendererCommand::Encode((tx_to_renderer, server_id,media_id,image))=> {
-                        if let Some(rgb_buffer) = ImageBuffer::<Rgb<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                            let dynamic_image = DynamicImage::ImageRgb8(rgb_buffer);
+                        if let Some(rgb_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
+                            let dynamic_image = DynamicImage::ImageRgba8(rgb_buffer);
                             match Picker::from_query_stdio(){
                                 Ok(pick) => {
                                     let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));

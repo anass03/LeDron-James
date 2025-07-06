@@ -1,5 +1,6 @@
 use std::fmt::Pointer;
 use std::fs::FileType;
+use log::error;
 use ratatui::crossterm::event::{Event, KeyEventKind, KeyCode};
 use ratatui_explorer::{File, Input};
 use crate::backend::sc_models::LogType;
@@ -23,7 +24,7 @@ impl App<'_> {
                             // Check if he pressed a directory or a file
                             // If it is a file, then return the current file to the
                             if self.cache.file_explorer.current().is_dir(){
-                                self.cache.file_explorer.handle(input);
+                                _ = self.cache.file_explorer.handle(input);
                                 self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", self.cache.file_explorer.current()));
 
                             }else{
@@ -34,7 +35,54 @@ impl App<'_> {
                                 match self.cache.tab1_data.file_exploring_data.file_request_source{
                                     1 => {
                                         // Chat - No need to check the type
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered 1 {:?}", selected_file.name()));
+                                        match selected_file.name().chars().position(|ch| ch=='.'){
+                                            None => {
+                                                // Impossible? Should not be a directory!
+                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", selected_file.name()));
+                                            }
+                                            Some(pos) => {
+                                                let ext = selected_file.name()[pos..].to_string();
+                                                if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+                                                    // Send media
+                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                                    match self.simulation_controller_data.media_for(
+                                                        sending_data.last_selected_cl_sender,
+                                                        sending_data.last_selected_cl_receiver,
+                                                        sending_data.last_selected_sr,
+                                                        selected_file.path().as_path())
+                                                    {
+                                                        Ok(_) => {
+                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Successfully uploaded media dc!"));
+                                                        }
+                                                        Err(str) => {
+                                                            //todo()! PUSH LOG
+                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
+                                                        }
+                                                    }
+                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                    self.app_mode = AppMode::Normal;
+
+                                                }else{
+                                                    // Send File
+                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                                    match self.simulation_controller_data.file_for(
+                                                        sending_data.last_selected_cl_sender,
+                                                        sending_data.last_selected_cl_receiver,
+                                                        sending_data.last_selected_sr,
+                                                        selected_file.path().as_path())
+                                                    {
+                                                        Ok(_) => (),
+                                                        Err(err) => {
+                                                            error!("[LEDRON-CLI] Error sending file, {:?}", err);
+                                                        }
+                                                    }
+                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                    self.app_mode = AppMode::Normal;
+
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered Report Err 2 {:?}", selected_file.name()));
+                                                }
+                                            }
+                                        }
                                     }
                                     2 => {
                                         self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered 2 {:?}", selected_file.name()));
@@ -84,14 +132,18 @@ impl App<'_> {
                                                 if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
                                                     // Send media
                                                     let sending_data = self.cache.tab1_data.file_exploring_data.clone();
-                                                /*                                 self.simulation_controller_data.file_for(
-                                                                                     sending_data.last_selected_cl_sender,
-                                                                                     sending_data.last_selected_cl_receiver,
-                                                                                     sending_data.last_selected_sr,
-                                                                                     selected_file.path().as_path(),
-                                                                                 )*/
-
+                                                    match self.simulation_controller_data.new_file(
+                                                        sending_data.last_selected_cl_sender,
+                                                        sending_data.last_selected_sr,
+                                                        selected_file.path().as_path())
+                                                    {
+                                                        Ok(_) => (),
+                                                        Err(err) => {
+                                                            error!("[LEDRON-CLI] Error sending file, {:?}", err);
+                                                        }
+                                                    }
                                                     self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                    self.app_mode = AppMode::Normal;
                                                 }else{
                                                     // Report error, I gotta check how to do it.
                                                 }

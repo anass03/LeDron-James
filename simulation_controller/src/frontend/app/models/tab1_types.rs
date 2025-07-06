@@ -21,9 +21,6 @@ pub(in crate::frontend::app) struct Tab1{
     pub popup_cursor: usize,
     pub popup_selection: PopupSelection,
 
-    // Needed fast accessible data for Tab1-Third Page
-    pub chat_third_page_selection: ChatThirdPageSelection,
-
     pub image_rendering_data: RenderingImage,
     pub file_exploring_data: FileExploring,
 
@@ -116,12 +113,6 @@ impl FileExploring {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(crate) enum ChatThirdPageSelection{
-    ScrollingMessages, BottomTab
-}
-
-
 #[derive(PartialEq, Eq, Debug)]
 pub(crate) enum PopupSelection{
     MenuArea, OptArea
@@ -162,10 +153,20 @@ pub(crate) struct ChFirstPage {
 pub(crate) struct ChSecondPage {
     pub selected_server: NodeId
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq,Default)]
+pub(crate) enum ChatThirdPageSelection{
+    #[default]
+    BottomTab,
+    ScrollingMessages,
+}
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ChThirdPage {
+    pub scroll_offset:u8,
+    pub selected_item: ChatThirdPageSelection,
+
     pub selected_server: NodeId,
-    pub selected_contact: NodeId
+    pub selected_contact: NodeId,
+
 }
 #[derive(Debug, Clone)]
 pub(crate) enum ClientNetPopup{
@@ -339,7 +340,6 @@ impl Tab1{
             popup_cursor: 0,
 
             popup_selection: PopupSelection::MenuArea,
-            chat_third_page_selection: ChatThirdPageSelection::BottomTab,
             image_rendering_data: RenderingImage::False,
             file_exploring_data: FileExploring::default(),
             viewing: ViewedTab1::Main

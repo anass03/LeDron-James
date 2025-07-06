@@ -2,10 +2,15 @@
 In this module you will find general not-essential methods.
 */
 use std::fs::File;
-use std::io;
+use std::{io, vec};
+use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::Path;
+use std::process::id;
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
 use log::{info, LevelFilter};
+use ratatui_image::thread::ResizeRequest;
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
 use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
@@ -13,9 +18,7 @@ use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use super::super::App;
 use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as ServerConfig};
-
-
-
+use host::{MediaId, ServerId};
 
 fn read_from_file<'a>(file: File) -> io::Result<TextArea<'a>> {
     io::BufReader::new(file).lines().collect()
@@ -64,24 +67,34 @@ impl App<'_> {
         }
     }
     pub(crate) fn handle_downloaded_medias(&mut self){
+        // Collect media IDs to remove after processing to avoid borrowing issues
+        let mut media_to_remove: Vec<(ServerId, MediaId)> = Vec::new();
+        let mut media_to_add_rendering: Vec<(ServerId, MediaId)> = Vec::new();
+
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
-            for (id,(channels,media)) in values{
-                match media{
-                    NetCacheMedia::Downloaded(vec) => {
-                        match channels.0.clone(){
+            for (media_id, (channels, media)) in values.iter_mut() {
+                match media {
+                    NetCacheMedia::Downloaded(_) => {
+                        match &channels.0 {
                             None => {}
                             Some(ch_resize_req) => {
-                                match self.simulation_controller_data.tx_to_renderer.clone(){
+                                match self.simulation_controller_data.tx_to_renderer.clone() {
                                     None => {
                                         // Impossible
                                     }
                                     Some(ch_to_renderer) => {
-                                        match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req,server_id.clone(),id.clone(),vec.clone()))) {
-                                            Ok(_) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Successfully sent encode request to the renderer".to_string())
-                                            }
-                                            Err(str) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
+                                        // Clone the image data for sending to renderer
+                                        if let NetCacheMedia::Downloaded(image_data) = media {
+                                            match ch_to_renderer.send(RendererCommand::Encode((ch_resize_req.clone(), server_id.clone(), media_id.clone(), image_data.clone()))) {
+                                                Ok(_) => {
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Successfully sent encode request to the renderer".to_string());
+                                                    // Mark for removal and re-addition as Rendering
+                                                    media_to_remove.push((server_id.clone(), media_id.clone()));
+                                                    media_to_add_rendering.push((server_id.clone(), media_id.clone()));
+                                                }
+                                                Err(str) => {
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending encode request to the renderer [{:?}]", str.to_string()));
+                                                }
                                             }
                                         }
                                     }
@@ -89,8 +102,8 @@ impl App<'_> {
                             }
                         }
                     }
-                    NetCacheMedia::Rendered(ref mut rendered) => {
-                        match &channels.1{
+                    NetCacheMedia::Rendered(rendered) => {
+                        match &channels.1 {
                             None => {
                                 // Should have a channel
                             }
@@ -99,7 +112,7 @@ impl App<'_> {
                                     match event {
                                         FileRendererUpdate::Redraw(redraw) => {
                                             rendered.update_resized_protocol(redraw);
-                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Updated resized protocol".to_string());
+                                            self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Updated resized protocol".to_string());
                                         }
                                         FileRendererUpdate::Error(err) => {
                                             self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err)
@@ -115,6 +128,25 @@ impl App<'_> {
                     _ => (),
                 }
             }
+        }
+
+        // Remove the downloaded media entries and store their channels
+        let mut channels_to_restore: Vec<(ServerId, MediaId, (Option<mpsc::Sender<ResizeRequest>>, Option<mpsc::Receiver<FileRendererUpdate>>))> = Vec::new();
+        
+        for (server_id, media_id) in media_to_remove {
+            if let Some(server_map) = self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&server_id) {
+                if let Some((channels, _)) = server_map.remove(&media_id) {
+                    channels_to_restore.push((server_id, media_id, channels));
+                }
+            }
+        }
+
+        // Add them back as Rendering status
+        for (server_id, media_id, channels) in channels_to_restore {
+            self.simulation_controller_data.net_cache.downloaded_medias
+                .entry(server_id)
+                .or_default()
+                .insert(media_id, (channels, NetCacheMedia::Rendering(0f32)));
         }
     }
 
