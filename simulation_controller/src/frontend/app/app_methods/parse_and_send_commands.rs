@@ -12,26 +12,7 @@ if any error happens while sending commands,
 it'll just print it on logs.
  */
 impl App<'_>{
-    // Each method here is
-
-    /// Drone
-
-
-
-    /// Client
-
-/*    pub(super) fn parse_and_send_message_old(&mut self, id:NodeId){
-        match self.parse_3input(){
-            Ok((n,s_id, str)) => {
-                match self.simulation_controller_data.message_for(id, n as u8, s_id as u8, str){
-                    Ok(_) => {},
-                    Err(str) => {error!(target: "main", "{}", str)}
-                }
-            }
-            Err(_) => {}
-        }
-    }*/
-    pub(super) fn parse_and_send_message(&mut self, client_sender:ClientId, client_receiver:ClientId, server_receiver:ServerId ){
+    pub(super) fn parse_and_send_message(&mut self, client_sender:ClientId, client_receiver:ClientId, server_receiver:ServerId ) -> Result<(),String>{
         let chat_lines = self
             .cache
             .text_buffer
@@ -40,19 +21,25 @@ impl App<'_>{
             .into_lines();
         if chat_lines.is_empty(){
             // I can set an error here, like red highlighting the box
-            self.simulation_controller_data.logs.push_log(LogType::ERROR, "Empty buffer, can't send message!");
+            Err("Empty buffer, can't send message!".to_string())
         }else{
             // join them into a single String separated by '\n'
             let second_string = chat_lines.join("\n");
             // clear the text areas after successful parsing
-            self.cache.text_buffer.clean_topology_inputs_buffer();
-            match self.simulation_controller_data.message_for(client_sender, client_receiver, server_receiver, second_string){
-                Ok(_) => {
-                    info!(target: "main", "Successfully sent message");
-                },
-                Err(str) => {
-                    error!(target: "main", "{}", str);
+            if !second_string.trim().is_empty(){
+                self.cache.text_buffer.clean_topology_inputs_buffer();
+                match self.simulation_controller_data.message_for(client_sender, client_receiver, server_receiver, second_string){
+                    Ok(_) => {
+                        info!(target: "main", "Successfully sent message");
+                        Ok(())
+                    },
+                    Err(str) => {
+                        error!(target: "main", "{}", str);
+                        Err(str)
+                    }
                 }
+            }else{
+                Err("Empty buffer, can't send message!".to_string())
             }
         }
     }

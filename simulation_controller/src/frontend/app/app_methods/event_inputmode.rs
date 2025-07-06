@@ -2,11 +2,11 @@
 Each input-mode related method is found here
 */
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tui_textarea::Input;
+use tui_textarea::{Input, TextArea};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::sc_models::LogType;
 use crate::frontend::app::models::general_types::TOMLmessages;
-use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
 impl App<'_>{
@@ -69,10 +69,10 @@ impl App<'_>{
         }
     }
     fn handle_topology_inputmode(&mut self, event: Event) {
-        match self.app_mode{
+        match &self.app_mode{
             AppMode::Input(mode) => {
                 match mode{
-                    1 => {
+                    InputMode::One => {
                         match event{
                             Event::Key(key) => {
                                 if key.kind == KeyEventKind::Press {
@@ -104,7 +104,62 @@ impl App<'_>{
                         }
 
                     }
-                    0 | _ => {
+                    InputMode::Two(id, chthird) => {
+                        // Chat message input mode
+                        match event {
+                            Event::Key(key) => {
+                                if key.kind == KeyEventKind::Press {
+                                    match key.code {
+                                        KeyCode::Esc => {
+                                            // Exit chat input mode and return to chat view
+                                            self.app_mode = AppMode::Normal;
+                                        }
+                                        KeyCode::Enter => {
+                                            if key.modifiers.contains(KeyModifiers::SHIFT) {
+                                                // Shift + Enter: Add new line
+                                                self.cache.text_buffer.chat_text_area.insert_char('\n');
+                                            } else {
+                                                // Enter: Send message
+                                                let message_text = self.cache.text_buffer.chat_text_area.lines().join("\n");
+                                                if !message_text.trim().is_empty() {
+                                                    // Send the message
+                                                    match self.parse_and_send_message(*id,chthird.selected_contact,chthird.selected_server){
+                                                        Ok(_) => {
+                                                            // Exit input mode and return to chat view
+                                                            self.app_mode = AppMode::Normal;
+                                                        }
+                                                        Err(err) => {
+                                                            // Log error and stay in input mode
+                                                            self.simulation_controller_data.logs.push_sc_log(
+                                                                LogType::ERROR,
+                                                                format!("[LEDRON-CLI] Failed to send chat message: {}", err)
+                                                            );
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Empty message, just exit input mode
+                                                    self.app_mode = AppMode::Normal;
+                                                }
+                                            }
+                                        }
+                                        _ => {
+                                            let input = Input::from(event.clone());
+                                            match Self::map_italian_brackets(&event) {
+                                                Some(c) => {
+                                                    self.cache.text_buffer.chat_text_area.insert_char(c);
+                                                }
+                                                None => {
+                                                    self.cache.text_buffer.chat_text_area.input(input);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            _ => ()
+                        }
+                    }
+                    _ => {
                         match event{
                             Event::Key(key) => {
                                 if key.kind == KeyEventKind::Press {
@@ -122,13 +177,13 @@ impl App<'_>{
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
                                                 Some(c) => {
-                                                    self.cache.text_buffer.chat_text_area.insert_char(c);
+                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
                                                 },
                                                 None => {
                                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
                                                         self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
                                                     };
-                                                    self.cache.text_buffer.chat_text_area.input(input);
+                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
                                                 }
                                             }
                                         }

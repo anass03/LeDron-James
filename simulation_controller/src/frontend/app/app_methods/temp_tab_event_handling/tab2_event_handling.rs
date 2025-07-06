@@ -1,7 +1,7 @@
 use log::debug;
 use crate::frontend::app::App;
 use ratatui::crossterm::event::KeyCode;
-use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::models::main_types::{AppMode, InputMode};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab2(&mut self, key: KeyCode) {
@@ -30,7 +30,7 @@ impl App<'_> {
             }
             KeyCode::Enter => match self.cache.cursor {
                 0 => {
-                    self.app_mode = AppMode::Input(0);
+                    self.app_mode = AppMode::Input(InputMode::Zero);
                 }
                 1 => {
                     // Handle topology selection
