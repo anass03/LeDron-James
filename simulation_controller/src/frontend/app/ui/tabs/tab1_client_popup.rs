@@ -1158,7 +1158,7 @@ pub(super) mod chat_rendering{
             scroll_state.scroll_to_top();
         } else {
             // If scroll_offset is 0, show the last message
-            scroll_state.scroll_to_bottom();
+        scroll_state.scroll_to_bottom();
         }
 
         // Render the scroll view into the main buffer
@@ -1345,41 +1345,34 @@ pub(super) mod net_rendering{
                                     // odd rows – dimmer foreground for contrast
                                     Style::default().bg(ALTERNATE_LIST_COLOR)
                                 };
-                                match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+                                match app.simulation_controller_data.net_cache.new_downloaded_medias.get(id.as_str()){
                                     None => {
                                         ListItem::from(format!("{:?}",id)).style(base_style)
                                     }
-                                    Some(hash) => {
-                                        match hash.get(id.as_str()){
-                                            None => {
-                                                ListItem::from(format!("{:?}",id)).style(base_style)
+                                    Some(media_entry) => {
+                                        let load_char = match &media_entry.cache{
+                                            NetCacheMedia::Downloading(_) | NetCacheMedia::Rendering(_) => {
+                                                match app.cache.counter % 4 {
+                                                    0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                                }
                                             }
-                                            Some(item) => {
-                                                let load_char = match item.1{
-                                                    NetCacheMedia::Downloading(_) | NetCacheMedia::Rendering(_) => {
-                                                        match app.cache.counter % 4 {
-                                                            0 => '|', 1=> '/', 2=> '-', 3 => '\\', _ => ' '
+                                            NetCacheMedia::Downloaded(_) => {
+                                                match app.cache.counter % 20 {
+                                                    (num) => {
+                                                        if num<10{
+                                                            '✓'
+                                                        }else{
+                                                            ' '
                                                         }
                                                     }
-                                                    NetCacheMedia::Downloaded(_) => {
-                                                        match app.cache.counter % 20 {
-                                                            (num) => {
-                                                                if num<10{
-                                                                    '✓'
-                                                                }else{
-                                                                    ' '
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                    NetCacheMedia::Rendered(_) => '✓',
-                                                    _ => {
-                                                        ' '
-                                                    }
-                                                };
-                                                ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
+                                                }
                                             }
-                                        }
+                                            NetCacheMedia::Rendered(_) => '✓',
+                                            _ => {
+                                                ' '
+                                            }
+                                        };
+                                        ListItem::from(format!("{} - {:?}",load_char,id)).style(base_style)
                                     }
                                 }
                             })
@@ -1469,19 +1462,23 @@ pub(super) mod net_rendering{
             .highlight_symbol(">")
             .highlight_spacing(HighlightSpacing::Always);
 
+        let mut mediastate = ratatui::widgets::ListState::default();
+        mediastate.select(Some(app.cache.tab1_data.media_list_render_utils.selected as usize));
         // Render the list
         ratatui::widgets::StatefulWidget::render(
             media_list,
             media_list_area,
             buf,
-            &mut app.cache.tab1_data.media_list_render_utils.state.clone(),
+            &mut mediastate
         );
 
+        let mut filestate = ratatui::widgets::ListState::default();
+        filestate.select(Some(app.cache.tab1_data.file_list_render_utils.selected as usize));
         ratatui::widgets::StatefulWidget::render(
             file_list,
             file_list_area,
             buf,
-            &mut app.cache.tab1_data.file_list_render_utils.state.clone(),
+            &mut filestate
         );
 
 
@@ -1867,32 +1864,25 @@ pub(super) mod net_rendering{
         }
     }
     fn render_media_visualizer(app:&App, area:Rect, buf:&mut Buffer, ndpage_data: &NetSecondPage, selected_node: &ClientId, file_id:MediaId){
-        match app.simulation_controller_data.net_cache.downloaded_medias.get(&ndpage_data.selected_server){
+        match app.simulation_controller_data.net_cache.new_downloaded_medias.get(&file_id){
             None => {
-                error!(target: "main", "[LEDRON-CLI] Couldn't find server id in downloaded media while rendering")
+                error!(target: "main", "[LEDRON-CLI] Couldn't find media id in new_downloaded_medias while rendering")
             }
-            Some(hash) => {
-                match hash.get(&file_id){
-                    None => {
-                        error!(target: "main", "[LEDRON-CLI] Couldn't find file id in downloaded media while rendering")
+            Some(media_entry) => {
+                match &media_entry.cache{
+                    NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
+                        // Rendering Bar status widget
+                        render_loading_gauge(app,area,buf,Some(&media_entry.cache),None, ndpage_data.selected_server)
                     }
-                    Some((_,file_status)) => {
-                        match file_status{
-                            NetCacheMedia::Downloading(_) |  NetCacheMedia::Rendering(_) => {
-                                // Rendering Bar status widget
-                                render_loading_gauge(app,area,buf,Some(file_status),None, ndpage_data.selected_server)
-                            }
-                            NetCacheMedia::Downloaded(vec) => {
-                                render_media_waiting_for_rendering(app, area, buf);
-                            }
-                            NetCacheMedia::Rendered(image_protocol) => {
-                                // I render it externally ddso no need to do it again here,
-                                // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
-                            }
-                            NetCacheMedia::FatalErrorRendering() => {
-                                //
-                            }
-                        }
+                    NetCacheMedia::Downloaded(vec) => {
+                        render_media_waiting_for_rendering(app, area, buf);
+                    }
+                    NetCacheMedia::Rendered(image_protocol) => {
+                        // I render it externally ddso no need to do it again here,
+                        // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
+                    }
+                    NetCacheMedia::FatalErrorRendering() => {
+                        render_fatal_rendering_error(app, area, buf);
                     }
                 }
             }
@@ -2507,6 +2497,47 @@ pub(super) mod net_rendering{
         let status_para = Paragraph::new(status_line)
             .alignment(Alignment::Center);
         status_para.render(bottom_area, buf);
+    }
+    fn render_fatal_rendering_error(app: &App, area: Rect, buf: &mut Buffer) {
+        let [top_area, center_area, bottom_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Percentage(30),
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+            ])
+            .areas(area);
+
+        // Top: Error icon and title
+        let error_line = Line::from("❌ Fatal Rendering Error")
+            .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD));
+        let error_para = Paragraph::new(error_line)
+            .alignment(Alignment::Center);
+        error_para.render(top_area, buf);
+
+        // Center: Error details and instructions
+        let info_lines = vec![
+            Line::from("The image renderer encountered a fatal error.").style(Style::default().fg(Color::Red)),
+            Line::from("This usually happens when the terminal cannot").style(Style::default().fg(Color::Gray)),
+            Line::from("properly handle the image format or size.").style(Style::default().fg(Color::Gray)),
+            Line::from(""),
+            Line::from("💡 Try these solutions:").style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+            Line::from("• Use a smaller image file").style(Style::default().fg(Color::Cyan)),
+            Line::from("• Try a different image format (PNG/JPG)").style(Style::default().fg(Color::Cyan)),
+            Line::from("• Restart the application").style(Style::default().fg(Color::Cyan)),
+            Line::from("• Check terminal compatibility").style(Style::default().fg(Color::Cyan)),
+        ];
+        let info_para = Paragraph::new(info_lines)
+            .alignment(Alignment::Center)
+            .block(Block::default().borders(Borders::NONE));
+        info_para.render(center_area, buf);
+
+        // Bottom: Retry suggestion
+        let retry_line = Line::from("🔄 The image will be retried automatically on next access")
+            .style(Style::default().fg(Color::Magenta));
+        let retry_para = Paragraph::new(retry_line)
+            .alignment(Alignment::Center);
+        retry_para.render(bottom_area, buf);
     }
 }
 pub(super) mod settings_rendering{

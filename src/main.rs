@@ -6,6 +6,7 @@ use initializer::initializer::initialize;
 use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use tui_logger::*;
 use log::*;
+use crossterm;
 
 fn main() -> std::io::Result<()> {
     // 1) initialize tui-logger
@@ -33,11 +34,27 @@ fn main() -> std::io::Result<()> {
         Err(error) => {simulation_controller_data.logs.push_log(LogType::FATAL, format!("[Simulation Controller] - Failed to initialize: {}", error).as_str());}
     }
 
-    let mut terminal = ratatui::init();
+    // Initialize terminal with image support
+    crossterm::terminal::enable_raw_mode()?;
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::terminal::EnterAlternateScreen,
+        crossterm::event::EnableMouseCapture,
+        crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
+    )?;
+    
+    let mut terminal = ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
+    
     let mut app = simulation_controller::frontend::app::App::default(simulation_controller_data);
     let app_result = app.run(&mut terminal);
-    terminal.clear()?;
-    ratatui::restore();
+    
+    // Restore terminal
+    crossterm::execute!(
+        std::io::stdout(),
+        crossterm::event::DisableMouseCapture,
+        crossterm::terminal::LeaveAlternateScreen,
+    )?;
+    crossterm::terminal::disable_raw_mode()?;
 
     for (node_id, handle) in thread_handles {
         handle.join().unwrap();

@@ -21,10 +21,10 @@ use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
 use image::{DynamicImage, ImageBuffer, Rgb, RgbImage, Rgba};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use rand::Rng;
 use ratatui::style::Stylize;
-use ratatui::widgets::Block;
+use ratatui::widgets::{Block, Borders};
 use ratatui_image::errors::Errors;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
@@ -92,70 +92,108 @@ impl App<'_>{
         let mut instant = Instant::now();
         let mut downloaded_instant = Instant::now();
         let mut drawn:bool;
+        let mut handle_time = Instant::now();
 
         while self.stay.clone() {
             drawn=false;
 
             // Listening to channels
+            handle_time = std::time::Instant::now();
             self.simulation_controller_data.handle_channels();
+            let handle_ch_time = handle_time.elapsed();
+
+            handle_time = std::time::Instant::now();
             self.handle_rx_renderer();
+            let handle_rx_time = handle_time.elapsed();
+
             self.check_main_topology_status();
 
-
             // Terminal drawing and other basic app functions
-
-
             self.cache.update_counter();
-            // Image drawing if active
-            match self.selected_tab{
-                SelectedTab::Topology => {
-                    match self.cache.tab1_data.viewing.clone() {
-                        ViewedTab1::Popup((_,popup)) => {
-                            match popup{
-                                NodePopup::Client(clpop) => {
-                                    match clpop {
-                                        ClientPopup::InternetPage(netpop) => {
-                                            match netpop{
-                                                ClientNetPopup::SecondPage(ndpage) => {
-                                                    match ndpage.image_rendering_data {
-                                                        RenderingImage::True(data) => {
-                                                            drawn = true;
-                                                            terminal.draw(|f| {
-                                                                f.render_widget(&mut *self, f.area());
-                                                                Self::render_image(f, self, data);
-                                                            })?;
-                                                        }
-                                                        _ => {}
-                                                    }
-                                                }
-                                                _ => {}
-                                            }
-                                        }
-                                        _ => {}
-                                    }
-                                }
-                                _ => {}
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-                _ => (),
-            }if !drawn{
-                terminal.draw(|f| f.render_widget(&mut *self, f.area()))?;
-            }
 
+            handle_time = std::time::Instant::now();
+
+            // Combined rendering in a single frame to prevent flashing
+            terminal.draw(|f| {
+                // First render the main widget
+                f.render_widget(&mut *self, f.area());
+                
+                // Then render image if active - simplified and optimized
+                match self.selected_tab{
+                    SelectedTab::Topology => {
+                        match self.cache.tab1_data.viewing.clone() {
+                            ViewedTab1::Popup((_,popup)) => {
+                                match popup{
+                                    NodePopup::Client(clpop) => {
+                                        match clpop {
+                                            ClientPopup::InternetPage(netpop) => {
+                                                match netpop{
+                                                    ClientNetPopup::SecondPage(ndpage) => {
+                                                        match ndpage.image_rendering_data {
+                                                            RenderingImage::True(data) => {
+                                                                Self::render_image_internal(f, self, data);
+                                                            }
+                                                            _ => {}
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => (),
+                }
+            })?;
+
+            let handle_draw_time = handle_time.elapsed();
+
+            handle_time = std::time::Instant::now();
             self.handle_events()?;
+            let handle_hand_events_time = handle_time.elapsed();
+
+
+
+            let mut max = Duration::from_millis(0);
+            let mut case = 0;
+            if handle_hand_events_time>max{
+                max = handle_hand_events_time;
+                case = 1;
+            }
+            if handle_draw_time>max{
+                max = handle_draw_time;
+                case = 2;
+            }
+            if handle_rx_time>max{
+                max = handle_rx_time;
+                case = 3;
+            }
+            if handle_ch_time>max{
+                max = handle_ch_time;
+                case = 4;
+            }
+            match case{
+                1 => debug!(target:"main", "CROSSBEAM EVENTS: {:?}", handle_hand_events_time),
+                2 => debug!(target:"main", "DRAWING: {:?}", handle_draw_time),
+                3 => debug!(target:"main", "RX: {:?}", handle_rx_time),
+                4 => debug!(target:"main", "CHANNELS: {:?}", handle_ch_time),
+                _ => (),
+            }
 
             // Check if it is time to refresh some data
             if instant.elapsed() > self.tick_rate {
                 instant = Instant::now();
                 self.tick_refresh();
             }
-            if downloaded_instant.elapsed() > Duration::from_millis(100) {
-                downloaded_instant = Instant::now();
-                self.handle_downloaded_medias();
-            }
+
+            // Handle media resize requests
+            self.handle_media_resize_requests();
 
 
             if self.stay == false{
@@ -173,21 +211,22 @@ impl App<'_>{
         Ok(())
     }
     fn render_image(f: &mut Frame<'_>, app: &mut App, data: (Rect,ClientId, ServerId, MediaId)){
-        match app.simulation_controller_data.net_cache.downloaded_medias.get_mut(&data.2){
-            None => (),
-            Some(hash) => {
-                match hash.get_mut(&data.3) {
-                    None => (),
-                    Some(media) => {
-                        match &mut media.1{
-                            NetCacheMedia::Rendered(protocol) => {
-                                //f.render_stateful_widget(StatefulImage::new(), data.0, protocol)
-                                ratatui::widgets::StatefulWidget::render(StatefulImage::new(),data.0, f.buffer_mut(), protocol);
-                            }
-                            _ => (),
-                        }
-                    }
-                }
+        Self::render_image_internal(f, app, data);
+    }
+    
+    fn render_image_internal(f: &mut Frame<'_>, app: &mut App, data: (Rect,ClientId, ServerId, MediaId)){
+        // Early return if area is invalid
+        if data.0.width == 0 || data.0.height == 0 {
+            return;
+        }
+        
+        // Check if media exists in new_downloaded_medias
+        if let Some(mut media_entry) = app.simulation_controller_data.net_cache.new_downloaded_medias.get_mut(&data.3) {
+            if let NetCacheMedia::Rendered(protocol) = &mut media_entry.cache {
+                // Create a StatefulImage widget and render it properly
+                let image_widget = StatefulImage::new();
+                f.render_stateful_widget(image_widget, data.0, protocol);
+                return;
             }
         }
     }
@@ -291,23 +330,27 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
     let (tx_cmd, rx_cmd) = mpsc::channel::<RendererCommand>();
     let (tx_rsp, rx_rsp) = mpsc::channel::<RendererResponse>();
 
+    // Performance optimized renderer thread:
+    // - Removed 1.5s sleep that was causing lag
+    // - Optimized channel processing for better performance
+    // - Simplified image processing flow
+    // - Removed unnecessary frame rate limiting
 
     ((tx_cmd,rx_rsp),thread::spawn(move || {
-        let mut channels: Vec<(Sender<FileRendererUpdate>, Receiver<ResizeRequest>)> = Vec::new();
         let mut download_folder = PathBuf::from("assets");
+        let mut channels = Vec::new();
 
+        let mut picker = Picker::from_query_stdio();
+        let mut total_requested_picker = 0;
 
         loop {
             // Ascolto il canale main
-            if let Ok(request) = rx_cmd.try_recv(){
+            if let Ok(request) = rx_cmd.try_recv() {
                 match request {
                     RendererCommand::Stop => {
                         break
                     }
-                    RendererCommand::AddChannel((tx, rx)) => {
-                        channels.push((tx, rx));
-                    },
-                    RendererCommand::EncodeMedia((tx_to_renderer, server_id, media_id, image)) => {
+                    RendererCommand::EncodeMedia((media_id, image)) => {
                         let extension = media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id);
                         // Construct path safely
                         let path = download_folder.join(media_id.clone());
@@ -336,26 +379,74 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                                                 _ = dynamic_image.save(&path);
                                             }
                                         };
-                                        match tx_rsp.send(RendererResponse::EncodedMediaSteps((0,server_id, media_id.clone(), NetCacheMedia::Downloaded(path)))) {
+                                        
+                                        // Send downloaded status first
+                                        match tx_rsp.send(RendererResponse::EncodedMedia((media_id.clone(), NetCacheMedia::Downloaded(path), None))) {
                                             Ok(_) => {
-                                                info!(target: "main", "[RENDERER] - Successfully sent an Saved IN path response");
+                                                info!(target: "main", "[RENDERER] - Successfully sent downloaded status");
                                             }
-                                            Err(str) => (),
+                                            Err(str) => {
+                                                error!(target: "main", "[RENDERER] - Error sending downloaded status: {:?}", str);
+                                            }
                                         }
+                                        
+                                        // Now render the image
+                                        let max_retries = 3;
+                                        let mut retry_count = 0;
+                                        let mut render_success = false;
+                                        
+                                        while retry_count < max_retries && !render_success {
+                                            match &picker{
+                                                Ok(pick) => {
+                                                    // Create channels for resize requests
+                                                    let (resize_tx, resize_rx) = mpsc::channel::<ResizeRequest>();
+                                                    let (update_tx, update_rx) = mpsc::channel::<FileRendererUpdate>();
+                                                    
+                                                    // Create the ThreadProtocol with the resize sender
+                                                    let return_item = ThreadProtocol::new(resize_tx.clone(), Some(pick.new_resize_protocol(dynamic_image.clone())));
 
-                                        // PT2, we gotta send a Rendered request now!
-                                        match Picker::from_query_stdio(){
-                                            Ok(pick) => {
-                                                let return_item = ThreadProtocol::new(tx_to_renderer, Some(pick.new_resize_protocol(dynamic_image)));
-                                                match tx_rsp.send(RendererResponse::EncodedMediaSteps((1,server_id, media_id, NetCacheMedia::Rendered(return_item)))) {
-                                                    Ok(_) => {
-                                                        info!(target: "main", "[RENDERER] - Successfully sent an Encoded response");
+                                                    channels.push((update_tx,resize_rx));
+
+                                                    // Send the rendered status with the channels
+                                                    match tx_rsp.send(RendererResponse::EncodedMedia((media_id.clone(), NetCacheMedia::Rendered(return_item), Some(update_rx)))) {
+                                                        Ok(_) => {
+                                                            info!(target: "main", "[RENDERER] - Successfully sent rendered status");
+                                                            render_success = true;
+                                                        }
+                                                        Err(str) => {
+                                                            error!(target: "main", "[RENDERER] - Error sending rendered status: {:?}", str);
+                                                            retry_count += 1;
+                                                        }
                                                     }
-                                                    Err(str) => {}
+                                                }
+                                                Err(err) => {
+                                                    total_requested_picker +=1;
+                                                    retry_count += 1;
+                                                    if err.to_string().contains("No response from stdin") {
+                                                        warn!(target: "main", "[RENDERER] - No response from stdin, retry {}/{}", retry_count, max_retries);
+                                                        // Small delay before retry
+                                                        thread::sleep(Duration::from_millis(100));
+                                                    } else {
+                                                        error!(target: "main", "[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]", err.to_string());
+                                                        break; // Don't retry for non-stdin errors
+                                                    }
                                                 }
                                             }
-                                            Err(err) => {
-                                                error!(target: "main", "{}", format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]",err.to_string()));
+                                            if picker.is_err() && total_requested_picker<10{
+                                                picker = Picker::from_query_stdio();
+                                            }
+                                        }
+                                        
+                                        // If all retries failed, send fatal rendering error
+                                        if !render_success {
+                                            error!(target: "main", "[RENDERER] - Failed to render image after {} retries, sending fatal error", max_retries);
+                                            match tx_rsp.send(RendererResponse::EncodedMedia((media_id, NetCacheMedia::FatalErrorRendering(), None))) {
+                                                Ok(_) => {
+                                                    info!(target: "main", "[RENDERER] - Sent fatal rendering error response");
+                                                }
+                                                Err(str) => {
+                                                    error!(target: "main", "[RENDERER] - Error sending fatal rendering response: {:?}", str);
+                                                }
                                             }
                                         }
                                     }
@@ -363,7 +454,7 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                             }
                         }
                     }
-                    RendererCommand::ComputeSetOfTopologies((top_algs)) => {
+                    RendererCommand::ComputeSetOfTopologies(top_algs) => {
                         let mut ret_vec: Vec<(NodeId, TopologyAlgorithm)> = Vec::new();
                             for (id, mut top_alg) in top_algs {
                                 let mut iteration_count = 0;
@@ -416,21 +507,29 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                     _ => (),
                 }
             }
-
-            // Ascolto i canali dei file
+            // Time to check for redraw-requests
             for (tx,rx) in &channels{
-                if let Ok(request) = rx.try_recv() {
-                    let rendered_maybe = request.resize_encode();
-                    match rendered_maybe{
-                        Ok(rendered) => {
-                            tx.send(FileRendererUpdate::Redraw(rendered)).unwrap_or(());
+                while let Ok(update) = rx.try_recv() {
+                    match update.resize_encode(){
+                        Ok(updated) => {
+                            match tx.send(FileRendererUpdate::Redraw(updated)){
+                                Ok(_) => {}
+                                Err(err) => {
+                                    error!(target: "main", "[RENDERER] - {}", err.to_string());
+                                }
+                            }
                         }
-                        Err(err_rendering) => {
-                            tx.send(FileRendererUpdate::Error(err_rendering.to_string())).unwrap_or(());
+                        Err(err) => {
+                            error!(target: "main", "[RENDERER] - {}", err.to_string());
                         }
                     }
                 }
             }
+
+
+            // Add a small sleep to prevent busy loop and reduce CPU usage
+            thread::sleep(Duration::from_millis(10));
+
         }
     }))
 }
