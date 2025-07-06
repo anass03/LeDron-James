@@ -16,7 +16,14 @@ use crate::frontend::app::models::tab1_types::{ChFirstPage, ChSecondPage, ChThir
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 impl App<'_> {
+    
     pub(crate) fn handle_event_tab1(&mut self, key: KeyEvent) {
+        // Handle backspace globally for tab1
+        if key.code == KeyCode::Backspace {
+            self.handle_backspace_tab1();
+            return;
+        }
+
         match self.cache.tab1_data.viewing.clone(){
             ViewedTab1::Main => {
                 self.handle_main(key)
@@ -26,6 +33,146 @@ impl App<'_> {
             }
         }
     }
+
+    /// Handle backspace key according to navigation rules
+    fn handle_backspace_tab1(&mut self) {
+        match self.cache.tab1_data.viewing.clone() {
+            ViewedTab1::Main => {
+                // If we're at the main level, backspace should do nothing
+                // (or could be used for other purposes like clearing selection)
+                return;
+            }
+            ViewedTab1::Popup((id, node_popup)) => {
+                // Check if we're inside a block (file list, media list, etc.)
+                if self.is_inside_block(&node_popup) {
+                    // Go back to navigate through blocks
+                    self.go_back_to_block_navigation(&node_popup);
+                } else {
+                    // Go back one page in navigation history
+                    self.go_back_one_page();
+                }
+            }
+        }
+    }
+
+    /// Check if the user is currently inside a block (file list, media list, etc.)
+    fn is_inside_block(&self, node_popup: &NodePopup) -> bool {
+        match node_popup {
+            NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(_))) => {
+                // Inside chat messages or bottom tab
+                true
+            }
+            NodePopup::Client(ClientPopup::InternetPage(ClientNetPopup::SecondPage(second_page))) => {
+                // Inside file list or media list
+                matches!(second_page.selected_item, NetSecondPageItems::FileList | NetSecondPageItems::MediaList)
+            }
+            NodePopup::Client(ClientPopup::SettingsPage(settings)) => {
+                // Inside a command popup
+                !matches!(settings.command_popup, ClientSettingsCommandsPopup::None)
+            }
+            NodePopup::Server(ServerPopup::SettingsPage(settings)) => {
+                // Inside a command popup
+                !matches!(settings.command_popup, ServerSettingsCommandsPopup::None)
+            }
+            NodePopup::Drone(DronePopup::SettingsPage(settings)) => {
+                // Inside a command popup
+                !matches!(settings.command_popup, DroneSettingsCommandsPopup::None)
+            }
+            _ => false
+        }
+    }
+
+    /// Go back to block navigation (exit from file/media lists, command popups, etc.)
+    fn go_back_to_block_navigation(&mut self, node_popup: &NodePopup) {
+        match node_popup {
+            NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(third_page))) => {
+                // Go back from chat third page to second page
+                if let Some(id) = self.get_current_popup_id() {
+                    self.cache.tab1_data.viewing = ViewedTab1::Popup((
+                        id,
+                        NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::SecondPage(
+                            ChSecondPage {
+                                selected_server: third_page.selected_server,
+                            }
+                        )))
+                    ));
+                }
+            }
+            NodePopup::Client(ClientPopup::InternetPage(ClientNetPopup::SecondPage(second_page))) => {
+                // Go back from file/media list to blocks
+                if let Some(id) = self.get_current_popup_id() {
+                    let mut new_second_page = second_page.clone();
+                    new_second_page.selected_item = NetSecondPageItems::Blocks;
+                    self.cache.tab1_data.viewing = ViewedTab1::Popup((
+                        id,
+                        NodePopup::Client(ClientPopup::InternetPage(ClientNetPopup::SecondPage(new_second_page)))
+                    ));
+                }
+            }
+            NodePopup::Client(ClientPopup::SettingsPage(settings)) => {
+                // Exit command popup
+                if let Some(id) = self.get_current_popup_id() {
+                    let mut new_settings = settings.clone();
+                    new_settings.command_popup = ClientSettingsCommandsPopup::None;
+                    self.cache.tab1_data.viewing = ViewedTab1::Popup((
+                        id,
+                        NodePopup::Client(ClientPopup::SettingsPage(new_settings))
+                    ));
+                }
+            }
+            NodePopup::Server(ServerPopup::SettingsPage(settings)) => {
+                // Exit command popup
+                if let Some(id) = self.get_current_popup_id() {
+                    let mut new_settings = settings.clone();
+                    new_settings.command_popup = ServerSettingsCommandsPopup::None;
+                    self.cache.tab1_data.viewing = ViewedTab1::Popup((
+                        id,
+                        NodePopup::Server(ServerPopup::SettingsPage(new_settings))
+                    ));
+                }
+            }
+            NodePopup::Drone(DronePopup::SettingsPage(settings)) => {
+                // Exit command popup
+                if let Some(id) = self.get_current_popup_id() {
+                    let mut new_settings = settings.clone();
+                    new_settings.command_popup = DroneSettingsCommandsPopup::None;
+                    self.cache.tab1_data.viewing = ViewedTab1::Popup((
+                        id,
+                        NodePopup::Drone(DronePopup::SettingsPage(new_settings))
+                    ));
+                }
+            }
+            _ => {
+                // Default: go back one page
+                self.go_back_one_page();
+            }
+        }
+    }
+
+    /// Go back one page in navigation history
+    fn go_back_one_page(&mut self) {
+        if let Some(previous_state) = self.cache.tab1_data.pop_navigation_state() {
+            self.cache.tab1_data.viewing = previous_state;
+        } else {
+            // If no history, go back to main
+            self.cache.tab1_data.return_to_main();
+        }
+    }
+
+    /// Get the current popup ID if we're in a popup
+    fn get_current_popup_id(&self) -> Option<NodeId> {
+        if let ViewedTab1::Popup((id, _)) = &self.cache.tab1_data.viewing {
+            Some(*id)
+        } else {
+            None
+        }
+    }
+
+    /// Save current state to navigation history before navigating
+    fn save_navigation_state(&mut self) {
+        self.cache.tab1_data.push_navigation_state(self.cache.tab1_data.viewing.clone());
+    }
+
     fn handle_main(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up => {
@@ -54,13 +201,25 @@ impl App<'_> {
                         // I am on List
                         // Which item I've selected?
                         let selected_cursor_item = self.cache.tab1_data.netnode_list.selected as usize;
-                        match self.cache.tab1_data.netnode_list.items.get(selected_cursor_item){
+                        let node_info = self.cache.tab1_data.netnode_list.items.get(selected_cursor_item);
+                        
+                        match node_info {
                             None => {
-
+                                // Error: selected item doesn't exist
+                                self.simulation_controller_data.logs.push_sc_log(
+                                    LogType::ERROR,
+                                    "Selected item not found in network list".to_string()
+                                );
                             }
                             Some((node,is_active,_)) => {
                                 if *is_active{
-                                    match node{
+                                    // Clone the node data to avoid borrowing conflicts
+                                    let node_clone = node.clone();
+                                    
+                                    // Save current state before navigating
+                                    self.save_navigation_state();
+                                    
+                                    match node_clone{
                                         Node::Client(cl) => {
                                             self.cache.tab1_data.viewing =
                                                 ViewedTab1::Popup((
@@ -91,6 +250,10 @@ impl App<'_> {
                                     }
                                 }else{
                                     // Throw a warning POPUP saying the item is not ACTIVE
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        LogType::ERROR,
+                                        "Selected node is not active".to_string()
+                                    );
                                 }
                             }
                         }
@@ -98,19 +261,21 @@ impl App<'_> {
                     1 => {
                         // I am on Map
                         // I still don't know what could happen when I press map
+                        self.simulation_controller_data.logs.push_sc_log(
+                            LogType::INFO,
+                            "Map functionality not yet implemented".to_string()
+                        );
                     }
                     _ => ()
                 }
             }
-
-            // Missing KeyCodes to view the first one / last one, still gotta decide!
             _ => (), // Do nothing
         }
     }
 
     fn handle_popup(&mut self, key:KeyEvent, id: NodeId, node_popup: NodePopup) {
         match key.code{
-            KeyCode::Backspace => {
+            KeyCode::Esc => {
                 self.cache.tab1_data.return_to_main()
             }
             _ => (),
@@ -367,18 +532,27 @@ impl App<'_> {
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
+                                        self.simulation_controller_data.logs.push_sc_log(
+                                            LogType::ERROR,
+                                            "Selected chat server not found".to_string()
+                                        );
                                     }
                                     Some(selected_server_id) => {
                                         request=true;
                                         opt_server_id = selected_server_id.clone();
+                                        let server_id = *selected_server_id; // Clone the server ID
                                         self.cache.tab1_data.popup_cursor = 0;
+                                        
+                                        // Save current state before navigating
+                                        self.save_navigation_state();
+                                        
                                         self.cache.tab1_data.viewing =
                                             ViewedTab1::Popup((
                                                 id,
                                                 NodePopup::Client(ClientPopup::ChatPage(
                                                     ClientChatPopup::SecondPage(
                                                         ChSecondPage {
-                                                            selected_server: *selected_server_id,
+                                                            selected_server: server_id,
                                                         }
                                                     )
                                                 ))
@@ -459,9 +633,18 @@ impl App<'_> {
                                                     None => {
                                                         // Bug, shouldn't arrive here.
                                                         // Means I can select non existing items
+                                                        self.simulation_controller_data.logs.push_sc_log(
+                                                            LogType::ERROR,
+                                                            "Selected contact not found".to_string()
+                                                        );
                                                     }
                                                     Some(contact) => {
                                                         self.cache.tab1_data.popup_cursor = 0;
+                                                        let contact_id = *contact; // Clone the contact ID
+                                                        
+                                                        // Save current state before navigating
+                                                        self.save_navigation_state();
+                                                        
                                                         self.cache.tab1_data.viewing =
                                                             ViewedTab1::Popup((
                                                                 id,
@@ -471,7 +654,7 @@ impl App<'_> {
                                                                             scroll_offset: 0,
                                                                             selected_item: Default::default(),
                                                                             selected_server: contacts_data.selected_server,
-                                                                            selected_contact: *contact,
+                                                                            selected_contact: contact_id,
                                                                         }
                                                                     )
                                                                 ))
@@ -511,6 +694,91 @@ impl App<'_> {
             }
         }
     }
+    fn handle_chat_third_page(&mut self, key: KeyEvent, id: NodeId, mut third_page_data: ChThirdPage) {
+        // Get the chat length to set proper boundaries
+        let chat_length = match self.simulation_controller_data.chat_cache.local_chats.get(&third_page_data.selected_server) {
+            Some(chat_list) => {
+                match chat_list.chats_stored.get(&(id, third_page_data.selected_contact)) {
+                    Some(chat) => chat.chat.len(),
+                    None => {
+                        match chat_list.chats_stored.get(&(third_page_data.selected_contact, id)) {
+                            Some(chat) => chat.chat.len(),
+                            None => 0
+                        }
+                    }
+                }
+            }
+            None => 0
+        };
+
+        match third_page_data.selected_item {
+            ChatThirdPageSelection::ScrollingMessages => {
+                match key.code {
+                    KeyCode::Up => {
+                        // Increase scroll offset to go to older messages
+                        // Don't exceed chat length - 1 (since we start from 0)
+                        if (third_page_data.scroll_offset as usize ) < chat_length.saturating_sub(1) {
+                            third_page_data.scroll_offset += 1;
+                        }
+                    }
+                    KeyCode::Down => {
+                        // Decrease scroll offset to go to newer messages
+                        if third_page_data.scroll_offset > 0 {
+                            third_page_data.scroll_offset -= 1;
+                        } else {
+                            // If we're at 0, switch to BottomTab selection
+                            third_page_data.selected_item = ChatThirdPageSelection::BottomTab;
+                            third_page_data.scroll_offset = 0; // Start with text input
+                        }
+                    }
+                    KeyCode::Enter => {
+                        // todo!
+                    }
+                    _ => (),
+                }
+            }
+            ChatThirdPageSelection::BottomTab => {
+                match key.code {
+                    KeyCode::Up => {
+                        third_page_data.scroll_offset=0;
+                        third_page_data.selected_item = ChatThirdPageSelection::ScrollingMessages;
+                    }
+                    KeyCode::Left => {
+                        if third_page_data.scroll_offset > 0 { // 0: text input, 1: attach file
+                            third_page_data.scroll_offset -= 1;
+                        }
+                    }
+                    KeyCode::Right => {
+                        if third_page_data.scroll_offset < 1 { // 0: text input, 1: attach file
+                            third_page_data.scroll_offset += 1;
+                        }
+                    }
+                    KeyCode::Enter => {
+                        match third_page_data.scroll_offset {
+                            0 => {
+                                // Text input mode - switch to message input
+                                self.app_mode = AppMode::Input(InputMode::Two(id, third_page_data.clone())); // Use mode 2 for chat message input
+                            }
+                            1 => {
+                                // Attach file mode
+                                self.cache.tab1_data.file_exploring_data.set_fields(id, third_page_data.selected_contact, third_page_data.selected_server, 1);
+                                self.app_mode = AppMode::FileExploring;
+                            }
+                            _ => (),
+                        }
+                    }
+                    _ => (),
+                }
+            }
+        }
+
+        // Update the viewing state with the modified third page data
+        self.cache.tab1_data.viewing = ViewedTab1::Popup((
+            id,
+            NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(third_page_data)))
+        ));
+    }
+
     fn handle_net_client_page(&mut self, key: KeyEvent, id:NodeId, net_page:ClientNetPopup){
         match net_page {
             ClientNetPopup::FirstPage(stpage) => {
@@ -552,7 +820,7 @@ impl App<'_> {
                                     self.cache.tab1_data.popup_cursor+=1;
                                 }
                             }
-                            KeyCode::Left => {
+                            KeyCode::Left  => {
                                 // Return on Menu
                                 self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
                                 self.cache.tab1_data.popup_cursor = 1; // Re-selecting Net Menu
@@ -563,6 +831,10 @@ impl App<'_> {
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
+                                        self.simulation_controller_data.logs.push_sc_log(
+                                            LogType::ERROR,
+                                            "Selected content server not found".to_string()
+                                        );
                                     }
                                     Some(selected_server_id) => {
                                         let server_id = *selected_server_id;
@@ -583,6 +855,10 @@ impl App<'_> {
                                             }
                                         }
                                         self.cache.tab1_data.popup_cursor = 0;
+                                        
+                                        // Save current state before navigating
+                                        self.save_navigation_state();
+                                        
                                         self.cache.tab1_data.viewing =
                                             ViewedTab1::Popup((
                                                 id,
@@ -607,20 +883,6 @@ impl App<'_> {
                 }
             }
             ClientNetPopup::SecondPage(mut ndpage) => {
-                match key.code {
-                    KeyCode::Esc => {
-                        // Go back to first page
-                        self.cache.tab1_data.viewing =
-                            ViewedTab1::Popup((
-                                id,
-                                NodePopup::Client(ClientPopup::InternetPage(
-                                    ClientNetPopup::FirstPage(
-                                        NetFirstPage::default()
-                                    )
-                                ))
-                            ))
-                    }
-                    _ => {
                         match key.code.to_string().to_lowercase().as_str(){
                             "r" => {
                                 // Send request
@@ -645,6 +907,35 @@ impl App<'_> {
                             _ => (),
                         }
                         match key.code{
+                            KeyCode::Backspace => {
+                                match ndpage.selected_item{
+                                    NetSecondPageItems::Blocks => {
+                                        self.cache.tab1_data.viewing =
+                                            ViewedTab1::Popup((
+                                                id,
+                                                NodePopup::Client(ClientPopup::InternetPage(
+                                                    ClientNetPopup::FirstPage(
+                                                        NetFirstPage::default()
+                                                    )
+                                                ))
+                                            ))
+                                    }
+                                    NetSecondPageItems::FileList => {
+                                        self.cache.tab1_data.popup_cursor = 2;
+                                        ndpage.selected_item = NetSecondPageItems::Blocks;
+                                        self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                            ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                        )));
+                                    }
+                                    NetSecondPageItems::MediaList => {
+                                        self.cache.tab1_data.popup_cursor = 0;
+                                        ndpage.selected_item = NetSecondPageItems::Blocks;
+                                        self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                            ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                        )));
+                                    }
+                                }
+                            }
                             KeyCode::Up => {
                                 match ndpage.selected_item{
                                     NetSecondPageItems::Blocks => {
@@ -757,8 +1048,6 @@ impl App<'_> {
                                                                     self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                         ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                                     )));
-                                                                }else{
-
                                                                 }
                                                             }
                                                         }
@@ -791,17 +1080,12 @@ impl App<'_> {
                                                 }
                                             }
                                             3 => {
-                                                // Upload your file
-                                                // Upload your media
-                                                // Attach a file, il restituito andrà direttamente inviato
-                                                // Devo settare i fields in modo corretto
-                                                // todo()!
                                                 self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
                                                 self.app_mode = AppMode::FileExploring;
                                             }
                                             4 => {
                                                 // Open the media if it is selected!
-
+                                                //
                                             }
                                             _ => (),
                                         }
@@ -892,97 +1176,13 @@ impl App<'_> {
                             }
                             _ => (),
                         }
-                    }
-                }
             }
         }
     }
-    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, net_page: ClientNetPopup){}
+    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, net_page: ClientNetPopup){
 
-    fn handle_chat_third_page(&mut self, key: KeyEvent, id: NodeId, mut third_page_data: ChThirdPage) {
-        // Get the chat length to set proper boundaries
-        let chat_length = match self.simulation_controller_data.chat_cache.local_chats.get(&third_page_data.selected_server) {
-            Some(chat_list) => {
-                match chat_list.chats_stored.get(&(id, third_page_data.selected_contact)) {
-                    Some(chat) => chat.chat.len(),
-                    None => {
-                        match chat_list.chats_stored.get(&(third_page_data.selected_contact, id)) {
-                            Some(chat) => chat.chat.len(),
-                            None => 0
-                        }
-                    }
-                }
-            }
-            None => 0
-        };
-
-        match third_page_data.selected_item {
-            ChatThirdPageSelection::ScrollingMessages => {
-                match key.code {
-                    KeyCode::Up => {
-                        // Increase scroll offset to go to older messages
-                        // Don't exceed chat length - 1 (since we start from 0)
-                        if (third_page_data.scroll_offset as usize ) < chat_length.saturating_sub(1) {
-                            third_page_data.scroll_offset += 1;
-                        }
-                    }
-                    KeyCode::Down => {
-                        // Decrease scroll offset to go to newer messages
-                        if third_page_data.scroll_offset > 0 {
-                            third_page_data.scroll_offset -= 1;
-                        } else {
-                            // If we're at 0, switch to BottomTab selection
-                            third_page_data.selected_item = ChatThirdPageSelection::BottomTab;
-                            third_page_data.scroll_offset = 0; // Start with text input
-                        }
-                    }
-                    KeyCode::Enter => {
-                        // todo!
-                    }
-                    _ => (),
-                }
-            }
-            ChatThirdPageSelection::BottomTab => {
-                match key.code {
-                    KeyCode::Up => {
-                        third_page_data.scroll_offset=0;
-                        third_page_data.selected_item = ChatThirdPageSelection::ScrollingMessages;
-                    }
-                    KeyCode::Left => {
-                        if third_page_data.scroll_offset > 0 { // 0: text input, 1: attach file
-                            third_page_data.scroll_offset -= 1;
-                        }
-                    }
-                    KeyCode::Right => {
-                        if third_page_data.scroll_offset < 1 { // 0: text input, 1: attach file
-                            third_page_data.scroll_offset += 1;
-                        }
-                    }
-                    KeyCode::Enter => {
-                        match third_page_data.scroll_offset {
-                            0 => {
-                                // Text input mode - switch to message input
-                                self.app_mode = AppMode::Input(InputMode::Two(id, third_page_data.clone())); // Use mode 2 for chat message input
-                            }
-                            1 => {
-                                // Attach file mode
-                                self.cache.tab1_data.file_exploring_data.set_fields(id, third_page_data.selected_contact, third_page_data.selected_server, 1);
-                                self.app_mode = AppMode::FileExploring;
-                            }
-                            _ => (),
-                        }
-                    }
-                    _ => (),
-                }
-            }
-        }
-
-        // Update the viewing state with the modified third page data
-        self.cache.tab1_data.viewing = ViewedTab1::Popup((
-            id,
-            NodePopup::Client(ClientPopup::ChatPage(ClientChatPopup::ThirdPage(third_page_data)))
-        ));
     }
+
 
 
     fn handle_sett_client_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup){
@@ -1014,6 +1214,8 @@ impl App<'_> {
                         match sett_page.command_offset {
                             0 => {
                                 // Add Sender
+                                // Save current state before entering command popup
+                                self.save_navigation_state();
                                 sett_page.command_popup = ClientSettingsCommandsPopup::AddSender(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
@@ -1021,6 +1223,8 @@ impl App<'_> {
                             }
                             1 => {
                                 // Remove Sender
+                                // Save current state before entering command popup
+                                self.save_navigation_state();
                                 sett_page.command_popup = ClientSettingsCommandsPopup::RemoveSender(CommandPopup {
                                     status: SettingsPopupStatus::Idle,
                                     cursor: 0,
