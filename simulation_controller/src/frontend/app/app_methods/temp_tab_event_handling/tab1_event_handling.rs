@@ -405,10 +405,16 @@ impl App<'_> {
                         match key.code.to_string().to_lowercase().as_str(){
                             "r" => {
                                 // Send request
-                                match self.simulation_controller_data.request_client_list(id,contacts_data.selected_server){
-                                    Ok(_) => (),
-                                    Err(str) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                let client_ids: Vec<NodeId> = self.simulation_controller_data.clients
+                                    .iter()
+                                    .map(|client| client.id)  // assuming the field is named 'id'
+                                    .collect();
+                                for client in client_ids {
+                                    match self.simulation_controller_data.request_client_list(client,contacts_data.selected_server){
+                                        Ok(_) => (),
+                                        Err(str) => {
+                                            //self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                        }
                                     }
                                 }
                             },
