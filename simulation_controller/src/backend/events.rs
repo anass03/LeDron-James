@@ -86,19 +86,23 @@ impl SimulationControllerData {
                         pdr_expected: expected_pdr_clone,
                         ..Default::default()
                     });
-
-
             },
             HostEvent::NetSpeed(client_id, upload, download) => {
                 self.stats.node_statistic
                     .entry(client_id)
                     .and_modify(|node_stat| {
-                        node_stat.upload_at_sec = upload;
-                        node_stat.download_at_sec = download;
+                        if node_stat.upload_at_sec.len() >= 30 {
+                            node_stat.upload_at_sec.remove(0);
+                        }
+                        node_stat.upload_at_sec.push(upload);
+                        if node_stat.download_at_sec.len() >= 30 {
+                            node_stat.download_at_sec.remove(0);
+                        }
+                        node_stat.download_at_sec.push(download);
                     })
                     .or_insert_with(|| NodeStatistics {
-                        upload_at_sec: upload,
-                        download_at_sec: download,
+                        upload_at_sec: vec![upload],
+                        download_at_sec: vec![download],
                         ..Default::default()
                     });
             },
