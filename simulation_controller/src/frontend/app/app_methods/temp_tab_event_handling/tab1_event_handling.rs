@@ -367,6 +367,12 @@ impl App<'_> {
                                         // THROW FATAL
                                     }
                                     Some(selected_server_id) => {
+                                        match self.simulation_controller_data.request_registration_to_chat(id,selected_server_id.clone()){
+                                            Ok(_) => (),
+                                            Err(str) => {
+                                                error!(target:"main", "[LEDRON-CLI] Couldn't registrate to chat:\n{:?}",str);
+                                            }
+                                        }
                                         self.cache.tab1_data.popup_cursor = 0;
                                         self.cache.tab1_data.viewing =
                                             ViewedTab1::Popup((
@@ -411,7 +417,6 @@ impl App<'_> {
                                         self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
                                     }
                                 }
-
                             },
                             _ => (),
                         }
