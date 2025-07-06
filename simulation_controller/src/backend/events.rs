@@ -229,14 +229,14 @@ impl SimulationControllerData {
                     }
                 };
 
+                let (resize_request_sender, resize_request_receiver) = mpsc::channel();
+                let (render_update_sender, render_update_receiver) = mpsc::channel();
+                let media_channels = (Some(resize_request_sender.clone()), Some(render_update_receiver));
+                let renderer_channels = (render_update_sender, resize_request_receiver);
+
                 match server_map.get_mut(&media_id) {
                     Some((channels, net_cache_media)) => {
                         if let (None, None) = channels {
-                            let (resize_request_sender, resize_request_receiver) = mpsc::channel();
-                            let (render_update_sender, render_update_receiver) = mpsc::channel();
-                            let media_channels = (Some(resize_request_sender), Some(render_update_receiver));
-                            let renderer_channels = (render_update_sender, resize_request_receiver);
-
                             match self.tx_to_renderer.as_ref() {
                                 Some(mut sender) => {
                                     if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
@@ -250,7 +250,18 @@ impl SimulationControllerData {
                             *channels = media_channels;
                         }
                         match image {
-                            Some(image) => *net_cache_media = NetCacheMedia::Downloaded(image),
+                            Some(image) => {
+                                match self.tx_to_renderer.as_ref() {
+                                    Some(mut sender) => {
+                                        if let Err(e) = sender.send(RendererCommand::EncodeMedia((resize_request_sender, server_id, media_id, image))) {
+                                            return Err((LogType::ERROR, e.to_string()));
+                                        }
+                                    },
+                                    None => {
+                                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                                    },
+                                }
+                            },
                             None => {
                                 *net_cache_media = NetCacheMedia::Downloading(percentage.unwrap_or(0.0))
                             }

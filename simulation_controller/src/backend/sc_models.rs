@@ -171,7 +171,7 @@ impl NetCache{
 
 pub enum NetCacheMedia {
     Downloading(f32), // f32 € [0,100] representing client loading status.
-    Downloaded(Image), // ByteStream of the file the clients sends to the Sim. Controller
+    Downloaded(File), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32), // f32 € [0,100] representing Sim. Controller loading status.
     Rendered(ThreadProtocol), // Rendered file that has to be
     // re-rendered each time Terminal changes its size.
