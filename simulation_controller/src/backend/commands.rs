@@ -270,23 +270,23 @@ impl SimulationControllerData {
     }
 
     pub fn request_registration_to_chat(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-        debug!(target: "main", "Sending Registration to Chat Request to Client {client_id} for Server {server_id}");
+        debug!(target: "main", "Client {client_id} registering to Chat Server {server_id}");
         let command = Net(RegistrationToChat(server_id));
         self.send_client_command(client_id, command)
     }
 
     pub fn request_client_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
         // Check if client is registered to chat
-        let should_register = self.chat_cache.known_contacts
+        /*let should_register = self.chat_cache.known_contacts
             .get(&client_id)
             .and_then(|contact_map| contact_map.get(&server_id))
             .map_or(true, |contacts| contacts.is_empty());
-
-        if should_register {
+*/
+        //if should_register {
             if let Err(e) = self.request_registration_to_chat(client_id, server_id) {
                 debug!(target: "main", "Failed to register client: {}", e);
             }
-        }
+        //}
 
         debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
         for client in &self.clients {
