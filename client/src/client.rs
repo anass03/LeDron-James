@@ -825,7 +825,7 @@ impl Client {
     where
         F: FnMut(usize),
     {
-        self.send_logging(
+        self.host.send_logging(
             LogType::INFO,
             LogModule::FRAGMENT,
             format!(
@@ -839,7 +839,7 @@ impl Client {
             .find_best_route(self.host.id, destination)
             .ok_or_else(|| {
                 let err = format!("No route to {}", destination);
-                self.send_logging(
+                self.host.send_logging(
                     LogType::ERROR,
                     LogModule::FRAGMENT,
                     format!("Fragmentation error: {}", err),
@@ -848,7 +848,7 @@ impl Client {
             })?;
         match self.host.controller_send.send(HostEvent::Route(self.host.id, route.clone())){
             Ok(_) => {},
-            Err(err) => { self.send_logging(
+            Err(err) => { self.host.send_logging(
                 LogType::WARN,
                 LogModule::SESSION,
                 format!("error sending route to controller {}", err),
@@ -862,7 +862,7 @@ impl Client {
         {
             let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
             let entry = sent.entry(message.session_id).or_insert_with(|| {
-                self.send_logging(
+                self.host.send_logging(
                     LogType::DEBUG,
                     LogModule::FRAGMENT,
                     format!("Allocating buffer for {} fragments", total),
@@ -903,19 +903,19 @@ impl Client {
             }
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let pkt = Packet::new_fragment(header, message.session_id, frag.clone());
-            let res = self.send_packet(pkt, None);
+            let res = self.host.send_packet(pkt, None);
             on_fragment_sent(chunk.len());
-            self.send_logging(
+            self.host.send_logging(
                 LogType::DEBUG,
                 LogModule::FRAGMENT,
                 format!("Sent fragment #{} result={:?}", i, res),
             );
         }
 
-        self.send_logging(
+        self.host.send_logging(
             LogType::INFO,
             LogModule::FRAGMENT,
-            format!("Completed fragmentation session={}", message.session_id),
+            format!("Completed fragmentation session({})", message.session_id),
         );
         Ok(())
     }

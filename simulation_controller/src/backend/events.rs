@@ -18,7 +18,6 @@ use crate::backend::simulation_controller::SimulationControllerData;
 impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
-
         match event {
             DroneEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
@@ -113,7 +112,7 @@ impl SimulationControllerData {
                     .entry(host_id)
                     .and_modify(|node_stat| node_stat.route = route.clone())
                     .or_insert_with(|| NodeStatistics {
-                        route,
+                        route: route,
                         ..Default::default()
                     });
             },
