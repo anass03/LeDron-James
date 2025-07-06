@@ -12,10 +12,12 @@ use ratatui::text::Line;
 use ratatui::widgets;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, };
-use crate::backend::sc_models::NetNode;
+use crate::backend::sc_models::{NetNode, NodeType};
 use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use textwrap;
+use tui_logger::TuiLoggerWidget;
+use wg_2024::network::NodeId;
 
 pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     let popup_layout = Layout::default()
@@ -245,6 +247,7 @@ pub(super) mod data_rendering{
     use wg_2024::network::NodeId;
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
+    use crate::frontend::app::ui::tabs::tab1::render_data_logging_section;
 
     // For Client & Server
     pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
@@ -319,26 +322,7 @@ pub(super) mod data_rendering{
         let inner_log_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
 
-        match app.simulation_controller_data.host_log_state.get(&id){
-            None => {
-                // Logging not viewable page
-            }
-            Some((_,log_filter)) => {
-                TuiLoggerWidget::default()
-                    .style_error(Style::default().fg(Color::Red))
-                    .style_warn(Style::default().fg(Color::Yellow))
-                    .style_info(Style::default().fg(Color::White))
-                    .style_debug(Style::default().fg(Color::Green))
-                    .style_trace(Style::default().fg(Color::Magenta))
-                    .output_separator(' ')
-                    .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
-                    .output_target(false)
-                    .output_file(false)
-                    .output_line(false)
-                    .state(log_filter)
-                    .render(inner_log_block, buf);
-            }
-        }
+        render_data_logging_section(app, id, inner_log_block, buf);
     }
 
 }
@@ -502,5 +486,80 @@ pub(super) fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer
             msg.render(status_area, buf);
         },
         _ => {},
+    }
+}
+
+pub(crate) fn render_data_logging_section(app: &App, id: NodeId, inner_log_block: Rect, buf: &mut Buffer) {
+    // Determina se è un drone, client o server controllando i vettori
+    let node_type = if app.simulation_controller_data.drones.iter().any(|d| d.id == id) {
+        "drone"
+    } else if app.simulation_controller_data.clients.iter().any(|c| c.id == id) {
+        "client"
+    } else if app.simulation_controller_data.servers.iter().any(|s| s.id == id) {
+        "server"
+    } else {
+        "unknown"
+    };
+
+    match node_type {
+        "drone" => {
+            // Per i DRONI: mostra i log generali + log specifici del drone
+            TuiLoggerWidget::default()
+                .style_error(Style::default().fg(Color::Red))
+                .style_warn(Style::default().fg(Color::Yellow))
+                .style_info(Style::default().fg(Color::White))
+                .style_debug(Style::default().fg(Color::Green))
+                .style_trace(Style::default().fg(Color::Magenta))
+                .output_separator(' ')
+                .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
+                .output_target(false)
+                .output_file(false)
+                .output_line(false)
+                .state(&app.cache.main_log_state.1)
+                .render(inner_log_block, buf);
+        }
+        _ => {
+            // Per CLIENT e SERVER: usa il host_log_state specifico se esiste, altrimenti main_log_state
+            match app.simulation_controller_data.host_log_state.get(&id) {
+                Some((_, log_filter)) => {
+                    TuiLoggerWidget::default()
+                        .style_error(Style::default().fg(Color::Red))
+                        .style_warn(Style::default().fg(Color::Yellow))
+                        .style_info(Style::default().fg(Color::White))
+                        .style_debug(Style::default().fg(Color::Green))
+                        .style_trace(Style::default().fg(Color::Magenta))
+                        .output_separator(' ')
+                        .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
+                        .output_target(true)  // Mostra target per debug
+                        .output_file(false)
+                        .output_line(false)
+                        .state(log_filter)
+                        .render(inner_log_block, buf);
+                }
+                None => {
+                    // Fallback al main_log_state se non c'è host_log_state
+                    TuiLoggerWidget::default()
+                        .style_error(Style::default().fg(Color::Red))
+                        .style_warn(Style::default().fg(Color::Yellow))
+                        .style_info(Style::default().fg(Color::White))
+                        .style_debug(Style::default().fg(Color::Green))
+                        .style_trace(Style::default().fg(Color::Magenta))
+                        .output_separator(' ')
+                        .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
+                        .output_target(true)
+                        .output_file(false)
+                        .output_line(false)
+                        .state(&app.cache.main_log_state.1)
+                        .render(inner_log_block, buf);
+                }
+            }
+        }
+        /*_ => {
+            // Nodo sconosciuto - mostra messaggio di errore
+            let error_text = Paragraph::new("Unknown node type - no logs available")
+                .style(Style::default().fg(Color::Red))
+                .alignment(Alignment::Center);
+            error_text.render(inner_log_block, buf);
+        }*/
     }
 }

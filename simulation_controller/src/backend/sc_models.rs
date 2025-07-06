@@ -344,6 +344,7 @@ pub(crate) enum NodeType {
     Client,
     Server,
 }
+
 impl Display for NodeType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {

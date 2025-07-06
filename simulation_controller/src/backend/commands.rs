@@ -37,7 +37,7 @@ impl SimulationControllerData {
         // Find the drone and collect neighbors in one pass
         let drone_neighbors = self.drones.iter()
             .find(|drone| drone.id == drone_id)
-            .map(|drone| drone.connected_node_ids)
+            .map(|drone| drone.connected_node_ids.clone())
             .ok_or_else(|| format!("Drone {drone_id} does not exist"))?;
 
         debug!(target: "main", "Trying to Crash Drone: {drone_id}");

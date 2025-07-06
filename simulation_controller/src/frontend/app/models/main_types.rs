@@ -10,6 +10,7 @@ use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
+use crate::frontend::app::models::tab3_types::Tab3;
 use crate::frontend::app::models::general_types::TextBuffer;
 use crate::frontend::app::models::tab0_types::Tab0;
 use crate::frontend::app::models::tab1_types::{ChThirdPage, Tab1};
@@ -51,7 +52,8 @@ pub(in crate::frontend::app) struct Cache<'a> {
 
     pub tab0_data: Tab0, // Data needed by tab0 encapsulated in a struct
     pub tab1_data: Tab1,
-    pub tab2_data: Tab2
+    pub tab2_data: Tab2,
+    pub tab3_data: Tab3,
 }
 
 
@@ -65,6 +67,7 @@ impl<'a> Cache<'a> {
             tab0_data: Tab0::default(),
             tab1_data: Tab1::default(),
             tab2_data: Tab2::default(),
+            tab3_data: Tab3::default(),
             colors_vec: {
                 let colors = vec![
                     (179, 250, 178), // #b3fab2

@@ -186,14 +186,15 @@ impl SimulationControllerData {
             },
             ServerToClient::MessageFrom(server_id, client_id, message)
             => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
-            ServerToClient::FileFrom(server_id, client_id, file_id, file)  // todo
+            ServerToClient::FileFrom(server_id, from, to, file_id, file)  // todo
             => {
-                match self.chat_cache.local_chats.get(&server_id) {
-                    Some(chat_list) => {
-
+                /*match self.chat_cache.local_chats.get_mut(&server_id) {
+                    Some(ref mut chat_list) => {
+                        chat_list.chats_stored.entry((from, to))
                     }
+                    None => {}
                 }
-                self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
+                self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));*/
             }
             ServerToClient::MediaFrom(server_id, client_id, ..) //todo
             => {
