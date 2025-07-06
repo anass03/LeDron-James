@@ -40,21 +40,7 @@ use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, ViewedTab1};
 use crate::frontend::app::topology_algorithm::alg_models::{TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
-/*
-  DA PENSARE A UN APPROCCIO RIGUARDO L'EVENT HANDLING E PIU'
-  SPECIFICATAMENTE LO SCORRIMENTO DELLE SINGOLE TAB
-  - SE FARLO GENERALE, ES. TUTTI GLI ELEMENTI DELLA PAGINA IN UN VEC CON CURSORE+
-  - OGNI TAB IL SUO MECCANISMO E IL SUO CURSORE
- */
 
-/*
-IDEE:
- - Aggiungere una TAB External Network che permette di connettere una rete esterna,
- alla rete. Il simulation controller fungerà da intermediario network, ogni pacchetto ricevuto
- da una rete esterna, SC si preouccuperà di inoltrarlo ai relativi droni collegati.
- Per la rete interna, non farà alcuna differenza sapere dove si trovano,
- essendo l'SC l'intermediario che eseguirà le operazioni on-network.
- */
 pub struct App<'a> {
     renderer: JoinHandle<()>,
 
@@ -90,28 +76,17 @@ impl App<'_>{
     }
     pub fn run(&mut self, terminal: &mut DefaultTerminal) -> io::Result<()>{
         let mut instant = Instant::now();
-        let mut downloaded_instant = Instant::now();
-        let mut drawn:bool;
-        let mut handle_time = Instant::now();
 
         while self.stay.clone() {
-            drawn=false;
 
             // Listening to channels
-            handle_time = std::time::Instant::now();
             self.simulation_controller_data.handle_channels();
-            let handle_ch_time = handle_time.elapsed();
-
-            handle_time = std::time::Instant::now();
             self.handle_rx_renderer();
-            let handle_rx_time = handle_time.elapsed();
-
             self.check_main_topology_status();
 
             // Terminal drawing and other basic app functions
             self.cache.update_counter();
 
-            handle_time = std::time::Instant::now();
 
             // Combined rendering in a single frame to prevent flashing
             terminal.draw(|f| {
@@ -152,39 +127,8 @@ impl App<'_>{
                 }
             })?;
 
-            let handle_draw_time = handle_time.elapsed();
-
-            handle_time = std::time::Instant::now();
             self.handle_events()?;
-            let handle_hand_events_time = handle_time.elapsed();
 
-
-
-            let mut max = Duration::from_millis(0);
-            let mut case = 0;
-            if handle_hand_events_time>max{
-                max = handle_hand_events_time;
-                case = 1;
-            }
-            if handle_draw_time>max{
-                max = handle_draw_time;
-                case = 2;
-            }
-            if handle_rx_time>max{
-                max = handle_rx_time;
-                case = 3;
-            }
-            if handle_ch_time>max{
-                max = handle_ch_time;
-                case = 4;
-            }
-            match case{
-                1 => debug!(target:"main", "CROSSBEAM EVENTS: {:?}", handle_hand_events_time),
-                2 => debug!(target:"main", "DRAWING: {:?}", handle_draw_time),
-                3 => debug!(target:"main", "RX: {:?}", handle_rx_time),
-                4 => debug!(target:"main", "CHANNELS: {:?}", handle_ch_time),
-                _ => (),
-            }
 
             // Check if it is time to refresh some data
             if instant.elapsed() > self.tick_rate {
@@ -234,7 +178,7 @@ impl App<'_>{
         use std::time::Duration;
         use ratatui::crossterm::event::{self, Event};
 
-        if event::poll(Duration::from_millis(50))? {
+        if event::poll(Duration::from_millis(40))? {
             let event = ratatui::crossterm::event::read()?;
             match event {
                 Event::Key(key) => {

@@ -178,6 +178,7 @@ pub(crate) struct NetSecondPage {
     pub selected_item: NetSecondPageItems,
     // Depending on the selected client, we gotta view the available servers the client knows.
     pub scroll_offset:u8
+
 }
 
 #[derive(Debug, Clone, Default)]

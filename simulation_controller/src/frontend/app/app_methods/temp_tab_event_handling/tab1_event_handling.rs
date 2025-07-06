@@ -643,6 +643,14 @@ impl App<'_> {
                                     NetSecondPageItems::Blocks => {
                                         if self.cache.tab1_data.popup_cursor>0 && self.cache.tab1_data.popup_cursor<4{
                                             self.cache.tab1_data.popup_cursor-=1;
+                                        }else{
+                                            if ndpage.scroll_offset>0{
+                                                ndpage.scroll_offset-=1;
+                                                ndpage.selected_item = NetSecondPageItems::Blocks;
+                                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                )));
+                                            }
                                         }
                                     }
                                     NetSecondPageItems::FileList => {
@@ -658,6 +666,12 @@ impl App<'_> {
                                     NetSecondPageItems::Blocks => {
                                         if self.cache.tab1_data.popup_cursor<3{
                                             self.cache.tab1_data.popup_cursor+=1;
+                                        }else{
+                                            ndpage.scroll_offset+=1;
+                                            ndpage.selected_item = NetSecondPageItems::Blocks;
+                                            self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                            )));
                                         }
                                     }
                                     NetSecondPageItems::FileList => {
@@ -803,6 +817,7 @@ impl App<'_> {
                                                                                 file_id.clone(), NetCacheFile::Downloading(0f32)
                                                                             );
                                                                             ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
+                                                                            self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                                             self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                                 ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                                             )));
