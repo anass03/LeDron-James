@@ -127,11 +127,13 @@ impl Statistics{
 pub enum RendererCommand{
     Stop,
     AddChannel((Sender<FileRendererUpdate>, Receiver<ResizeRequest>)),
-    Encode((Sender<ResizeRequest>,ServerId, MediaId, Image)),
+    EncodeMedia((Sender<ResizeRequest>, ServerId, MediaId, Image)),
+    EncodeFile((Sender<ResizeRequest>, ServerId, MediaId, Image)),
     ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
 }
 pub enum RendererResponse{
-    Encoded((ServerId,MediaId, ThreadProtocol)),
+    EncodedMedia((ServerId, MediaId, NetCacheMedia)),
+    EncodedFile((ServerId, MediaId, NetCacheFile)),
     Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 
