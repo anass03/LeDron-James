@@ -12,7 +12,6 @@ pdr = 0.0
 id = 3
 connected_node_ids = [1, 5, 12, 13]
 pdr = 0.0
-
 [[drone]]
 id = 4
 connected_node_ids = [2, 6, 12]
