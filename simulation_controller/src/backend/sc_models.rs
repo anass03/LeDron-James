@@ -129,7 +129,8 @@ pub enum RendererCommand{
     Stop,
     EncodeMedia((MediaId, Image)),
     EncodeFile((FileId, Vec<u8>)),
-    ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
+    ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>)),
+    ChangeDownloadFolder(PathBuf)
 }
 pub enum RendererResponse{
     EncodedMedia((MediaId, NetCacheMedia, Option<Receiver<FileRendererUpdate>>)),

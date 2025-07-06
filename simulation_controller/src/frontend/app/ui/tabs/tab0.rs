@@ -11,6 +11,7 @@ use tui_logger::{ExtLogRecord, LogFormatter};
 use ratatui::text::{Line, Span, Text};
 use log::Level;
 use ratatui::widgets::canvas::{Context, Circle, Line as CanvasLine, Canvas};
+use textwrap;
 
 
 /// Renders Overview tab-page
@@ -123,7 +124,7 @@ impl LogFormatter for MyLogFormatter {
     fn min_width(&self) -> u16 {
         4
     }
-    fn format(&self, _width: usize, evt: &ExtLogRecord) -> Vec<Line> {
+    fn format(&self, width: usize, evt: &ExtLogRecord) -> Vec<Line> {
         let mut lines = vec![];
         let identifier_str = match parse_node_string(evt.target()){
             None => {
@@ -134,43 +135,49 @@ impl LogFormatter for MyLogFormatter {
             }
         };
 
-        match evt.level {
-            log::Level::Error => {
-                lines.push(
-                    Line::from(vec![Span::styled(format!("{} | [{:?}] ERR | {}",evt.timestamp.format("%H:%M:%S"), evt.level, evt.msg()),
-                                                 Style::default().fg(Color::Rgb(255, 168, 168))
-                    )])
-                );
-            }
-            log::Level::Debug => {
-                lines.push(
-                    Line::from(vec![Span::styled(format!("{} | [{:?}] DBG | {}",evt.timestamp.format("%H:%M:%S"), evt.level, evt.msg()),
-                                                 Style::default().fg(Color::Rgb(201, 255, 246))
-
-                    )])
-                );
-            }
-            Level::Warn => {
-                lines.push(
-                    Line::from(vec![Span::styled(format!("{} | [{:?}] WARN | {}",evt.timestamp.format("%H:%M:%S"), evt.level, evt.msg()),
-                                                 Style::default().fg(Color::Rgb(253, 215, 170))
-                    )])
-                );
-            }
-            Level::Info => {
-                lines.push(
-                    Line::from(vec![Span::styled(format!("{} | [{:?}] INFO | {}",evt.timestamp.format("%H:%M:%S"), evt.level, evt.msg()),
-                                                 Style::default().fg(Color::Rgb(182, 255, 206))
-                    )])                    );
-            }
-            Level::Trace => {
-                lines.push(
-                    Line::from(vec![Span::styled(format!("{} | [{:?}] GEN | {}",evt.timestamp.format("%H:%M:%S"), evt.level, evt.msg()),
-                                                 Style::default().fg(Color::Rgb(237, 254, 173))
-                    )])
-                );
-            }
+        // Create the base log entry format
+        let timestamp = evt.timestamp.format("%H:%M:%S").to_string();
+        let level_str = format!("{:?}", evt.level);
+        let level_short = match evt.level {
+            log::Level::Error => "ERR",
+            log::Level::Debug => "DBG", 
+            log::Level::Warn => "WARN",
+            log::Level::Info => "INFO",
+            log::Level::Trace => "GEN",
         };
+
+        // Calculate available width for the message (accounting for timestamp, level, and separators)
+        let header_width = timestamp.len() + 3 + level_short.len() + 3; // "HH:MM:SS | [LEVEL] | "
+        let available_width = width.saturating_sub(header_width);
+        
+        // Wrap the message to fit the available width
+        let wrapped_message = textwrap::wrap(evt.msg(), available_width);
+        
+        // Get the appropriate color for the log level
+        let color = match evt.level {
+            log::Level::Error => Color::Rgb(255, 168, 168),
+            log::Level::Debug => Color::Rgb(201, 255, 246),
+            log::Level::Warn => Color::Rgb(253, 215, 170),
+            log::Level::Info => Color::Rgb(182, 255, 206),
+            log::Level::Trace => Color::Rgb(237, 254, 173),
+        };
+
+        // Create lines for each wrapped message part
+        for (i, message_line) in wrapped_message.iter().enumerate() {
+            let formatted_line = if i == 0 {
+                // First line includes the full header
+                format!("{} | [{}] | {}", timestamp, level_short, message_line)
+            } else {
+                // Subsequent lines just continue the message with proper indentation
+                let indent_width = timestamp.len() + 3 + level_short.len() + 3; // Same as header_width
+                format!("{}{}", " ".repeat(indent_width), message_line)
+            };
+            
+            lines.push(Line::from(vec![
+                Span::styled(formatted_line, Style::default().fg(color))
+            ]));
+        }
+        
         lines
     }
 }

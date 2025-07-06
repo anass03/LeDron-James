@@ -1080,7 +1080,7 @@ pub(super) mod chat_rendering{
 
             // Determine if sent or received and if this message is selected
             let is_sent = meta.id == selected_cl;
-            let is_selected = (i == selected_message_index || third_page_data.selected_item == ChatThirdPageSelection::ScrollingMessages);
+            let is_selected = (i == selected_message_index && third_page_data.selected_item == ChatThirdPageSelection::ScrollingMessages);
 
             // Split left/right for bubble with more conservative margins
             let cols = if is_sent {
@@ -1135,7 +1135,7 @@ pub(super) mod chat_rendering{
 
             // Apply selection styling to text
             let text_style = if is_selected {
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::White)
             } else {
                 Style::default().fg(Color::White)
             };

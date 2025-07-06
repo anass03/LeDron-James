@@ -195,9 +195,6 @@ impl App<'_>{
                         AppMode::FileExploring => {
                             self.handle_event_file_exploringmode(event)
                         },
-                        _ => {
-                            self.handle_event_normalmode(key);
-                        }
                     }
                 },
                 _ => {}
@@ -486,6 +483,9 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                             }
                         }
                     },
+                    RendererCommand::ChangeDownloadFolder(path) => {
+                        download_folder = path;
+                    }
                 }
             }
             // Time to check for redraw-requests
