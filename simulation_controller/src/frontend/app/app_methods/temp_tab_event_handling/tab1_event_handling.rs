@@ -2,6 +2,7 @@ use crate::backend::sc_models::MediaEntry;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
+use log::error;
 use host::{ClientId, FileId, MediaId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
@@ -109,7 +110,7 @@ impl App<'_> {
 
     fn handle_popup(&mut self, key:KeyEvent, id: NodeId, node_popup: NodePopup) {
         match key.code{
-            KeyCode::Esc => {
+            KeyCode::Backspace => {
                 self.cache.tab1_data.return_to_main()
             }
             _ => (),
@@ -276,26 +277,34 @@ impl App<'_> {
                 }
             }
             PopupSelection::OptArea => {
-                match client_popup {
-                    ClientPopup::ChatPage(ch_page) => {
-                        self.handle_chat_page(key,id,ch_page)
+                match key.code {
+                    KeyCode::Esc => {
+                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                        self.cache.tab1_data.popup_cursor = 0;
                     }
-                    ClientPopup::InternetPage(net_page) => {
-                        self.handle_net_client_page(key, id, net_page)
-                    }
-                    ClientPopup::DataPage(data_page) => {
+                    _ => {
+                        match client_popup {
+                            ClientPopup::ChatPage(ch_page) => {
+                                self.handle_chat_page(key,id,ch_page)
+                            }
+                            ClientPopup::InternetPage(net_page) => {
+                                self.handle_net_client_page(key, id, net_page)
+                            }
+                            ClientPopup::DataPage(data_page) => {
 
-                    }
-                    ClientPopup::SettingsPage(sett_page) => {
-                        match sett_page.command_popup.clone(){
-                            ClientSettingsCommandsPopup::None => {
-                                self.handle_sett_client_page(key, id, sett_page)
                             }
-                            ClientSettingsCommandsPopup::AddSender(cmd) => {
-                                self.handle_client_add_sender_popup(key, id, sett_page, cmd);
-                            }
-                            ClientSettingsCommandsPopup::RemoveSender(cmd) => {
-                                self.handle_client_remove_sender_popup(key, id, sett_page, cmd);
+                            ClientPopup::SettingsPage(sett_page) => {
+                                match sett_page.command_popup.clone(){
+                                    ClientSettingsCommandsPopup::None => {
+                                        self.handle_sett_client_page(key, id, sett_page)
+                                    }
+                                    ClientSettingsCommandsPopup::AddSender(cmd) => {
+                                        self.handle_client_add_sender_popup(key, id, sett_page, cmd);
+                                    }
+                                    ClientSettingsCommandsPopup::RemoveSender(cmd) => {
+                                        self.handle_client_remove_sender_popup(key, id, sett_page, cmd);
+                                    }
+                                }
                             }
                         }
                     }
@@ -379,71 +388,87 @@ impl App<'_> {
                 }
             }
             ClientChatPopup::SecondPage(contacts_data) => {
-                match key.code.to_string().to_lowercase().as_str(){
-                    "r" => {
-                        // Send request
-                        match self.simulation_controller_data.request_client_list(id,contacts_data.selected_server){
-                            Ok(_) => (),
-                            Err(str) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
-                            }
+                match key.code {
+                    KeyCode::Esc => {
+                        // Go back to first page
+                        self.cache.tab1_data.viewing =
+                            ViewedTab1::Popup((
+                                id,
+                                NodePopup::Client(ClientPopup::ChatPage(
+                                    ClientChatPopup::FirstPage(
+                                        ChFirstPage::default()
+                                    )
+                                ))
+                            ))
+                    }
+                    _ => {
+                        match key.code.to_string().to_lowercase().as_str(){
+                            "r" => {
+                                // Send request
+                                match self.simulation_controller_data.request_client_list(id,contacts_data.selected_server){
+                                    Ok(_) => (),
+                                    Err(str) => {
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                    }
+                                }
+                            },
+                            _ => (),
                         }
-                    },
-                    _ => (),
-                }
-                // Devo capire dove mi trovo
-                match self.simulation_controller_data.chat_cache.known_contacts.get(&id){
-                    None => {
-                        // Pagina vuota
-                    },
-                    Some(known_contacts) => {
-                        match known_contacts.get(&contacts_data.selected_server){
+                        // Devo capire dove mi trovo
+                        match self.simulation_controller_data.chat_cache.known_contacts.get(&id){
                             None => {
                                 // Pagina vuota
-                            }
-                            Some(contacts) => {
-                                let contacts_len = contacts.len();
-                                match key.code {
-                                    KeyCode::Left => {
-                                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
-                                        self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
+                            },
+                            Some(known_contacts) => {
+                                match known_contacts.get(&contacts_data.selected_server){
+                                    None => {
+                                        // Pagina vuota
                                     }
-                                    KeyCode::Up => {
-                                        if self.cache.tab1_data.popup_cursor as isize -1 >=0{
-                                            self.cache.tab1_data.popup_cursor-=1
-                                        }
-                                    }
-                                    KeyCode::Down => {
-                                        if self.cache.tab1_data.popup_cursor+1 < contacts_len  {
-                                            self.cache.tab1_data.popup_cursor+=1
-                                        }
-                                    }
-                                    KeyCode::Enter => {
-                                        match contacts.get(self.cache.tab1_data.popup_cursor){
-                                            None => {
-                                                // Bug, shouldn't arrive here.
-                                                // Means I can select non existing items
+                                    Some(contacts) => {
+                                        let contacts_len = contacts.len();
+                                        match key.code {
+                                            KeyCode::Left => {
+                                                self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                                self.cache.tab1_data.popup_cursor = 0; // Re-selecting Chat Menu
                                             }
-                                            Some(contact) => {
-                                                self.cache.tab1_data.popup_cursor = 0;
-                                                self.cache.tab1_data.viewing =
-                                                    ViewedTab1::Popup((
-                                                        id,
-                                                        NodePopup::Client(ClientPopup::ChatPage(
-                                                            ClientChatPopup::ThirdPage(
-                                                                ChThirdPage {
-                                                                    scroll_offset: 0,
-                                                                    selected_item: Default::default(),
-                                                                    selected_server: contacts_data.selected_server,
-                                                                    selected_contact: *contact,
-                                                                }
-                                                            )
-                                                        ))
-                                                    ))
+                                            KeyCode::Up => {
+                                                if self.cache.tab1_data.popup_cursor as isize -1 >=0{
+                                                    self.cache.tab1_data.popup_cursor-=1
+                                                }
                                             }
+                                            KeyCode::Down => {
+                                                if self.cache.tab1_data.popup_cursor+1 < contacts_len  {
+                                                    self.cache.tab1_data.popup_cursor+=1
+                                                }
+                                            }
+                                            KeyCode::Enter => {
+                                                match contacts.get(self.cache.tab1_data.popup_cursor){
+                                                    None => {
+                                                        // Bug, shouldn't arrive here.
+                                                        // Means I can select non existing items
+                                                    }
+                                                    Some(contact) => {
+                                                        self.cache.tab1_data.popup_cursor = 0;
+                                                        self.cache.tab1_data.viewing =
+                                                            ViewedTab1::Popup((
+                                                                id,
+                                                                NodePopup::Client(ClientPopup::ChatPage(
+                                                                    ClientChatPopup::ThirdPage(
+                                                                        ChThirdPage {
+                                                                            scroll_offset: 0,
+                                                                            selected_item: Default::default(),
+                                                                            selected_server: contacts_data.selected_server,
+                                                                            selected_contact: *contact,
+                                                                        }
+                                                                    )
+                                                                ))
+                                                            ))
+                                                    }
+                                                }
+                                            }
+                                            _ => (),
                                         }
                                     }
-                                    _ => (),
                                 }
                             }
                         }
@@ -451,7 +476,25 @@ impl App<'_> {
                 }
             }
             ClientChatPopup::ThirdPage(chat_data) => {
-                self.handle_chat_third_page(key, id, chat_data);
+                match key.code {
+                    KeyCode::Esc => {
+                        // Go back to second page
+                        self.cache.tab1_data.viewing =
+                            ViewedTab1::Popup((
+                                id,
+                                NodePopup::Client(ClientPopup::ChatPage(
+                                    ClientChatPopup::SecondPage(
+                                        ChSecondPage {
+                                            selected_server: chat_data.selected_server,
+                                        }
+                                    )
+                                ))
+                            ))
+                    }
+                    _ => {
+                        self.handle_chat_third_page(key, id, chat_data);
+                    }
+                }
             }
         }
     }
@@ -551,221 +594,225 @@ impl App<'_> {
                 }
             }
             ClientNetPopup::SecondPage(mut ndpage) => {
-                match key.code.to_string().to_lowercase().as_str(){
-                    "r" => {
-                        // Send request
-                        let server_id = ndpage.selected_server;
-                        match self.simulation_controller_data.request_files_list(id, server_id){
-                            Ok(_) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request files list".to_string());
-                            }
-                            Err(str) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
-                            }
-                        }
-                        match self.simulation_controller_data.request_media_list(id, server_id){
-                            Ok(_) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request media list".to_string());
-                            }
-                            Err(str) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
-                            }
-                        }
-                    },
-                    _ => (),
-                }
-                match key.code{
-                    KeyCode::Up => {
-                        match ndpage.selected_item{
-                            NetSecondPageItems::Blocks => {
-                                if self.cache.tab1_data.popup_cursor>0 && self.cache.tab1_data.popup_cursor<4{
-                                    self.cache.tab1_data.popup_cursor-=1;
-                                }
-                            }
-                            NetSecondPageItems::FileList => {
-                                self.cache.tab1_data.file_list_render_utils.decrease();
-                            }
-                            NetSecondPageItems::MediaList => {
-                                self.cache.tab1_data.media_list_render_utils.decrease();
-                            }
-                        }
+                match key.code {
+                    KeyCode::Esc => {
+                        // Go back to first page
+                        self.cache.tab1_data.viewing =
+                            ViewedTab1::Popup((
+                                id,
+                                NodePopup::Client(ClientPopup::InternetPage(
+                                    ClientNetPopup::FirstPage(
+                                        NetFirstPage::default()
+                                    )
+                                ))
+                            ))
                     }
-                    KeyCode::Down => {
-                        match ndpage.selected_item{
-                            NetSecondPageItems::Blocks => {
-                                if self.cache.tab1_data.popup_cursor<3{
-                                    self.cache.tab1_data.popup_cursor+=1;
-                                }
-                            }
-                            NetSecondPageItems::FileList => {
-                                match self.simulation_controller_data.net_cache.known_file_list.get(&id){
-                                    None => (), // Do nothing
-                                    Some(hash) => {
-                                        match hash.get(&ndpage.selected_server){
-                                            None => (), // Do nothing
-                                            Some(vecfiles) => {
-                                                // todo()!
-                                                if (self.cache.tab1_data.file_list_render_utils.selected as usize) + 1 < vecfiles.len(){
-                                                    self.cache.tab1_data.file_list_render_utils.increase();
-                                                }
-                                            }
-                                        }
+                    _ => {
+                        match key.code.to_string().to_lowercase().as_str(){
+                            "r" => {
+                                // Send request
+                                let server_id = ndpage.selected_server;
+                                match self.simulation_controller_data.request_files_list(id, server_id){
+                                    Ok(_) => {
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request files list".to_string());
+                                    }
+                                    Err(str) => {
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
                                     }
                                 }
-                            }
-                            NetSecondPageItems::MediaList => {
-                                match self.simulation_controller_data.net_cache.known_media_list.get(&id){
-                                    None => (), // Do nothing
-                                    Some(hash) => {
-                                        match hash.get(&ndpage.selected_server){
-                                            None => (), // Do nothing
-                                            Some(vecfiles) => {
-                                                if (self.cache.tab1_data.media_list_render_utils.selected as usize) + 1  < vecfiles.len() {
-                                                    self.cache.tab1_data.media_list_render_utils.increase();
-                                                }
-                                            }
-                                        }
+                                match self.simulation_controller_data.request_media_list(id, server_id){
+                                    Ok(_) => {
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request media list".to_string());
+                                    }
+                                    Err(str) => {
+                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
                                     }
                                 }
-                            }
-                        }
-                    }
-                    KeyCode::Left => {
-                        match self.cache.tab1_data.popup_cursor{
-                            0 | 1 | 2 | 3 => {
-                                // Back on selecting menu tab
-                                self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
-                                self.cache.tab1_data.popup_cursor = 1;
-                            }
-                            4 => {
-                                self.cache.tab1_data.popup_cursor= 0;
-                                ndpage.selected_item = NetSecondPageItems::Blocks;
-                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
-                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
-                                )));
-                            }
+                            },
                             _ => (),
                         }
-                    }
-                    KeyCode::Right => {
-                        if ndpage.selected_file != SelectedFileMedia::None {
-                            self.cache.tab1_data.popup_cursor = 4;
-                            ndpage.selected_item = NetSecondPageItems::Blocks;
-                            self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
-                                ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
-                            )));
-                        }
-                    }
-                    KeyCode::Enter => {
-                        match ndpage.selected_item {
-                            NetSecondPageItems::Blocks => {
+                        match key.code{
+                            KeyCode::Up => {
+                                match ndpage.selected_item{
+                                    NetSecondPageItems::Blocks => {
+                                        if self.cache.tab1_data.popup_cursor>0 && self.cache.tab1_data.popup_cursor<4{
+                                            self.cache.tab1_data.popup_cursor-=1;
+                                        }
+                                    }
+                                    NetSecondPageItems::FileList => {
+                                        self.cache.tab1_data.file_list_render_utils.decrease();
+                                    }
+                                    NetSecondPageItems::MediaList => {
+                                        self.cache.tab1_data.media_list_render_utils.decrease();
+                                    }
+                                }
+                            }
+                            KeyCode::Down => {
+                                match ndpage.selected_item{
+                                    NetSecondPageItems::Blocks => {
+                                        if self.cache.tab1_data.popup_cursor<3{
+                                            self.cache.tab1_data.popup_cursor+=1;
+                                        }
+                                    }
+                                    NetSecondPageItems::FileList => {
+                                        match self.simulation_controller_data.net_cache.known_file_list.get(&id){
+                                            None => (), // Do nothing
+                                            Some(hash) => {
+                                                match hash.get(&ndpage.selected_server){
+                                                    None => (), // Do nothing
+                                                    Some(vecfiles) => {
+                                                        // todo()!
+                                                        if (self.cache.tab1_data.file_list_render_utils.selected as usize) + 1 < vecfiles.len(){
+                                                            self.cache.tab1_data.file_list_render_utils.increase();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    NetSecondPageItems::MediaList => {
+                                        match self.simulation_controller_data.net_cache.known_media_list.get(&id){
+                                            None => (), // Do nothing
+                                            Some(hash) => {
+                                                match hash.get(&ndpage.selected_server){
+                                                    None => (), // Do nothing
+                                                    Some(vecfiles) => {
+                                                        if (self.cache.tab1_data.media_list_render_utils.selected as usize) + 1  < vecfiles.len() {
+                                                            self.cache.tab1_data.media_list_render_utils.increase();
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            KeyCode::Left => {
                                 match self.cache.tab1_data.popup_cursor{
-                                    0 => {
-                                        // Enter media list only if it is not empty
-                                        match self.simulation_controller_data.net_cache.known_media_list.get(&id){
-                                            None => (), // Do nothing
-                                            Some(hash) => {
-                                                match hash.get(&ndpage.selected_server){
-                                                    None => (), // Do nothing
-                                                    Some(vecfiles) => {
-                                                        if !vecfiles.is_empty(){
-                                                            ndpage.selected_item = NetSecondPageItems::MediaList;
-                                                            self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
-                                                                ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
-                                                            )));
-                                                        }else{
-
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    1 => {
-                                        // Upload your media
-                                        // Attach a file, il restituito andrà direttamente inviato
-                                        // Devo settare i fields in modo corretto
-                                        self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 2);
-                                        self.app_mode = AppMode::FileExploring;
-                                    }
-                                    2 => {
-                                        match self.simulation_controller_data.net_cache.known_media_list.get(&id){
-                                            None => (), // Do nothing
-                                            Some(hash) => {
-                                                match hash.get(&ndpage.selected_server){
-                                                    None => (), // Do nothing
-                                                    Some(vecfiles) => {
-                                                        if !vecfiles.is_empty(){
-                                                            ndpage.selected_item = NetSecondPageItems::FileList;
-                                                            self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
-                                                                ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
-                                                            )));
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                    3 => {
-                                        // Upload your file
-                                        // Upload your media
-                                        // Attach a file, il restituito andrà direttamente inviato
-                                        // Devo settare i fields in modo corretto
-                                        // todo()!
-                                        self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
-                                        self.app_mode = AppMode::FileExploring;
+                                    0 | 1 | 2 | 3 => {
+                                        // Back on selecting menu tab
+                                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                                        self.cache.tab1_data.popup_cursor = 1;
                                     }
                                     4 => {
-                                        // Open the media if it is selected!
-
+                                        self.cache.tab1_data.popup_cursor= 0;
+                                        ndpage.selected_item = NetSecondPageItems::Blocks;
+                                        self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                            ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                        )));
                                     }
                                     _ => (),
                                 }
                             }
-                            NetSecondPageItems::FileList => {
-                                match self.simulation_controller_data.net_cache.known_file_list.clone().get(&id){
-                                    None => (), // Do nothing
-                                    Some(hash) => {
-                                        match hash.get(&ndpage.selected_server){
+                            KeyCode::Right => {
+                                if ndpage.selected_file != SelectedFileMedia::None {
+                                    self.cache.tab1_data.popup_cursor = 4;
+                                    ndpage.selected_item = NetSecondPageItems::Blocks;
+                                    self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                        ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                    )));
+                                }
+                            }
+                            KeyCode::Enter => {
+                                match ndpage.selected_item {
+                                    NetSecondPageItems::Blocks => {
+                                        match self.cache.tab1_data.popup_cursor{
+                                            0 => {
+                                                // Enter media list only if it is not empty
+                                                match self.simulation_controller_data.net_cache.known_media_list.get(&id){
+                                                    None => (), // Do nothing
+                                                    Some(hash) => {
+                                                        match hash.get(&ndpage.selected_server){
+                                                            None => (), // Do nothing
+                                                            Some(vecfiles) => {
+                                                                if !vecfiles.is_empty(){
+                                                                    ndpage.selected_item = NetSecondPageItems::MediaList;
+                                                                    self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                                        ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                                    )));
+                                                                }else{
+
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            1 => {
+                                                // Upload your media
+                                                // Attach a file, il restituito andrà direttamente inviato
+                                                // Devo settare i fields in modo corretto
+                                                self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 2);
+                                                self.app_mode = AppMode::FileExploring;
+                                            }
+                                            2 => {
+                                                match self.simulation_controller_data.net_cache.known_media_list.get(&id){
+                                                    None => (), // Do nothing
+                                                    Some(hash) => {
+                                                        match hash.get(&ndpage.selected_server){
+                                                            None => (), // Do nothing
+                                                            Some(vecfiles) => {
+                                                                if !vecfiles.is_empty(){
+                                                                    ndpage.selected_item = NetSecondPageItems::FileList;
+                                                                    self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                                        ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                                    )));
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            3 => {
+                                                // Upload your file
+                                                // Upload your media
+                                                // Attach a file, il restituito andrà direttamente inviato
+                                                // Devo settare i fields in modo corretto
+                                                // todo()!
+                                                self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
+                                                self.app_mode = AppMode::FileExploring;
+                                            }
+                                            4 => {
+                                                // Open the media if it is selected!
+
+                                            }
+                                            _ => (),
+                                        }
+                                    }
+                                    NetSecondPageItems::FileList => {
+                                        match self.simulation_controller_data.net_cache.known_file_list.clone().get(&id){
                                             None => (), // Do nothing
-                                            Some(vecfiles) => {
-                                                match vecfiles.get(self.cache.tab1_data.file_list_render_utils.selected as usize){
-                                                    None => self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Error selecting the file, file-index out of bounds!".to_string()),
-                                                    Some(file_id) => {
-                                                        // Request the file
-                                                        match self.simulation_controller_data.request_file(id, ndpage.selected_server, file_id.clone()){
-                                                            Ok(_) => {
-                                                                let ret_values = self.simulation_controller_data.net_cache.downloaded_files.get_mut(&ndpage.selected_server);
-                                                                match ret_values{
-                                                                    None => {
-                                                                        self.simulation_controller_data.net_cache.downloaded_files.insert(
-                                                                            ndpage.selected_server,
-                                                                            {
-                                                                                let mut ret_hash = HashMap::new();
-                                                                                ret_hash.insert(
-                                                                                    file_id.clone(),
-                                                                                    NetCacheFile::Downloading(0f32)
-                                                                                );
-                                                                                ret_hash
-                                                                            }
-                                                                        );
-                                                                    }
-                                                                    Some(hash_mut) => {
-                                                                        if !hash_mut.contains_key(&file_id.clone()){
-                                                                            hash_mut.insert(
-                                                                                file_id.clone(),
-                                                                                NetCacheFile::Downloading(0f32)
+                                            Some(hash) => {
+                                                match hash.get(&ndpage.selected_server){
+                                                    None => (), // Do nothing
+                                                    Some(vecfiles) => {
+                                                        match vecfiles.get(self.cache.tab1_data.file_list_render_utils.selected as usize){
+                                                            None => self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Error selecting the file, file-index out of bounds!".to_string()),
+                                                            Some(file_id) => {
+                                                                // Request the file
+                                                                if !self.simulation_controller_data.net_cache.downloaded_files.contains_key(file_id){
+                                                                    match self.simulation_controller_data.request_file(id, ndpage.selected_server, file_id.clone()){
+                                                                        Ok(_) => {
+                                                                            self.simulation_controller_data.net_cache.downloaded_files.insert(
+                                                                                file_id.clone(), NetCacheFile::Downloading(0f32)
                                                                             );
+                                                                            ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
+                                                                            self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                                                ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                                            )));
+                                                                        }
+                                                                        Err(str) => {
+                                                                            error!(target:"main", "[LEDRON-CLI] Error sending request file to client:\n{}",str);
                                                                         }
                                                                     }
+                                                                }else{
+                                                                    ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
+                                                                    self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                                        ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                                    )));
                                                                 }
-                                                                ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
-                                                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
-                                                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
-                                                                )));
-                                                            }
-                                                            Err(str) => {
-                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+
+                                                                //}
                                                             }
                                                         }
                                                     }
@@ -773,19 +820,23 @@ impl App<'_> {
                                             }
                                         }
                                     }
-                                }
-                            }
-                            NetSecondPageItems::MediaList => {
-                                match self.simulation_controller_data.net_cache.known_media_list.clone().get(&id){
-                                    None => (), // Do nothing
-                                    Some(hash) => {
-                                        match hash.get(&ndpage.selected_server){
-                                            None => (), // Do nothing
-                                            Some(vecfiles) => {
-                                                match vecfiles.get(self.cache.tab1_data.media_list_render_utils.selected as usize){
-                                                    None => self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Error selecting the media, media-index out of bounds!".to_string()),
-                                                    Some(media_id) => {
-                                                        // Request the media
+                                    NetSecondPageItems::MediaList => {
+                                        let opt = match self.simulation_controller_data.net_cache.known_media_list.get(&id){
+                                            None => None, // Do nothing
+                                            Some(hash) => {
+                                                match hash.get(&ndpage.selected_server){
+                                                    None => None, // Do nothing
+                                                    Some(vecfiles) => {
+                                                        vecfiles.get(self.cache.tab1_data.media_list_render_utils.selected as usize).cloned()
+                                                    }
+                                                }
+                                            }
+                                        };
+                                        match opt{
+                                                None => error!(target:"main","Error selecting the media, media-index out of bounds!"),
+                                                Some(media_id) => {
+                                                    // Request the media
+                                                    if !self.simulation_controller_data.net_cache.downloaded_medias.contains_key(&media_id){
                                                         match self.simulation_controller_data.request_media(id, ndpage.selected_server, media_id.clone()){
                                                             Ok(_) => {
                                                                 // Create or update the media entry in new_downloaded_medias
@@ -797,19 +848,23 @@ impl App<'_> {
                                                                 )));
                                                             }
                                                             Err(str) => {
-                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                                                error!(target:"main", "[LEDRON-CLI] Error sending request media to client:\n{}",str);
                                                             }
-                                                        }
                                                     }
-                                                }
+                                                    }else{
+                                                        ndpage.selected_file = SelectedFileMedia::Media(media_id.clone());
+                                                        self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                            ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                        )));
+                                                    }
                                             }
                                         }
                                     }
                                 }
                             }
+                            _ => (),
                         }
                     }
-                    _ => (),
                 }
             }
         }
@@ -1128,20 +1183,28 @@ impl App<'_> {
                 }
             }
             PopupSelection::OptArea => {
-                match server_popup{
-                    ServerPopup::DataPage(datapage) => {
-
+                match key.code {
+                    KeyCode::Esc => {
+                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                        self.cache.tab1_data.popup_cursor = 0;
                     }
-                    ServerPopup::SettingsPage(settpage) => {
-                        match settpage.command_popup.clone(){
-                            ServerSettingsCommandsPopup::None => {
-                                self.handle_sett_server_page(key,id,settpage);
+                    _ => {
+                        match server_popup{
+                            ServerPopup::DataPage(datapage) => {
+
                             }
-                            ServerSettingsCommandsPopup::AddSender(addsend) => {
-                                self.handle_server_add_sender_popup(key, id, settpage, addsend);
-                            }
-                            ServerSettingsCommandsPopup::RemoveSender(remsend) => {
-                                self.handle_server_remove_sender_popup(key, id, settpage, remsend);
+                            ServerPopup::SettingsPage(settpage) => {
+                                match settpage.command_popup.clone(){
+                                    ServerSettingsCommandsPopup::None => {
+                                        self.handle_sett_server_page(key,id,settpage);
+                                    }
+                                    ServerSettingsCommandsPopup::AddSender(addsend) => {
+                                        self.handle_server_add_sender_popup(key, id, settpage, addsend);
+                                    }
+                                    ServerSettingsCommandsPopup::RemoveSender(remsend) => {
+                                        self.handle_server_remove_sender_popup(key, id, settpage, remsend);
+                                    }
+                                }
                             }
                         }
                     }
@@ -1376,26 +1439,34 @@ impl App<'_> {
                 }
             }
             PopupSelection::OptArea => {
-                match client_popup{
-                    DronePopup::DataPage(datapage) => {
-
+                match key.code {
+                    KeyCode::Esc => {
+                        self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                        self.cache.tab1_data.popup_cursor = 0;
                     }
-                    DronePopup::SettingsPage(settpage) => {
-                        match settpage.command_popup.clone(){
-                            DroneSettingsCommandsPopup::None => {
-                                self.handle_sett_drone_page(key,id,settpage)
+                    _ => {
+                        match client_popup{
+                            DronePopup::DataPage(datapage) => {
+
                             }
-                            DroneSettingsCommandsPopup::SetPDR(commpop) => {
-                                self.handle_drone_set_pdr_popup(key, id, settpage, commpop);
-                            }
-                            DroneSettingsCommandsPopup::AddSender(addsend) => {
-                                self.handle_drone_add_sender_popup(key, id, settpage, addsend);
-                            }
-                            DroneSettingsCommandsPopup::RemoveSender(remsend) => {
-                                self.handle_drone_remove_sender_popup(key, id, settpage, remsend);
-                            }
-                            DroneSettingsCommandsPopup::Crash(crapop) => {
-                                self.handle_drone_crash_drone_popup(key, id, settpage, crapop);
+                            DronePopup::SettingsPage(settpage) => {
+                                match settpage.command_popup.clone(){
+                                    DroneSettingsCommandsPopup::None => {
+                                        self.handle_sett_drone_page(key,id,settpage)
+                                    }
+                                    DroneSettingsCommandsPopup::SetPDR(commpop) => {
+                                        self.handle_drone_set_pdr_popup(key, id, settpage, commpop);
+                                    }
+                                    DroneSettingsCommandsPopup::AddSender(addsend) => {
+                                        self.handle_drone_add_sender_popup(key, id, settpage, addsend);
+                                    }
+                                    DroneSettingsCommandsPopup::RemoveSender(remsend) => {
+                                        self.handle_drone_remove_sender_popup(key, id, settpage, remsend);
+                                    }
+                                    DroneSettingsCommandsPopup::Crash(crapop) => {
+                                        self.handle_drone_crash_drone_popup(key, id, settpage, crapop);
+                                    }
+                                }
                             }
                         }
                     }

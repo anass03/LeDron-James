@@ -33,7 +33,7 @@ use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLmessages;
-use crate::backend::sc_models::{FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{FileRendererUpdate, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::backend::sc_models::RendererCommand::ComputeSetOfTopologies;
 use crate::backend::sc_models::RendererResponse::Computed;
 use crate::frontend::app::models::main_types::AppMode::FileExploring;
@@ -504,7 +504,44 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                                 }
                             }
                         }
-                    _ => (),
+                    RendererCommand::EncodeFile((file_id,file_buf)) => {
+                        // Construct path safely
+                        let path = download_folder.join(file_id.clone());
+                        // Ensure download directory exists
+                        if let Some(parent) = path.parent() {
+                            _ = fs::create_dir_all(parent);
+                        }
+                        match fs::write(&path, &file_buf) {
+                            Ok(_) => info!(target: "main", "[LEDRON-CLI] File {file_id} downloaded in : {path:?}"),
+                            Err(e) => error!(target: "main", "[RENDERER] Couldn't download {file_id} in {path:?}"),
+                        }
+                        match tx_rsp.send(RendererResponse::EncodedFile((file_id.clone(), NetCacheFile::Downloaded(path.clone())))){
+                            Ok(_) => (),
+                            Err(str) => {
+                                error!(target: "main", "[RENDERER] - Error sending encoded file:\n{:?}", str);
+                            }
+                        }
+
+                        match std::str::from_utf8(&file_buf) {
+                            Ok(valid_str) => {
+                                let ret_utf = valid_str.to_string().lines().map(|str| str.to_string()).collect::<Vec<String>>();
+                                info!(target: "main", "[RENDERER] Successfully verified that file is correctly formatted as UTF-8");
+                                match tx_rsp.send(RendererResponse::EncodedFile((file_id, NetCacheFile::Rendered(FileType::UTF8(ret_utf))))){
+                                    Ok(_) => {}
+                                    Err(_) => {}
+                                }
+                            }
+                            Err(err) => {
+                                warn!(target: "main", "[RENDERER] File is not formatted as UTF-8, use an external renderer");
+                                match tx_rsp.send(RendererResponse::EncodedFile((file_id, NetCacheFile::Rendered(FileType::Other(path))))){
+                                    Ok(_) => (),
+                                    Err(str) => {
+                                        error!(target: "main", "[RENDERER] - Error sending encoded file:\n{:?}", str);
+                                    }
+                                }
+                            }
+                        }
+                    },
                 }
             }
             // Time to check for redraw-requests

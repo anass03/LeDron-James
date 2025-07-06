@@ -216,13 +216,13 @@ impl Debug for NetCacheMedia{
 }
 pub enum NetCacheFile{
     Downloading(f32), // f32 € [0,100] representing client loading status.
-    Downloaded(Vec<u8>), // ByteStream of the file the clients sends to the Sim. Controller
+    Downloaded(PathBuf), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32),
     Rendered(FileType)
 }
 pub enum FileType{
     UTF8(Vec<String>),
-    Other(File)
+    Other(PathBuf)
 }
 
 
