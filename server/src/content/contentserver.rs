@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}, time::Duration};
 use tempfile::TempDir;
-use crossbeam_channel::{Receiver, Sender};
+use crossbeam_channel::{tick, Receiver, Sender};
 use wg_2024::network::NodeId;
 use wg_2024::packet::{Ack, FloodRequest, Fragment, Nack, NodeType, Packet, PacketType};
 use crate::{delegate_to_host_mut, delegate_to_host_ref, GenServer, MediaServer, TextServer};
@@ -82,6 +82,8 @@ impl ContentServer {
 
     /// Starts the main loop of the ContentServer.
     pub fn run(&mut self){
+        let speed_tick = tick(Duration::from_millis(5000));
+        
         self.initiate_flood();
         self.send_logging(LogType::INFO,LogModule::MEDIA,"Starting Content Server...".into());
         self.send_logging(LogType::INFO,LogModule::MEDIA,format!("This is the PrivateDir: {}",self.private_dir.path().display()));
@@ -96,6 +98,12 @@ impl ContentServer {
                     Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Packet error: {e}")),
                 },
                 default(Duration::from_millis(3)) => {}
+                recv(speed_tick) -> _ =>{
+                    match self.info.host.controller_send.send(HostEvent::ExpectedPDR(self.info.host.id, self.info.host.network.drone_pdr.clone())) {
+                         Ok(_) => {}
+                         Err(e) => {self.info.host.send_logging(LogType::ERROR, LogModule::NETWORK,format!("Error reporting PDR: {}", e));}
+                    }
+                }
             }
         }
     }
@@ -121,10 +129,16 @@ impl ContentServer {
             MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
-                        Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
+                        Ok(cmd) => {
+                            if let Some(generator) = packet.routing_header.source() {
+                                self.handle_command(cmd,generator);
+                            }
+                        },
                         Err(e) => {
                             self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to parse ClientNetCommand: {}", e));
-                            self.send_response(ServerToClient::ErrNotFound(self.info.host.id), packet.routing_header.hops[0]);
+                            if let Some(generator) = packet.routing_header.source() {
+                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), generator);
+                            }
                         }
                     }
                 } else {
