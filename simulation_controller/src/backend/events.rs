@@ -19,11 +19,23 @@ impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
         match event {
-            DroneEvent::PacketSent(_packet) => {
+            DroneEvent::PacketSent(packet) => {
+                match packet.routing_header.current_hop() {
+                    Some(drone_id) => {
+                        self.drone_packet_exchanged(drone_id);
+                    },
+                    None => {}
+                }
                 self.stats.received_packet();
                 Ok(())
             },
-            DroneEvent::PacketDropped(_packet) => {
+            DroneEvent::PacketDropped(packet) => {
+                match packet.routing_header.current_hop() {
+                    Some(drone_id) => {
+                        self.drone_packet_exchanged(drone_id);
+                    },
+                    None => {}
+                }
                 self.stats.dropped_packet();
                 Ok(())
             },
@@ -66,6 +78,17 @@ impl SimulationControllerData {
             HostEvent::ChatUpdate(server_id, string) => {
                 let chat: ChatStruct = serde_json::from_str(&string)
                     .map_err(|e| (LogType::ERROR, e.to_string()))?;
+
+                match self.tx_to_renderer.as_ref() {
+                    Some(sender) => {
+                        if let Err(e) = sender.send(RendererCommand::SaveMediaFromChatList(chat)) {
+                            return Err((LogType::ERROR, e.to_string()));
+                        }
+                    },
+                    None => {
+                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                    },
+                }
 
                 let key = (chat.users.user1, chat.users.user2);
                 let mut chats_stored = HashMap::new();
