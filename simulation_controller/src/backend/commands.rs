@@ -289,8 +289,11 @@ impl SimulationControllerData {
         }
 
         debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
-        let command = Net(ClientList(server_id));
-        self.send_client_command(client_id, command)
+        for client in self.clients {
+            let command = Net(ClientList(server_id));
+            self.send_client_command(client.id, command)?
+        }
+        Ok(())
     }
 
     pub fn message_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, message: String) -> Result<(), String> {

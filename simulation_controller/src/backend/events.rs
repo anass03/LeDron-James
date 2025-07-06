@@ -243,13 +243,13 @@ impl SimulationControllerData {
                         let (render_update_sender, render_update_receiver) = mpsc::channel();
                         let media_channels = (Some(resize_request_sender.clone()), Some(render_update_receiver));
                         let renderer_channels = (render_update_sender, resize_request_receiver);
-                        if let (None, None) = channels {
                             match self.tx_to_renderer.as_ref() {
                                 Some(mut sender) => {
                                     if let (None, None) = channels {
                                         if let Err(e) = sender.send(RendererCommand::AddChannel(renderer_channels)) {
                                             return Err((LogType::ERROR, e.to_string()));
                                         }
+                                        *channels = media_channels;
                                     }
                                     match image {
                                         Some(image) => {
@@ -266,8 +266,7 @@ impl SimulationControllerData {
                                     self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
                                 },
                             }
-                            *channels = media_channels;
-                        }
+
 
                         Ok(())
 
