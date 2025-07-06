@@ -1,6 +1,7 @@
 use ratatui::crossterm::event::KeyCode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab3_types::{LogLevel, NavigationLevel};
+use crate::frontend::app::models::main_types::AppMode;
 
 impl App<'_> {
     pub(crate) fn handle_event_tab3(&mut self, key: KeyCode) {
@@ -62,11 +63,15 @@ impl App<'_> {
                     NavigationLevel::OuterBoxes => {
                         match self.cache.tab3_data.selected_outer_box {
                             0 => {
-                                // Download Folder selected - trigger action directly
+                                // Download Folder selected - trigger folder browser
                                 self.simulation_controller_data.logs.push_sc_log(
                                     crate::backend::sc_models::LogType::INFO,
-                                    "Download folder selection triggered - Press 'B' to browse".to_string()
+                                    "Opening folder browser...".to_string()
                                 );
+                                // Set the tab3 data so we know we're browsing for download folder
+                                self.cache.tab3_data.browsing_for_download_folder = true;
+                                // Enter file exploring mode
+                                self.app_mode = AppMode::FileExploring;
                             }
                             1 => {
                                 // Logging Preferences selected - enter middle boxes level
@@ -142,11 +147,12 @@ impl App<'_> {
                     // Browse for folder when Download Folder is selected
                     self.simulation_controller_data.logs.push_sc_log(
                         crate::backend::sc_models::LogType::INFO,
-                        "File browser would open here to select download folder".to_string()
+                        "Opening folder browser...".to_string()
                     );
-                    // In a real implementation, you would open a file browser here
-                    // For now, let's just change to a placeholder path
-                    self.cache.tab3_data.current_download_folder = "/new/download/path".to_string();
+                    // Set the tab3 data so we know we're browsing for download folder
+                    self.cache.tab3_data.browsing_for_download_folder = true;
+                    // Enter file exploring mode
+                    self.app_mode = AppMode::FileExploring;
                 }
             }
             KeyCode::Char('[') => {

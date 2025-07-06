@@ -5,10 +5,10 @@ pub(crate) struct Tab3 {
     pub selected_outer_box: u8, // 0: Download Folder, 1: Logging Preferences
     pub selected_middle_box: u8, // 0: Choose Target, 1: Choose Log Type (within Logging Preferences)
     pub selected_category: u8, // Index of selected category in right panel
-    pub current_download_folder: String,
     pub current_log_target: String,
     pub current_log_level: LogLevel,
     pub available_targets: Vec<String>,
+    pub browsing_for_download_folder: bool, // Flag to know if we're browsing for download folder
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -35,7 +35,6 @@ impl Default for Tab3 {
             selected_outer_box: 0,
             selected_middle_box: 0,
             selected_category: 0,
-            current_download_folder: "assets".to_string(),
             current_log_target: "main".to_string(),
             current_log_level: LogLevel::Debug,
             available_targets: vec![
@@ -46,6 +45,7 @@ impl Default for Tab3 {
                 "topology".to_string(),
                 "All targets".to_string(),
             ],
+            browsing_for_download_folder: false,
         }
     }
 }

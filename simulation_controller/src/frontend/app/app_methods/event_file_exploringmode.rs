@@ -1,5 +1,6 @@
 use std::fmt::Pointer;
 use std::fs::FileType;
+use std::path::PathBuf;
 use log::error;
 use ratatui::crossterm::event::{Event, KeyEventKind, KeyCode};
 use ratatui_explorer::{File, Input};
@@ -10,7 +11,7 @@ use crate::frontend::app::models::main_types::AppMode;
 impl App<'_> {
     pub(crate) fn handle_event_file_exploringmode(&mut self, event: Event) {
         let input = Input::from(&event);
-        match event.clone(){
+        match event.clone() {
             Event::Key(key) => {
                 if key.kind == KeyEventKind::Press {
                     match key.code {
@@ -18,150 +19,153 @@ impl App<'_> {
                             // Quit file exploring without nothing
                             self.app_mode = AppMode::Normal;
                             self.cache.tab1_data.file_exploring_data.file_request_source = 0;
-                            // Reset file_explorer
+                            // Reset tab3 browsing flag
+                            self.cache.tab3_data.browsing_for_download_folder = false;
                         },
                         KeyCode::Enter => {
-                            // Check if he pressed a directory or a file
-                            // If it is a file, then return the current file to the
-                            if self.cache.file_explorer.current().is_dir(){
-                                _ = self.cache.file_explorer.handle(input);
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", self.cache.file_explorer.current()));
-
-                            }else{
+                            // Check if we're browsing for tab3 download folder
+                            if self.cache.tab3_data.browsing_for_download_folder {
                                 let selected_file = self.cache.file_explorer.current();
-                                // Here I should send the request, depending if I am on Net Page and Chat Page
-                                // I even should differentiate between files and media;
-                                // If I press on upload media I can't upload a file!
-                                match self.cache.tab1_data.file_exploring_data.file_request_source{
-                                    1 => {
-                                        // Chat - No need to check the type
-                                        match selected_file.name().chars().position(|ch| ch=='.'){
-                                            None => {
-                                                // Impossible? Should not be a directory!
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", selected_file.name()));
-                                            }
-                                            Some(pos) => {
-                                                let ext = selected_file.name()[pos..].to_string();
-                                                if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
-                                                    // Send media
-                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
-                                                    match self.simulation_controller_data.media_for(
-                                                        sending_data.last_selected_cl_sender,
-                                                        sending_data.last_selected_cl_receiver,
-                                                        sending_data.last_selected_sr,
-                                                        selected_file.path().as_path())
-                                                    {
-                                                        Ok(_) => {
-                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Successfully uploaded media dc!"));
-                                                        }
-                                                        Err(str) => {
-                                                            //todo()! PUSH LOG
-                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
-                                                        }
-                                                    }
-                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
-                                                    self.app_mode = AppMode::Normal;
 
-                                                }else{
-                                                    // Send File
-                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
-                                                    match self.simulation_controller_data.file_for(
-                                                        sending_data.last_selected_cl_sender,
-                                                        sending_data.last_selected_cl_receiver,
-                                                        sending_data.last_selected_sr,
-                                                        selected_file.path().as_path())
-                                                    {
-                                                        Ok(_) => (),
-                                                        Err(err) => {
-                                                            error!("[LEDRON-CLI] Error sending file, {:?}", err);
-                                                        }
-                                                    }
-                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
-                                                    self.app_mode = AppMode::Normal;
+                                if selected_file.is_dir() {
+                                    // If it's a directory and we're browsing for download folder, select it
+                                    let folder_path = selected_file.path().to_string_lossy().to_string();
+                                    self.simulation_controller_data.download_folder = PathBuf::from(folder_path.clone());
+                                    self.cache.tab3_data.browsing_for_download_folder = false;
+                                    self.app_mode = AppMode::Normal;
 
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered Report Err 2 {:?}", selected_file.name()));
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        LogType::INFO,
+                                        format!("Download folder set to: {}", folder_path)
+                                    );
+                                } else {
+                                    // If they clicked on a file, navigate into its parent directory or show error
+                                    _ = self.cache.file_explorer.handle(input);
+                                }
+                            } else {
+                                // Original tab1 file exploring logic
+                                if self.cache.file_explorer.current().is_dir() {
+                                    _ = self.cache.file_explorer.handle(input);
+                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered directory: {:?}", self.cache.file_explorer.current()));
+                                } else {
+                                    let selected_file = self.cache.file_explorer.current();
+                                    // Here I should send the request, depending if I am on Net Page and Chat Page
+                                    // I even should differentiate between files and media;
+                                    // If I press on upload media I can't upload a file!
+                                    match self.cache.tab1_data.file_exploring_data.file_request_source {
+                                        1 => {
+                                            // Chat - No need to check the type
+                                            match selected_file.name().chars().position(|ch| ch == '.') {
+                                                None => {
+                                                    // Impossible? Should not be a directory!
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 1 {:?}", selected_file.name()));
+                                                }
+                                                Some(pos) => {
+                                                    let ext = selected_file.name()[pos..].to_string();
+                                                    if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+                                                        // Send media
+                                                        let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                                        match self.simulation_controller_data.media_for(
+                                                            sending_data.last_selected_cl_sender,
+                                                            sending_data.last_selected_cl_receiver,
+                                                            sending_data.last_selected_sr,
+                                                            selected_file.path().as_path())
+                                                        {
+                                                            Ok(_) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded media!"));
+                                                            }
+                                                            Err(str) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
+                                                            }
+                                                        }
+                                                        self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                        self.app_mode = AppMode::Normal;
+                                                    } else {
+                                                        // Send file
+                                                        let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                                        match self.simulation_controller_data.file_for(
+                                                            sending_data.last_selected_cl_sender,
+                                                            sending_data.last_selected_cl_receiver,
+                                                            sending_data.last_selected_sr,
+                                                            selected_file.path().as_path())
+                                                        {
+                                                            Ok(_) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded file!"));
+                                                            }
+                                                            Err(str) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending file {:?}", str));
+                                                            }
+                                                        }
+                                                        self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                        self.app_mode = AppMode::Normal;
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                    2 => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered 2 {:?}", selected_file.name()));
-                                        // Net Media - Checking if it is a media
-                                        match selected_file.name().chars().position(|ch| ch=='.'){
-                                            None => {
-                                                // Impossible? Should not be a directory!
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", selected_file.name()));
-                                            }
-                                            Some(pos) => {
-                                                let ext = selected_file.name()[pos..].to_string();
-                                                if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
-                                                    // Send media
-                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
-                                                    match self.simulation_controller_data.new_media(
-                                                        sending_data.last_selected_cl_sender,
-                                                        sending_data.last_selected_sr,
-                                                        selected_file.path().as_path(),
-                                                    ){
-                                                        Ok(_) => {
-                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Successfully uploaded media dc!"));
+                                        2 => {
+                                            // Net Media - Checking if it is a media
+                                            match selected_file.name().chars().position(|ch| ch == '.') {
+                                                None => {
+                                                    // Impossible? Should not be a directory!
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 2 {:?}", selected_file.name()));
+                                                }
+                                                Some(pos) => {
+                                                    let ext = selected_file.name()[pos..].to_string();
+                                                    if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+                                                        // Send media
+                                                        let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                                        match self.simulation_controller_data.new_media(
+                                                            sending_data.last_selected_cl_sender,
+                                                            sending_data.last_selected_sr,
+                                                            selected_file.path().as_path(),
+                                                        ) {
+                                                            Ok(_) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded media!"));
+                                                            }
+                                                            Err(str) => {
+                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
+                                                            }
                                                         }
-                                                        Err(str) => {
-                                                            //todo()! PUSH LOG
-                                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
-                                                        }
+                                                        self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                                        self.app_mode = AppMode::Normal;
+                                                    } else {
+                                                        // Report error, I gotta check how to do it.
+                                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Invalid media format. Only .jpg, .jpeg, .png are supported"));
                                                     }
-                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
-                                                    self.app_mode = AppMode::Normal;
-
-                                                }else{
-                                                    // Report error, I gotta check how to do it.
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered Report Err 2 {:?}", selected_file.name()));
                                                 }
                                             }
                                         }
-                                    }
-                                    3 => {
-                                        // Net File - Checking if it is a file
-                                        match selected_file.name().chars().position(|ch| ch=='.'){
-                                            None => {
-                                                // Impossible? Should not be a directory!
-                                                // self.simulation_controller_data.logs.push_sc_log();
-                                            }
-                                            Some(pos) => {
-                                                let ext = selected_file.name()[pos..].to_string();
-                                                if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
-                                                    // Send media
-                                                    let sending_data = self.cache.tab1_data.file_exploring_data.clone();
-                                                    match self.simulation_controller_data.new_file(
-                                                        sending_data.last_selected_cl_sender,
-                                                        sending_data.last_selected_sr,
-                                                        selected_file.path().as_path())
-                                                    {
-                                                        Ok(_) => (),
-                                                        Err(err) => {
-                                                            error!("[LEDRON-CLI] Error sending file, {:?}", err);
-                                                        }
-                                                    }
-                                                    self.cache.tab1_data.file_exploring_data.file_request_source = 0;
-                                                    self.app_mode = AppMode::Normal;
-                                                }else{
-                                                    // Report error, I gotta check how to do it.
+                                        3 => {
+                                            // Net File - Any file type is acceptable
+                                            let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                                            match self.simulation_controller_data.new_file(
+                                                sending_data.last_selected_cl_sender,
+                                                sending_data.last_selected_sr,
+                                                selected_file.path().as_path(),
+                                            ) {
+                                                Ok(_) => {
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded file!"));
+                                                }
+                                                Err(str) => {
+                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending file {:?}", str));
                                                 }
                                             }
+                                            self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                                            self.app_mode = AppMode::Normal;
                                         }
-                                    }
-                                    _ => {
-                                        // It should never go here.
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered Impossible {:?}", selected_file.name()));
+                                        _ => {
+                                            // It should never go here.
+                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Invalid file request source"));
+                                        }
                                     }
                                 }
                             }
-                        }
+                        },
                         _ => _ = self.cache.file_explorer.handle(input),
                     }
                 }
-            },
-            _ => (),
+            }
+             _ => {}
         }
     }
 }

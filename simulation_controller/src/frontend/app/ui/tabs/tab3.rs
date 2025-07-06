@@ -13,8 +13,8 @@ pub(super) fn render_tab3(app: &App, area: Rect, buf: &mut Buffer) {
     let main_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(30), // Settings content (new sections)
-            Constraint::Percentage(70), // Settings categories
+            Constraint::Percentage(40), // Settings content (new sections)
+            Constraint::Percentage(60), // Settings categories
         ])
         .split(area);
 
@@ -91,29 +91,48 @@ pub(super) fn render_tab3(app: &App, area: Rect, buf: &mut Buffer) {
         .highlight_symbol("> ")
         .highlight_spacing(HighlightSpacing::Always);
 
-    // For now, render with a simple state since we don't have the actual state management
-    // In a full implementation, you'd want to track which category is selected
     categories_list.render(categories_area, buf);
 
-    // Settings Content Area
-    let mut content_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(
-            if app.cache.cursor == 1 && app.cache.tab3_data.selected_category == 0 {
-                app.animation_color()
-            } else {
-                MAIN_BLOCK_BORDERS
-            }
-        ))
-        .title(" Settings Options ")
-        .title_alignment(Alignment::Center);
+    // Show file explorer overlay if browsing for download folder
+    if app.cache.tab3_data.browsing_for_download_folder {
+        use ratatui::widgets::Clear;
+        use crate::frontend::app::ui::tabs::{POPUP_BG_COLOR};
 
-    let inner_content_area = content_block.inner(content_area);
-    content_block.render(content_area, buf);
+        // Create a centered popup area for the file browser
+        let popup_area = centered_popup_area(area);
+        Clear.render(popup_area, buf);
 
-    // Content based on selected category (for now showing general settings)
-    render_settings_content(app, inner_content_area, buf);
+        let colored_bg_block = Block::default()
+            .style(Style::default().bg(POPUP_BG_COLOR))
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(" Choose Download Folder - Press Enter on a directory, Esc to cancel ");
+        let colored_popup_area = colored_bg_block.inner(popup_area);
+        colored_bg_block.render(popup_area, buf);
+
+        app.cache.file_explorer.widget().render(colored_popup_area, buf);
+    }
+}
+
+// Helper function to create a centered popup area
+fn centered_popup_area(area: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(60),
+            Constraint::Percentage(20),
+        ])
+        .split(area);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage(20),
+            Constraint::Percentage(60),
+            Constraint::Percentage(20),
+        ])
+        .split(popup_layout[1])[1]
 }
 
 fn render_settings_content(app: &App, area: Rect, buf: &mut Buffer) {
@@ -154,7 +173,7 @@ fn render_settings_content(app: &App, area: Rect, buf: &mut Buffer) {
     render_logging_preferences_section(app, settings_content[1], buf);
 
     // Footer
-    let footer = Paragraph::new("Use ↑/↓ to navigate options, Enter to select/edit • Press 'q' to quit • Press 'a'/'d' to change tabs")
+    let footer = Paragraph::new("Use ↑/↓ to navigate options, Enter to select/edit")
         .style(Style::default().fg(Color::Cyan))
         .alignment(Alignment::Center);
     footer.render(footer_area, buf);
@@ -165,7 +184,8 @@ fn render_download_folder_section(app: &App, area: Rect, buf: &mut Buffer) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(
-            if app.cache.cursor == 1 && app.cache.tab3_data.selected_category == 1 {
+            if app.cache.tab3_data.navigation_level == NavigationLevel::OuterBoxes
+                && app.cache.tab3_data.selected_outer_box == 0 {
                 app.animation_color()
             } else {
                 MAIN_BLOCK_BORDERS
@@ -187,7 +207,7 @@ fn render_download_folder_section(app: &App, area: Rect, buf: &mut Buffer) {
         .split(inner_area);
 
     // Current download folder display
-    let current_folder = &app.cache.tab3_data.current_download_folder;
+    let current_folder = &app.simulation_controller_data.download_folder;
     let folder_display = Paragraph::new(format!("Current: {}", current_folder))
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center)
@@ -233,7 +253,7 @@ fn render_logging_preferences_section(app: &App, area: Rect, buf: &mut Buffer) {
     // 1. Choose Target sub-section
     render_choose_target_section(app, logging_layout[0], buf);
 
-    // 2. Choose Log Type sub-section  
+    // 2. Choose Log Type sub-section
     render_choose_log_type_section(app, logging_layout[1], buf);
 }
 
@@ -242,7 +262,8 @@ fn render_choose_target_section(app: &App, area: Rect, buf: &mut Buffer) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(
-            if app.cache.cursor == 1 && app.cache.tab3_data.selected_category == 2 {
+            if app.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
+                && app.cache.tab3_data.selected_middle_box == 0 {
                 app.animation_color()
             } else {
                 MAIN_BLOCK_BORDERS
@@ -253,13 +274,12 @@ fn render_choose_target_section(app: &App, area: Rect, buf: &mut Buffer) {
     let inner_area = target_block.inner(area);
     target_block.render(area, buf);
 
-    // Available targets list
-
     let target_content = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),  // Current selection
-            Constraint::Min(2),     // Available options
+            Constraint::Length(1),  // Available label
+            Constraint::Length(1),  // Available options
         ])
         .split(inner_area);
 
@@ -269,13 +289,19 @@ fn render_choose_target_section(app: &App, area: Rect, buf: &mut Buffer) {
         .alignment(Alignment::Center);
     current_target.render(target_content[0], buf);
 
+    // Available label
+    let available_label = Paragraph::new("Available:")
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+    available_label.render(target_content[1], buf);
+
     // Available targets
     let targets_text = app.cache.tab3_data.available_targets.join(" | ");
-    let targets_para = Paragraph::new(format!("Available: {}", targets_text))
+    let targets_para = Paragraph::new(targets_text)
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    targets_para.render(target_content[1], buf);
+    targets_para.render(target_content[2], buf);
 }
 
 fn render_choose_log_type_section(app: &App, area: Rect, buf: &mut Buffer) {
@@ -283,7 +309,8 @@ fn render_choose_log_type_section(app: &App, area: Rect, buf: &mut Buffer) {
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(
-            if app.cache.cursor == 1 {
+            if app.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
+                && app.cache.tab3_data.selected_middle_box == 1 {
                 app.animation_color()
             } else {
                 MAIN_BLOCK_BORDERS
@@ -308,7 +335,8 @@ fn render_choose_log_type_section(app: &App, area: Rect, buf: &mut Buffer) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),  // Current selection
-            Constraint::Min(2),     // Available options
+            Constraint::Length(1),  // Available label
+            Constraint::Length(1),  // Available options
         ])
         .split(inner_area);
 
@@ -318,19 +346,24 @@ fn render_choose_log_type_section(app: &App, area: Rect, buf: &mut Buffer) {
         .alignment(Alignment::Center);
     current_level.render(log_type_content[0], buf);
 
-    // Available log types with colors
-    let mut log_lines = Vec::new();
+    // Available label
+    let available_label = Paragraph::new("Available:")
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+    available_label.render(log_type_content[1], buf);
+
+    // Available log types with colors - all in one line
+    let mut spans = Vec::new();
+
     for (i, (log_type, color)) in log_types.iter().enumerate() {
-        let prefix = if i == 0 { "Available: " } else { "          " };
-        log_lines.push(Line::from(vec![
-            Span::styled(prefix, Style::default().fg(Color::Gray)),
-            Span::styled(*log_type, Style::default().fg(*color).add_modifier(Modifier::BOLD)),
-            if i < log_types.len() - 1 { Span::raw(" | ") } else { Span::raw("") },
-        ]));
+        spans.push(Span::styled(*log_type, Style::default().fg(*color).add_modifier(Modifier::BOLD)));
+        if i < log_types.len() - 1 {
+            spans.push(Span::raw(" | "));
+        }
     }
 
-    let log_types_para = Paragraph::new(log_lines)
+    let log_types_para = Paragraph::new(Line::from(spans))
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    log_types_para.render(log_type_content[1], buf);
+    log_types_para.render(log_type_content[2], buf);
 }
