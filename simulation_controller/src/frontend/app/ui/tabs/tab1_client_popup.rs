@@ -1392,14 +1392,14 @@ pub(super) mod chat_rendering{
         let mut scroll_state = ScrollViewState::default();
         
         // Calculate the position of the selected message
-        let mut cumulative_height = 0;
+        let mut cumulative_height: usize = 0;
         for i in 0..selected_message_index {
-            cumulative_height += message_heights[i];
+            cumulative_height += message_heights[i] as usize;
         }
         
         // Scroll to position the selected message in the center of the view
         let view_height = area.height as usize;
-        let selected_message_height = message_heights[selected_message_index];
+        let selected_message_height = message_heights[selected_message_index] as usize;
         let target_scroll = cumulative_height.saturating_sub(view_height / 2).saturating_add(selected_message_height / 2);
         
         // Apply scroll
