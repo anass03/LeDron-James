@@ -5,44 +5,25 @@ use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph, Widget, Wrap, HighlightSpacing};
-use crate::frontend::app::models::tab3_types::{NavigationLevel};
+use crate::frontend::app::models::tab3_types::{LogLevel, NavigationLevel};
 use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
+
+// ============= TAB3.RS RENDER FUNCTION CHANGES =============
 
 pub(super) fn render_tab3(app: &App, area: Rect, buf: &mut Buffer) {
     let main_layout = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Percentage(40), // Settings content (new sections)
-            Constraint::Percentage(60), // Settings categories
+            Constraint::Percentage(60), // Settings categories (now on left)
+            Constraint::Percentage(40), // Settings content (now on right)
         ])
         .split(area);
 
-    let content_area = main_layout[0];
-    let categories_area = main_layout[1];
+    let categories_area = main_layout[0];  // Categories now on the left
+    let content_area = main_layout[1];     // Settings content now on the right
 
-    // Settings Content Area (Now on the left)
-    let mut content_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .border_style(Style::default().fg(
-            match app.cache.tab3_data.navigation_level {
-                NavigationLevel::OuterBoxes | NavigationLevel::MiddleBoxes => {
-                    app.animation_color()
-                }
-                _ => MAIN_BLOCK_BORDERS
-            }
-        ))
-        .title(" Settings Options ")
-        .title_alignment(Alignment::Center);
-
-    let inner_content_area = content_block.inner(content_area);
-    content_block.render(content_area, buf);
-
-    // Content based on selected category (for now showing general settings)
-    render_settings_content(app, inner_content_area, buf);
-
-    // Settings Categories List (Now on the right)
+    // Settings Categories List (Now on the left)
     let mut categories_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -92,6 +73,27 @@ pub(super) fn render_tab3(app: &App, area: Rect, buf: &mut Buffer) {
         .highlight_spacing(HighlightSpacing::Always);
 
     categories_list.render(categories_area, buf);
+
+    // Settings Content Area (Now on the right)
+    let mut content_block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(
+            match app.cache.tab3_data.navigation_level {
+                NavigationLevel::OuterBoxes | NavigationLevel::MiddleBoxes => {
+                    app.animation_color()
+                }
+                _ => MAIN_BLOCK_BORDERS
+            }
+        ))
+        .title(" Settings Options ")
+        .title_alignment(Alignment::Center);
+
+    let inner_content_area = content_block.inner(content_area);
+    content_block.render(content_area, buf);
+
+    // Content based on selected category (for now showing general settings)
+    render_settings_content(app, inner_content_area, buf);
 
     // Show file explorer overlay if browsing for download folder
     if app.cache.tab3_data.browsing_for_download_folder {
@@ -155,11 +157,11 @@ fn render_settings_content(app: &App, area: Rect, buf: &mut Buffer) {
         .alignment(Alignment::Center);
     header.render(header_area, buf);
 
-    // Main content - NEW LAYOUT with 3 sections as requested
+    // Main content - Updated layout to accommodate larger download folder section
     let settings_content = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(6),  // Choose Download Folder
+            Constraint::Length(8),  // Choose Download Folder (increased from 6 to 8)
             Constraint::Min(8),     // Logging Preferences (outer box)
             Constraint::Min(2),     // Remaining space
         ])
@@ -196,22 +198,27 @@ fn render_download_folder_section(app: &App, area: Rect, buf: &mut Buffer) {
     let inner_area = download_folder_block.inner(area);
     download_folder_block.render(area, buf);
 
-    // Split inner area for label and field
+    // Split inner area for label and field - Updated to accommodate three lines
     let folder_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(1),  // Label
-            Constraint::Length(1),  // Current folder display
+            Constraint::Length(3),  // Current folder display (increased from 1 to 3 lines)
             Constraint::Length(1),  // Browse button/instruction
         ])
         .split(inner_area);
 
-    // Current download folder display
+    // Current download folder display - Updated to format better for multiple lines
     let current_folder = &app.simulation_controller_data.download_folder;
-    let folder_display = Paragraph::new(format!("Current: {:?}", current_folder))
-        .style(Style::default().fg(Color::White))
+    let folder_path_str = current_folder.to_string_lossy().to_string();
+
+    // Format the folder display text
+    let folder_display_text = format!("Current:\n{}", folder_path_str);
+
+    let folder_display = Paragraph::new(folder_display_text)
+        .style(Style::default().fg(Color::Green))
         .alignment(Alignment::Center)
-        .wrap(Wrap { trim: true });
+        .wrap(Wrap { trim: true });  // Enable text wrapping
     folder_display.render(folder_layout[1], buf);
 
     // Browse instruction
@@ -269,7 +276,7 @@ fn render_choose_target_section(app: &App, area: Rect, buf: &mut Buffer) {
                 MAIN_BLOCK_BORDERS
             }
         ))
-        .title(" Choose Target ");
+        .title(" Choose Target(s) ");
 
     let inner_area = target_block.inner(area);
     target_block.render(area, buf);
@@ -277,28 +284,73 @@ fn render_choose_target_section(app: &App, area: Rect, buf: &mut Buffer) {
     let target_content = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Current selection
+            Constraint::Length(1),  // Selected targets display
             Constraint::Length(1),  // Available label
-            Constraint::Length(1),  // Available options
+            Constraint::Length(2),  // Available options with navigation
         ])
         .split(inner_area);
 
-    // Current target display
-    let current_target = Paragraph::new(format!("Current: {}", &app.cache.tab3_data.current_log_target))
+    // Selected targets display
+    let selected_text = if app.cache.tab3_data.selected_targets.is_empty() {
+        "No targets selected".to_string()
+    } else {
+        format!("Selected: {}", app.cache.tab3_data.selected_targets.join(", "))
+    };
+
+    let selected_targets_para = Paragraph::new(selected_text)
         .style(Style::default().fg(Color::Green))
-        .alignment(Alignment::Center);
-    current_target.render(target_content[0], buf);
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    selected_targets_para.render(target_content[0], buf);
 
     // Available label
-    let available_label = Paragraph::new("Available:")
+    let available_label = Paragraph::new("Available targets (←/→ to navigate, Enter to select/deselect):")
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center);
     available_label.render(target_content[1], buf);
 
-    // Available targets
-    let targets_text = app.cache.tab3_data.available_targets.join(" | ");
-    let targets_para = Paragraph::new(targets_text)
-        .style(Style::default().fg(Color::Gray))
+    // Create spans for each target with highlighting
+    let mut target_spans = Vec::new();
+    for (i, target) in app.cache.tab3_data.available_targets.iter().enumerate() {
+        if i > 0 {
+            // Add separator
+            target_spans.push(Span::styled(" | ", Style::default().fg(Color::Gray)));
+        }
+
+        // Check cursor position and selection status
+        let is_cursor_here = i == app.cache.tab3_data.target_cursor;
+        let is_selected = app.cache.tab3_data.selected_targets.contains(target);
+
+        let target_style = if is_cursor_here && is_selected {
+            // Cursor on selected item: green background with white text
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else if is_cursor_here {
+            // Cursor on unselected item: blue background
+            Style::default()
+                .fg(Color::White)
+                .bg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else if is_selected {
+            // Selected but not cursor: green text, bold
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            // Neither cursor nor selected: normal bold
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+        };
+
+        target_spans.push(Span::styled(target.clone(), target_style));
+    }
+
+    // Render the targets line
+    let targets_line = Line::from(target_spans);
+    let targets_para = Paragraph::new(vec![targets_line])
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
     targets_para.render(target_content[2], buf);
@@ -316,54 +368,90 @@ fn render_choose_log_type_section(app: &App, area: Rect, buf: &mut Buffer) {
                 MAIN_BLOCK_BORDERS
             }
         ))
-        .title(" Choose Log Type ");
+        .title(" Choose Log Level(s) ");
 
     let inner_area = log_type_block.inner(area);
     log_type_block.render(area, buf);
 
-    // Available log types
-    let log_types = vec![
-        ("TRACE", Color::Magenta),
-        ("DEBUG", Color::Green),
-        ("INFO", Color::White),
-        ("WARN", Color::Yellow),
-        ("ERROR", Color::Red),
-        ("FATAL", Color::LightRed),
-    ];
-
     let log_type_content = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(1),  // Current selection
+            Constraint::Length(1),  // Selected log levels display
             Constraint::Length(1),  // Available label
-            Constraint::Length(1),  // Available options
+            Constraint::Length(2),  // Available options with navigation
         ])
         .split(inner_area);
 
-    // Current log level display
-    let current_level = Paragraph::new(format!("Current: {}", app.cache.tab3_data.current_log_level.to_string()))
+    // Selected log levels display
+    let selected_text = if app.cache.tab3_data.selected_log_levels.is_empty() {
+        "No log levels selected".to_string()
+    } else {
+        let selected_names: Vec<&str> = app.cache.tab3_data.selected_log_levels
+            .iter()
+            .map(|level| level.to_string())
+            .collect();
+        format!("Selected: {}", selected_names.join(", "))
+    };
+
+    let selected_levels_para = Paragraph::new(selected_text)
         .style(Style::default().fg(Color::Green))
-        .alignment(Alignment::Center);
-    current_level.render(log_type_content[0], buf);
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: true });
+    selected_levels_para.render(log_type_content[0], buf);
 
     // Available label
-    let available_label = Paragraph::new("Available:")
+    let available_label = Paragraph::new("Available log levels (←/→ to navigate, Enter to select/deselect):")
         .style(Style::default().fg(Color::Gray))
         .alignment(Alignment::Center);
     available_label.render(log_type_content[1], buf);
 
-    // Available log types with colors - all in one line
-    let mut spans = Vec::new();
+    // Define all log levels with their colors
+    let log_levels = LogLevel::all_levels();
 
-    for (i, (log_type, color)) in log_types.iter().enumerate() {
-        spans.push(Span::styled(*log_type, Style::default().fg(*color).add_modifier(Modifier::BOLD)));
-        if i < log_types.len() - 1 {
-            spans.push(Span::raw(" | "));
+    // Create spans for each log level with highlighting
+    let mut log_level_spans = Vec::new();
+    for (i, level) in log_levels.iter().enumerate() {
+        if i > 0 {
+            // Add separator
+            log_level_spans.push(Span::styled(" | ", Style::default().fg(Color::Gray)));
         }
+
+        // Check cursor position and selection status
+        let is_cursor_here = i == app.cache.tab3_data.log_level_cursor;
+        let is_selected = app.cache.tab3_data.selected_log_levels.contains(level);
+        let level_color = level.color();
+
+        let log_level_style = if is_cursor_here && is_selected {
+            // Cursor on selected item: green background with original color
+            Style::default()
+                .fg(level_color)
+                .bg(Color::Green)
+                .add_modifier(Modifier::BOLD)
+        } else if is_cursor_here {
+            // Cursor on unselected item: blue background with original color
+            Style::default()
+                .fg(level_color)
+                .bg(Color::Blue)
+                .add_modifier(Modifier::BOLD)
+        } else if is_selected {
+            // Selected but not cursor: original color with green underline/modification
+            Style::default()
+                .fg(level_color)
+                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED)
+        } else {
+            // Neither cursor nor selected: original color, bold
+            Style::default()
+                .fg(level_color)
+                .add_modifier(Modifier::BOLD)
+        };
+
+        log_level_spans.push(Span::styled(level.to_string().to_string(), log_level_style));
     }
 
-    let log_types_para = Paragraph::new(Line::from(spans))
+    // Render the log levels line
+    let log_levels_line = Line::from(log_level_spans);
+    let log_levels_para = Paragraph::new(vec![log_levels_line])
         .alignment(Alignment::Center)
         .wrap(Wrap { trim: true });
-    log_types_para.render(log_type_content[2], buf);
+    log_levels_para.render(log_type_content[2], buf);
 }

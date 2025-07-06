@@ -51,12 +51,55 @@ impl App<'_> {
                 }
             }
             KeyCode::Left => {
-                // Move to left panel (settings content) - always go to outer boxes level
-                self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
+                match self.cache.tab3_data.navigation_level {
+                    NavigationLevel::MiddleBoxes => {
+                        match self.cache.tab3_data.selected_middle_box {
+                            0 => {
+                                // Navigate left in targets
+                                if self.cache.tab3_data.target_cursor > 0 {
+                                    self.cache.tab3_data.target_cursor -= 1;
+                                }
+                            }
+                            1 => {
+                                // Navigate left in log levels
+                                if self.cache.tab3_data.log_level_cursor > 0 {
+                                    self.cache.tab3_data.log_level_cursor -= 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {
+                        // Original left navigation (move to categories)
+                        self.cache.tab3_data.navigation_level = NavigationLevel::Categories;
+                    }
+                }
             }
             KeyCode::Right => {
-                // Move to right panel (categories)
-                self.cache.tab3_data.navigation_level = NavigationLevel::Categories;
+                match self.cache.tab3_data.navigation_level {
+                    NavigationLevel::MiddleBoxes => {
+                        match self.cache.tab3_data.selected_middle_box {
+                            0 => {
+                                // Navigate right in targets
+                                if self.cache.tab3_data.target_cursor < self.cache.tab3_data.available_targets.len() - 1 {
+                                    self.cache.tab3_data.target_cursor += 1;
+                                }
+                            }
+                            1 => {
+                                // Navigate right in log levels
+                                let log_levels = LogLevel::all_levels();
+                                if self.cache.tab3_data.log_level_cursor < log_levels.len() - 1 {
+                                    self.cache.tab3_data.log_level_cursor += 1;
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                    _ => {
+                        // Original right navigation (move to settings content)
+                        self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
+                    }
+                }
             }
             KeyCode::Enter => {
                 match self.cache.tab3_data.navigation_level {
@@ -84,30 +127,45 @@ impl App<'_> {
                     NavigationLevel::MiddleBoxes => {
                         match self.cache.tab3_data.selected_middle_box {
                             0 => {
-                                // Choose Target - cycle through available targets
-                                let current_index = self.cache.tab3_data.available_targets
-                                    .iter()
-                                    .position(|target| target == &self.cache.tab3_data.current_log_target)
-                                    .unwrap_or(0);
+                                // Choose Target - toggle selection of current cursor target
+                                let cursor_target = &self.cache.tab3_data.available_targets[self.cache.tab3_data.target_cursor].clone();
 
-                                let next_index = (current_index + 1) % self.cache.tab3_data.available_targets.len();
-                                self.cache.tab3_data.current_log_target =
-                                    self.cache.tab3_data.available_targets[next_index].clone();
-
-                                self.simulation_controller_data.logs.push_sc_log(
-                                    crate::backend::sc_models::LogType::INFO,
-                                    format!("Log target changed to: {}", self.cache.tab3_data.current_log_target)
-                                );
+                                if self.cache.tab3_data.selected_targets.contains(cursor_target) {
+                                    // Deselect: remove from selected list
+                                    self.cache.tab3_data.selected_targets.retain(|t| t != cursor_target);
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        crate::backend::sc_models::LogType::INFO,
+                                        format!("Deselected target: {}", cursor_target)
+                                    );
+                                } else {
+                                    // Select: add to selected list
+                                    self.cache.tab3_data.selected_targets.push(cursor_target.clone());
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        crate::backend::sc_models::LogType::INFO,
+                                        format!("Selected target: {}", cursor_target)
+                                    );
+                                }
                             }
                             1 => {
-                                // Choose Log Type - cycle through log levels
-                                self.cache.tab3_data.current_log_level =
-                                    self.cache.tab3_data.current_log_level.next();
+                                // Choose Log Type - toggle selection of current cursor log level
+                                let log_levels = LogLevel::all_levels();
+                                let cursor_log_level = &log_levels[self.cache.tab3_data.log_level_cursor].clone();
 
-                                self.simulation_controller_data.logs.push_sc_log(
-                                    crate::backend::sc_models::LogType::INFO,
-                                    format!("Log level changed to: {}", self.cache.tab3_data.current_log_level.to_string())
-                                );
+                                if self.cache.tab3_data.selected_log_levels.contains(cursor_log_level) {
+                                    // Deselect: remove from selected list
+                                    self.cache.tab3_data.selected_log_levels.retain(|l| l != cursor_log_level);
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        crate::backend::sc_models::LogType::INFO,
+                                        format!("Deselected log level: {}", cursor_log_level.to_string())
+                                    );
+                                } else {
+                                    // Select: add to selected list
+                                    self.cache.tab3_data.selected_log_levels.push(cursor_log_level.clone());
+                                    self.simulation_controller_data.logs.push_sc_log(
+                                        crate::backend::sc_models::LogType::INFO,
+                                        format!("Selected log level: {}", cursor_log_level.to_string())
+                                    );
+                                }
                             }
                             _ => {}
                         }
@@ -156,39 +214,84 @@ impl App<'_> {
                 }
             }
             KeyCode::Char('[') => {
+                // Keep the old bracket navigation for backwards compatibility (if needed)
                 if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
                     && self.cache.tab3_data.selected_middle_box == 1 {
-                    // Previous log level when Log Type is selected
-                    self.cache.tab3_data.current_log_level =
-                        self.cache.tab3_data.current_log_level.prev();
-
-                    self.simulation_controller_data.logs.push_sc_log(
-                        crate::backend::sc_models::LogType::INFO,
-                        format!("Log level changed to: {}", self.cache.tab3_data.current_log_level.to_string())
-                    );
+                    // Navigate left in log levels (alternative to Left arrow)
+                    if self.cache.tab3_data.log_level_cursor > 0 {
+                        self.cache.tab3_data.log_level_cursor -= 1;
+                    }
                 }
             }
             KeyCode::Char(']') => {
+                // Keep the old bracket navigation for backwards compatibility (if needed)
                 if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes
                     && self.cache.tab3_data.selected_middle_box == 1 {
-                    // Next log level when Log Type is selected
-                    self.cache.tab3_data.current_log_level =
-                        self.cache.tab3_data.current_log_level.next();
-
-                    self.simulation_controller_data.logs.push_sc_log(
-                        crate::backend::sc_models::LogType::INFO,
-                        format!("Log level changed to: {}", self.cache.tab3_data.current_log_level.to_string())
-                    );
+                    // Navigate right in log levels (alternative to Right arrow)
+                    let log_levels = LogLevel::all_levels();
+                    if self.cache.tab3_data.log_level_cursor < log_levels.len() - 1 {
+                        self.cache.tab3_data.log_level_cursor += 1;
+                    }
                 }
             }
             KeyCode::Tab => {
-                // Toggle between left panel (settings) and right panel (categories)
+                // Toggle between left panel (categories) and right panel (settings)
                 match self.cache.tab3_data.navigation_level {
                     NavigationLevel::Categories => {
                         self.cache.tab3_data.navigation_level = NavigationLevel::OuterBoxes;
                     }
                     _ => {
                         self.cache.tab3_data.navigation_level = NavigationLevel::Categories;
+                    }
+                }
+            }
+            KeyCode::Char('c') | KeyCode::Char('C') => {
+                // Clear all selections in current section (optional feature)
+                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes {
+                    match self.cache.tab3_data.selected_middle_box {
+                        0 => {
+                            // Clear all selected targets
+                            let count = self.cache.tab3_data.selected_targets.len();
+                            self.cache.tab3_data.selected_targets.clear();
+                            self.simulation_controller_data.logs.push_sc_log(
+                                crate::backend::sc_models::LogType::INFO,
+                                format!("Cleared {} selected targets", count)
+                            );
+                        }
+                        1 => {
+                            // Clear all selected log levels
+                            let count = self.cache.tab3_data.selected_log_levels.len();
+                            self.cache.tab3_data.selected_log_levels.clear();
+                            self.simulation_controller_data.logs.push_sc_log(
+                                crate::backend::sc_models::LogType::INFO,
+                                format!("Cleared {} selected log levels", count)
+                            );
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            KeyCode::Char('a') | KeyCode::Char('A') => {
+                // Select all in current section (optional feature)
+                if self.cache.tab3_data.navigation_level == NavigationLevel::MiddleBoxes {
+                    match self.cache.tab3_data.selected_middle_box {
+                        0 => {
+                            // Select all targets
+                            self.cache.tab3_data.selected_targets = self.cache.tab3_data.available_targets.clone();
+                            self.simulation_controller_data.logs.push_sc_log(
+                                crate::backend::sc_models::LogType::INFO,
+                                format!("Selected all {} targets", self.cache.tab3_data.selected_targets.len())
+                            );
+                        }
+                        1 => {
+                            // Select all log levels
+                            self.cache.tab3_data.selected_log_levels = LogLevel::all_levels();
+                            self.simulation_controller_data.logs.push_sc_log(
+                                crate::backend::sc_models::LogType::INFO,
+                                format!("Selected all {} log levels", self.cache.tab3_data.selected_log_levels.len())
+                            );
+                        }
+                        _ => {}
                     }
                 }
             }

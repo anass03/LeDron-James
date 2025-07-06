@@ -5,9 +5,16 @@ pub(crate) struct Tab3 {
     pub selected_outer_box: u8, // 0: Download Folder, 1: Logging Preferences
     pub selected_middle_box: u8, // 0: Choose Target, 1: Choose Log Type (within Logging Preferences)
     pub selected_category: u8, // Index of selected category in right panel
-    pub current_log_target: String,
-    pub current_log_level: LogLevel,
+
+    // Multi-select target system
+    pub selected_targets: Vec<String>, // List of selected targets
+    pub target_cursor: usize, // Which target we're currently highlighting
     pub available_targets: Vec<String>,
+
+    // Multi-select log level system
+    pub selected_log_levels: Vec<LogLevel>, // List of selected log levels
+    pub log_level_cursor: usize, // Which log level we're currently highlighting
+
     pub browsing_for_download_folder: bool, // Flag to know if we're browsing for download folder
 }
 
@@ -35,8 +42,10 @@ impl Default for Tab3 {
             selected_outer_box: 0,
             selected_middle_box: 0,
             selected_category: 0,
-            current_log_target: "main".to_string(),
-            current_log_level: LogLevel::Debug,
+
+            // Initialize with "main" target selected
+            selected_targets: vec!["main".to_string()],
+            target_cursor: 0,
             available_targets: vec![
                 "main".to_string(),
                 "simulation_controller".to_string(),
@@ -45,6 +54,11 @@ impl Default for Tab3 {
                 "topology".to_string(),
                 "All targets".to_string(),
             ],
+
+            // Initialize with Debug log level selected
+            selected_log_levels: vec![LogLevel::Debug],
+            log_level_cursor: 1, // Start at Debug (index 1)
+
             browsing_for_download_folder: false,
         }
     }
@@ -73,25 +87,14 @@ impl LogLevel {
         }
     }
 
-    pub fn next(&self) -> Self {
-        match self {
-            LogLevel::Trace => LogLevel::Debug,
-            LogLevel::Debug => LogLevel::Info,
-            LogLevel::Info => LogLevel::Warn,
-            LogLevel::Warn => LogLevel::Error,
-            LogLevel::Error => LogLevel::Fatal,
-            LogLevel::Fatal => LogLevel::Trace,
-        }
-    }
-
-    pub fn prev(&self) -> Self {
-        match self {
-            LogLevel::Trace => LogLevel::Fatal,
-            LogLevel::Debug => LogLevel::Trace,
-            LogLevel::Info => LogLevel::Debug,
-            LogLevel::Warn => LogLevel::Info,
-            LogLevel::Error => LogLevel::Warn,
-            LogLevel::Fatal => LogLevel::Error,
-        }
+    pub fn all_levels() -> Vec<LogLevel> {
+        vec![
+            LogLevel::Trace,
+            LogLevel::Debug,
+            LogLevel::Info,
+            LogLevel::Warn,
+            LogLevel::Error,
+            LogLevel::Fatal,
+        ]
     }
 }
