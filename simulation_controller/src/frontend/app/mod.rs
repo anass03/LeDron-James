@@ -486,6 +486,9 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                             }
                         }
                     },
+                    RendererCommand::ChangeDownloadFolder(path) => {
+                        download_folder = path;
+                    }
                 }
             }
             // Time to check for redraw-requests

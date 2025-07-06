@@ -3,7 +3,7 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use log::error;
-use host::{ClientId, FileId, MediaId};
+use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
 use server::chat::Chat;
@@ -361,18 +361,16 @@ impl App<'_> {
                             }
                             KeyCode::Enter => {
                                 // I get the selected item and pass it to the second page struct
+                                let mut request:bool = false;
+                                let mut opt_server_id: ServerId = 0;
                                 match known_chat_servers.get((self.cache.tab1_data.popup_cursor as usize)){
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
                                     }
                                     Some(selected_server_id) => {
-                                        match self.simulation_controller_data.request_registration_to_chat(id,selected_server_id.clone()){
-                                            Ok(_) => (),
-                                            Err(str) => {
-                                                error!(target:"main", "[LEDRON-CLI] Couldn't registrate to chat:\n{:?}",str);
-                                            }
-                                        }
+                                        request=true;
+                                        opt_server_id = selected_server_id.clone();
                                         self.cache.tab1_data.popup_cursor = 0;
                                         self.cache.tab1_data.viewing =
                                             ViewedTab1::Popup((
@@ -387,6 +385,15 @@ impl App<'_> {
                                             ))
                                     }
                                 }
+                                if request{
+                                    match self.simulation_controller_data.request_registration_to_chat(id,opt_server_id) {
+                                        Ok(_) => (),
+                                        Err(str) => {
+                                            error!(target:"main", "[LEDRON-CLI] Couldn't registrate to chat:\n{:?}",str);
+                                        }
+                                    }
+                                }
+
                             }
                             _ => (),
                         }
