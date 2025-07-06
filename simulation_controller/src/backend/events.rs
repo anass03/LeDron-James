@@ -111,9 +111,9 @@ impl SimulationControllerData {
             HostEvent::Route(host_id, route) => {
                 self.stats.node_statistic
                     .entry(host_id)
-                    .and_modify(|node_stat| node_stat.routh = route.clone())
+                    .and_modify(|node_stat| node_stat.route = route.clone())
                     .or_insert_with(|| NodeStatistics {
-                        routh: route,
+                        route,
                         ..Default::default()
                     });
             },
