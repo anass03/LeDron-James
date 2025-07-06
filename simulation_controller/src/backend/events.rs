@@ -18,6 +18,7 @@ use crate::backend::simulation_controller::SimulationControllerData;
 impl SimulationControllerData {
     /// - Drone Events
     pub fn handle_drone_event(&mut self, event: DroneEvent) -> Result<(), (LogType, String)> {
+
         match event {
             DroneEvent::PacketSent(_packet) => {
                 self.stats.received_packet();
