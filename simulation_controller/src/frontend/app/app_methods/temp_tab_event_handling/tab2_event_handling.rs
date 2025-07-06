@@ -1,6 +1,9 @@
 use log::debug;
 use crate::frontend::app::App;
 use ratatui::crossterm::event::KeyCode;
+use std::fs::File;
+use std::io::Write;
+use std::path::Path;
 use crate::frontend::app::models::main_types::{AppMode, InputMode};
 
 impl App<'_> {
@@ -72,11 +75,9 @@ impl App<'_> {
                     // Load the file content into the TOML text area
                     self.cache.text_buffer.toml_text_area = tui_textarea::TextArea::from(content.lines());
 
-                    // Log success
-                    self.simulation_controller_data.logs.push_sc_log(
-                        crate::backend::sc_models::LogType::INFO,
-                        format!("Loaded topology template: {}", filename)
-                    );
+                    // Automatically save to chosen_topology.toml
+                    self.save_text_buffer();
+
                 }
                 Err(err) => {
                     // Log error if file can't be read

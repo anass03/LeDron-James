@@ -276,9 +276,9 @@ impl SimulationControllerData {
     }
 
     pub fn request_client_list(&mut self, client_id: ClientId, server_id: ServerId) -> Result<(), String> {
-            if let Err(e) = self.request_registration_to_chat(client_id, server_id) {
-                debug!(target: "main", "Failed to register client: {}", e);
-            }
+        if let Err(e) = self.request_registration_to_chat(client_id, server_id) {
+            debug!(target: "main", "Failed to register client: {}", e);
+        }
 
         debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
         for client in &self.clients {

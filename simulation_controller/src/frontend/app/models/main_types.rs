@@ -21,7 +21,7 @@ pub(in crate::frontend::app) struct Settings{
 impl Settings{
     pub(in crate::frontend::app) fn load() ->Self{
         Self{
-            toml_path: "topologies/personalized_network.toml".to_string()
+            toml_path: "topologies/chosen_network.toml".to_string()
         }
     }
 }

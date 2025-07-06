@@ -26,7 +26,7 @@ fn main() -> std::io::Result<()> {
 
     let mut thread_handles = HashMap::new();
     let mut simulation_controller_data = SimulationControllerData::default();
-    match initialize("topologies/double_chain_network.toml") {
+    match initialize("topologies/chosen_network.toml") {
         Ok((simulation_controller, handles)) => {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;
