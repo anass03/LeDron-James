@@ -371,6 +371,24 @@ impl SimulationControllerData {
         let command = ControllerShortcut(packet);
         self.send_client_command(client_id, command)
     }
+
+    // Method 1: Increment packet count
+    pub fn drone_packet_exchanged(&mut self, drone_id: NodeId) {
+        *self.drone_packet_count.entry(drone_id).or_insert(0) += 1;
+    }
+
+    // Method 2: Get ordered vec of (DroneId, packet_count) - most utilized first
+    pub fn get_utilization(&self) -> Vec<(NodeId, u64)> {
+        let mut drones: Vec<(NodeId, u64)> = self.drone_packet_count
+            .iter()
+            .map(|(&id, &count)| (id, count))
+            .collect();
+
+        // Sort by packet count - highest first
+        drones.sort_by(|a, b| b.1.cmp(&a.1));
+
+        drones
+    }
 }
 
 #[inline]

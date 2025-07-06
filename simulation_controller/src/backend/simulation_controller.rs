@@ -34,6 +34,7 @@ pub struct SimulationControllerData {
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_types: HashMap<NodeId, DroneType>,
     pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has! Has to be updated by Initializer / SC Backend
+    pub drone_packet_count: HashMap<NodeId, u64>,
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
@@ -136,6 +137,7 @@ impl SimulationControllerData {
 
             tx_to_renderer: None,
             rx_from_renderer: None,
+            drone_packet_count: Default::default(),
         }
     }
 }
@@ -148,6 +150,7 @@ impl Default for SimulationControllerData {
             servers: vec![],
             drone_types: Default::default(),
             running_network: HashMap::new(),
+            drone_packet_count: Default::default(),
             drone_command_sender: Default::default(),
             client_command_sender: Default::default(),
             server_command_sender: Default::default(),
