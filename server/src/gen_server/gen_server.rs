@@ -1,7 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::io::Cursor;
-use std::time::Instant;
+use std::thread;
+use std::time::{Duration, Instant};
 use crossbeam_channel::{Receiver, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
 use wg_2024::packet::{Fragment, NodeType, Packet, FRAGMENT_DSIZE};
@@ -152,26 +153,42 @@ impl GenServer {
 
     /// Sends a high-level response to a client.
     pub fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
-        if let Some((msg, meta,total)) = self.prepare_message(&response) {
+        if let Some((msg, meta, total)) = self.prepare_message(&response) {
+            // Se c'è metadata, ma non siamo già in un Sending, invio la notifica di download
             if let Some((content_type, id)) = meta {
-                self.send_download(destination, total, content_type, id);
+                if !matches!(response, ServerToClient::Sending(_, _)) {
+                    self.send_download(destination, total, content_type, id);
+                }
             }
+            // Poi frammento e mando il messaggio vero e proprio
             if let Err(e) = self.build_msg_fragment(destination, msg) {
-                self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Failed to send response to {}: {}", destination, e));
+                self.send_logging(
+                    LogType::ERROR,
+                    LogModule::PACKET,
+                    format!("Failed to send response to {}: {}", destination, e),
+                );
             }
         } else {
-            self.send_logging(LogType::ERROR,LogModule::PACKET,"prepare_message returned None".to_string());
+            self.send_logging(
+                LogType::ERROR,
+                LogModule::PACKET,
+                "prepare_message returned None".to_string(),
+            );
         }
     }
+
 
     /// Sends a content download notification before sending the actual data.
     fn send_download(&mut self, destination: NodeId, total: usize, content: ContentType, id: String) {
         let cid = match content {
-            ContentType::File => ContentID::File(id),
+            ContentType::File  => ContentID::File(id),
             ContentType::Media => ContentID::Media(id),
         };
+        // Questa chiamata ricade su send_response, ma con un Sending(...):
+        // grazie al guard in send_response non ricondurrà send_download.
         self.send_response(ServerToClient::Sending(cid, total), destination);
     }
+
 
     /// Prepares a message for transmission, optionally extracting content metadata.
     fn prepare_message(&self, response: &ServerToClient) -> Option<(Message, Option<(ContentType, String)>, usize)> {
