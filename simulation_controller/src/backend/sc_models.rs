@@ -8,6 +8,7 @@ use server::chat::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use server::MessageSC::Message;
 use std::io::Write;
+use std::path::PathBuf;
 use wg_2024::controller::DroneCommand;
 use wg_2024::network::NodeId;
 use client::ClientCommand;
@@ -132,8 +133,8 @@ pub enum RendererCommand{
     ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>))
 }
 pub enum RendererResponse{
-    EncodedMedia((ServerId, MediaId, NetCacheMedia)),
-    EncodedFile((ServerId, MediaId, NetCacheFile)),
+    EncodedMediaSteps((u8,ServerId, MediaId, NetCacheMedia)),
+    EncodedFileSteps((u8,ServerId, MediaId, NetCacheFile)),
     Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 
@@ -171,7 +172,7 @@ impl NetCache{
 
 pub enum NetCacheMedia {
     Downloading(f32), // f32 € [0,100] representing client loading status.
-    Downloaded(File), // ByteStream of the file the clients sends to the Sim. Controller
+    Downloaded(PathBuf), // ByteStream of the file the clients sends to the Sim. Controller
     Rendering(f32), // f32 € [0,100] representing Sim. Controller loading status.
     Rendered(ThreadProtocol), // Rendered file that has to be
     // re-rendered each time Terminal changes its size.

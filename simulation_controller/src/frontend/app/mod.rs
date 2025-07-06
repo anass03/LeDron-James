@@ -10,16 +10,17 @@ use ratatui::{buffer::Buffer, layout::{
     Layout, Rect
 }, widgets::Widget, DefaultTerminal, Frame};
 
-use std::{io, io::Write, thread, time};
+use std::{fs, io, io::Write, thread, time};
 use std::cmp::PartialEq;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 use time::Instant;
 use host::{ClientId, FileId, MediaId, ServerId};
-use image::{DynamicImage, ImageBuffer, Rgb, Rgba};
+use image::{DynamicImage, ImageBuffer, Rgb, RgbImage, Rgba};
 use log::{error, info, warn};
 use rand::Rng;
 use ratatui::style::Stylize;
@@ -293,6 +294,8 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
 
     ((tx_cmd,rx_rsp),thread::spawn(move || {
         let mut channels: Vec<(Sender<FileRendererUpdate>, Receiver<ResizeRequest>)> = Vec::new();
+        let mut download_folder = PathBuf::from("assets");
+
 
         loop {
             // Ascolto il canale main
@@ -301,82 +304,116 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                     RendererCommand::Stop => {
                         break
                     }
-                    RendererCommand::AddChannel((tx,rx)) => {
+                    RendererCommand::AddChannel((tx, rx)) => {
                         channels.push((tx, rx));
                     },
-                    RendererCommand::EncodeMedia((tx_to_renderer, server_id,media_id,image))=> {
-                        if let Some(rgb_buffer) = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone()) {
-                            let dynamic_image = DynamicImage::ImageRgba8(rgb_buffer);
-                            match Picker::from_query_stdio(){
-                                Ok(pick) => {
-                                    let return_item = ThreadProtocol::new(tx_to_renderer,Some(pick.new_resize_protocol(dynamic_image)));
-                                    match tx_rsp.send(RendererResponse::EncodedMedia((server_id, media_id, return_item))){
-                                        Ok(_) => {
-                                            info!(target: "main", "[RENDERER] - Successfully sent an Encoded response");
+                    RendererCommand::EncodeMedia((tx_to_renderer, server_id, media_id, image)) => {
+                        let extension = media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id);
+                        // Construct path safely
+                        let path = download_folder.join(media_id.clone());
+                        // Ensure download directory exists
+                        if let Some(parent) = path.parent() {
+                            _ = fs::create_dir_all(parent);
+                        }
+                        // Create image buffer without cloning if possible
+                        let opt_rgba_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data);
+                        match extension{
+                            None => {}
+                            Some(ext) => {
+                                match opt_rgba_buffer{
+                                    None => {}
+                                    Some(rgba_buffer) => {
+                                        let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+                                        // Save based on extension
+                                        match ext.to_lowercase().as_str() {
+                                            "jpg" | "jpeg" => {
+                                                // Convert to RGB to drop alpha channel for JPEG
+                                                let rgb_image: RgbImage = dynamic_image.to_rgb8();
+                                                _ = rgb_image.save(&path);
+                                            },
+                                            _ => {
+                                                // For PNG and other formats that support alpha
+                                                _ = dynamic_image.save(&path);
+                                            }
+                                        };
+                                        match tx_rsp.send(RendererResponse::EncodedMediaSteps((0,server_id, media_id.clone(), NetCacheMedia::Downloaded(path)))) {
+                                            Ok(_) => {
+                                                info!(target: "main", "[RENDERER] - Successfully sent an Saved IN path response");
+                                            }
+                                            Err(str) => (),
                                         }
-                                        Err(str) => {
+
+                                        // PT2, we gotta send a Rendered request now!
+                                        match Picker::from_query_stdio(){
+                                            Ok(pick) => {
+                                                let return_item = ThreadProtocol::new(tx_to_renderer, Some(pick.new_resize_protocol(dynamic_image)));
+                                                match tx_rsp.send(RendererResponse::EncodedMediaSteps((1,server_id, media_id, NetCacheMedia::Rendered(return_item)))) {
+                                                    Ok(_) => {
+                                                        info!(target: "main", "[RENDERER] - Successfully sent an Encoded response");
+                                                    }
+                                                    Err(str) => {}
+                                                }
+                                            }
+                                            Err(err) => {
+                                                error!(target: "main", "{}", format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]",err.to_string()));
+                                            }
                                         }
                                     }
                                 }
-                                Err(err) => {
-                                    error!(target: "main", "{}", format!("[RENDERER] - Error rendering the image-buffer to picker-image [{:?}]",err.to_string()));
-                                }
-                            }
-                        }else{
-                            // Error
-                            error!(target: "main", "[RENDERER] - Error rendering the data buffer to image-buffer");
-                        }
-                    },
-                    RendererCommand::ComputeSetOfTopologies((top_algs)) => {
-                        let mut ret_vec:Vec<(NodeId,TopologyAlgorithm)> = Vec::new();
-                        for (id, mut top_alg) in top_algs {
-                            let mut iteration_count = 0;
-                            const MAX_ITERATIONS: u32 = 1000; // Safety limit
-                            let mut attempts = 0;
-                            const MAX_ATTEMPTS: u32 = 3; // Maximum reinitialization attempts for convergence issues
-                            
-                            'convergence_loop: loop {
-                                while top_alg.status != TopologyStatus::Converged && iteration_count < MAX_ITERATIONS {
-                                    top_alg.check_general_node_topology_status();
-                                    iteration_count += 1;
-                                }
-                                
-                                // Check if the map is valid (no NaN, no points outside boundaries)
-                                let is_valid = top_alg.is_map_valid();
-                                
-                                if top_alg.status == TopologyStatus::Converged && is_valid {
-                                    // Perfect! Converged and valid
-                                    break 'convergence_loop;
-                                } else if is_valid && top_alg.status != TopologyStatus::Converged {
-                                    // Valid but didn't converge - limited attempts
-                                    attempts += 1;
-                                    if attempts >= MAX_ATTEMPTS {
-                                        warn!(target: "main", "[RENDERER] - Node {} valid but didn't converge after {} attempts, keeping current state", id, MAX_ATTEMPTS);
-                                        break 'convergence_loop;
-                                    }
-                                    warn!(target: "main", "[RENDERER] - Node {} valid but didn't converge after {} iterations, reinitializing (attempt {}/{})", id, MAX_ITERATIONS, attempts, MAX_ATTEMPTS);
-                                } else {
-                                    // Invalid map - keep trying indefinitely
-                                    warn!(target: "main", "[RENDERER] - Node {} has invalid map (NaN or out of bounds), reinitializing", id);
-                                }
-                                
-                                // Reinitialize the topology algorithm
-                                let current_links = top_alg.map_links.clone();
-                                top_alg.initialize(current_links);
-                                iteration_count = 0;
-                            }
-                            
-                            ret_vec.push((id,top_alg));
-                        }
-                        match tx_rsp.send(Computed(ret_vec)){
-                            Ok(_) => {
-                                info!(target: "main", "[RENDERER] - Successfully sent computed topologies");
-                            },
-                            Err(err) => {
-                                error!(target: "main", "{}", format!("[RENDERER] - Error sending computed topologies [{:?}]", err.to_string()));
                             }
                         }
                     }
+                    RendererCommand::ComputeSetOfTopologies((top_algs)) => {
+                        let mut ret_vec: Vec<(NodeId, TopologyAlgorithm)> = Vec::new();
+                            for (id, mut top_alg) in top_algs {
+                                let mut iteration_count = 0;
+                                const MAX_ITERATIONS: u32 = 1000; // Safety limit
+                                let mut attempts = 0;
+                                const MAX_ATTEMPTS: u32 = 3; // Maximum reinitialization attempts for convergence issues
+
+                                'convergence_loop: loop {
+                                    while top_alg.status != TopologyStatus::Converged && iteration_count < MAX_ITERATIONS {
+                                        top_alg.check_general_node_topology_status();
+                                        iteration_count += 1;
+                                    }
+
+                                    // Check if the map is valid (no NaN, no points outside boundaries)
+                                    let is_valid = top_alg.is_map_valid();
+
+                                    if top_alg.status == TopologyStatus::Converged && is_valid {
+                                        // Perfect! Converged and valid
+                                        break 'convergence_loop;
+                                    } else if is_valid && top_alg.status != TopologyStatus::Converged {
+                                        // Valid but didn't converge - limited attempts
+                                        attempts += 1;
+                                        if attempts >= MAX_ATTEMPTS {
+                                            warn!(target: "topology", "[RENDERER] - Node {} valid but didn't converge after {} attempts, keeping current state", id, MAX_ATTEMPTS);
+                                            break 'convergence_loop;
+                                        }
+                                        warn!(target: "topology", "[RENDERER] - Node {} valid but didn't converge after {} iterations, reinitializing (attempt {}/{})", id, MAX_ITERATIONS, attempts, MAX_ATTEMPTS);
+                                    } else {
+                                        // Invalid map - keep trying indefinitely
+                                        warn!(target: "topology", "[RENDERER] - Node {} has invalid map (NaN or out of bounds), reinitializing", id);
+                                    }
+
+                                    // Reinitialize the topology algorithm
+                                    let current_links = top_alg.map_links.clone();
+                                    top_alg.initialize(current_links);
+                                    iteration_count = 0;
+                                }
+
+                                ret_vec.push((id,top_alg));
+                            }
+                            match tx_rsp.send(Computed(ret_vec)){
+                                Ok(_) => {
+                                    info!(target: "topology", "[RENDERER] - Successfully sent computed topologies");
+                                },
+                                Err(err) => {
+                                    error!(target: "topology", "{}", format!("[RENDERER] - Error sending computed topologies [{:?}]", err.to_string()));
+                                }
+                            }
+                        }
+                    _ => (),
                 }
             }
 

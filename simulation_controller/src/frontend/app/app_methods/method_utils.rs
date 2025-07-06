@@ -32,8 +32,12 @@ impl App<'_> {
             Some(channel) => {
                 while let Ok(event) = channel.try_recv() {
                     match event{
-                        RendererResponse::EncodedMedia((enc_server, enc_media, enc_proto)) => {
-                            info!(target: "main", "[LEDRON-CLI] Received encoded Response");
+                        RendererResponse::EncodedMediaSteps((step,enc_server, enc_media, enc_proto)) => {
+                            match step{
+                                0 => info!(target: "main", "[LEDRON-CLI] Received encoded Response"),
+                                1 => info!(target: "main", "[LEDRON-CLI] Received SavedInPath"),
+                                _ => (),
+                            }
                             match self.simulation_controller_data.net_cache.downloaded_medias.get_mut(&enc_server) {
                                 None => {}
                                 Some(hash) => {
@@ -46,6 +50,9 @@ impl App<'_> {
                                 }
                             }
                         },
+                        RendererResponse::EncodedFileSteps(_) => {
+
+                        }
                         RendererResponse::Computed((ret_vec)) => {
                             for (id,top) in ret_vec{
                                 'inner: for (node,act,ref mut current_alg) in &mut self.cache.tab1_data.netnode_list.items{
@@ -68,14 +75,14 @@ impl App<'_> {
         }
     }
     pub(crate) fn handle_downloaded_medias(&mut self){
-        // Collect media IDs to remove after processing to avoid borrowing issues
+ /*       // Collect media IDs to remove after processing to avoid borrowing issues
         let mut media_to_remove: Vec<(ServerId, MediaId)> = Vec::new();
-        let mut media_to_add_rendering: Vec<(ServerId, MediaId)> = Vec::new();
+        let mut media_to_add_rendering: Vec<(ServerId, MediaId)> = Vec::new();*/
 
         for (server_id, values) in &mut self.simulation_controller_data.net_cache.downloaded_medias{
             for (media_id, (channels, media)) in values.iter_mut() {
                 match media {
-                    NetCacheMedia::Downloaded(_) => {
+                    /*NetCacheMedia::Downloaded(_) => {
                         match &channels.0 {
                             None => {}
                             Some(ch_resize_req) => {
@@ -102,7 +109,7 @@ impl App<'_> {
                                 }
                             }
                         }
-                    }
+                    }*/
                     NetCacheMedia::Rendered(rendered) => {
                         match &channels.1 {
                             None => {
@@ -131,7 +138,7 @@ impl App<'_> {
             }
         }
 
-        // Remove the downloaded media entries and store their channels
+    /*    // Remove the downloaded media entries and store their channels
         let mut channels_to_restore: Vec<(ServerId, MediaId, (Option<mpsc::Sender<ResizeRequest>>, Option<mpsc::Receiver<FileRendererUpdate>>))> = Vec::new();
         
         for (server_id, media_id) in media_to_remove {
@@ -140,15 +147,15 @@ impl App<'_> {
                     channels_to_restore.push((server_id, media_id, channels));
                 }
             }
-        }
-
+        }*/
+/*
         // Add them back as Rendering status
         for (server_id, media_id, channels) in channels_to_restore {
             self.simulation_controller_data.net_cache.downloaded_medias
                 .entry(server_id)
                 .or_default()
                 .insert(media_id, (channels, NetCacheMedia::Rendering(0f32)));
-        }
+        }*/
     }
 
     pub(crate) fn check_lists_initialized(&mut self){
