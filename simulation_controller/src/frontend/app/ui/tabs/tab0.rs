@@ -169,10 +169,8 @@ impl LogFormatter for MyLogFormatter {
                 format!("{} | [{}] | {}", timestamp, level_short, message_line)
             } else {
                 // Subsequent lines just continue the message with proper indentation
-                format!("{} | [{}] | {}", 
-                    " ".repeat(timestamp.len()), 
-                    " ".repeat(level_short.len()), 
-                    message_line)
+                let indent_width = timestamp.len() + 3 + level_short.len() + 3; // Same as header_width
+                format!("{}{}", " ".repeat(indent_width), message_line)
             };
             
             lines.push(Line::from(vec![
