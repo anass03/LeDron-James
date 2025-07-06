@@ -229,7 +229,7 @@ impl ChatServer {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::FileFor(destination, receiver_id, file_id.clone(), message.clone()), source.clone());
                     // self.send_logging(format!("Sending file to {}", destination));
-                    self.send_response(ServerToClient::FileFrom(self.info.host.id, source, file_id, message), destination);
+                    self.send_response(ServerToClient::FileFrom(self.info.host.id, source,destination, file_id, message), destination);
                 } else {
                     self.send_logging(LogType::WARN,LogModule::CHAT,format!("Destination {} not registered", destination));
                     self.send_response(ServerToClient::ErrClientId(self.info.host.id), destination);
@@ -249,7 +249,7 @@ impl ChatServer {
                 if self.client_list.contains(&destination) {
                     self.save_message(ClientNetCommand::MediaFor(destination, receiver_id, media_id.clone(), message.clone()), source.clone());
                     // self.send_logging(format!("Sending media to {}", destination));
-                    self.send_response(ServerToClient::MediaFrom(self.info.host.id, source, media_id, message), destination);
+                    self.send_response(ServerToClient::MediaFrom(self.info.host.id, source,destination, media_id, message), destination);
                 } else {
                     self.send_logging(LogType::WARN,LogModule::CHAT,"Destination client not registered".into());
                 }

@@ -201,10 +201,8 @@ impl GenServer {
         };
 
         let meta = match response {
-            ServerToClient::File(_, id, _)
-            | ServerToClient::FileFrom(_, _, id, _) => Some((ContentType::File, id.clone())),
-            ServerToClient::Media(_, id, _)
-            | ServerToClient::MediaFrom(_, _, id, _) => Some((ContentType::Media, id.clone())),
+            ServerToClient::File(_, id, _) | ServerToClient::FileFrom(_, _,_,id, _) => Some((ContentType::File, id.clone())),
+            ServerToClient::Media(_, id, _) | ServerToClient::MediaFrom(_, _, _, id,_) => Some((ContentType::Media, id.clone())),
             _ => None,
         };
 
