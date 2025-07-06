@@ -1,6 +1,7 @@
 /*
 Each input-mode related method is found here
 */
+use log::error;
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tui_textarea::{Input, TextArea};
 use initializer_utils::utils::parse_and_check_config;
@@ -115,8 +116,8 @@ impl App<'_>{
                                             self.app_mode = AppMode::Normal;
                                         }
                                         KeyCode::Enter => {
-                                            if key.modifiers.contains(KeyModifiers::SHIFT) {
-                                                // Shift + Enter: Add new line
+                                            if key.modifiers.contains(KeyModifiers::ALT) {
+                                                // Option + Enter: Add new line
                                                 self.cache.text_buffer.chat_text_area.insert_char('\n');
                                             } else {
                                                 // Enter: Send message

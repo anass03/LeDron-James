@@ -1,39 +1,34 @@
-# Tree Topology
-# L1: 1 (root)
-# L2: 2, 3
-# L3: 4, 5, 6
-# L4: 7, 8, 9, 10
-# Each node connects to all nodes in neighboring layers
+# Tree Topology – Full, bidirectional, PDR molto varie
 
 [[drone]]
 id = 1
 connected_node_ids = [2, 3, 11]
-pdr = 0.8
+pdr = 0.05
 
 [[drone]]
 id = 2
-connected_node_ids = [1, 4, 5, 6, 13]
-pdr = 0.75
+connected_node_ids = [1, 4, 5, 6, 13, 11]
+pdr = 0.15
 
 [[drone]]
 id = 3
 connected_node_ids = [1, 4, 5, 6, 13]
-pdr = 0.7
+pdr = 0.25
 
 [[drone]]
 id = 4
 connected_node_ids = [2, 3, 7, 8, 9, 10, 14]
-pdr = 0.85
+pdr = 0.35
 
 [[drone]]
 id = 5
 connected_node_ids = [2, 3, 7, 8, 9, 10, 14]
-pdr = 0.6
+pdr = 0.45
 
 [[drone]]
 id = 6
 connected_node_ids = [2, 3, 7, 8, 9, 10]
-pdr = 0.9
+pdr = 0.55
 
 [[drone]]
 id = 7
@@ -43,21 +38,21 @@ pdr = 0.65
 [[drone]]
 id = 8
 connected_node_ids = [4, 5, 6, 12]
-pdr = 0.8
+pdr = 0.75
 
 [[drone]]
 id = 9
 connected_node_ids = [4, 5, 6, 15]
-pdr = 0.7
+pdr = 0.85
 
 [[drone]]
 id = 10
 connected_node_ids = [4, 5, 6, 15]
-pdr = 0.55
+pdr = 0.95
 
 [[client]]
 id = 11
-connected_drone_ids = [1]
+connected_drone_ids = [1, 2]
 
 [[client]]
 id = 12

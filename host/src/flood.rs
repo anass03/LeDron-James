@@ -30,7 +30,7 @@ impl FloodControl for Host {
     fn initiate_flood(&mut self) {
         // clear previous discovery state
         self.send_logging(
-            LogType::DEBUG,
+            LogType::INFO,
             LogModule::FLOOD,
             "Clearing previous flood cache and topology".to_string(),
         );
@@ -68,7 +68,7 @@ impl FloodControl for Host {
             LogType::INFO,
             LogModule::FLOOD,
             format!(
-                "Starting flood discovery: flood_id={}, session_id={}",
+                "Starting flood discovery: flood({}), session({})",
                 flood_id, session_id
             ),
         );
@@ -76,16 +76,16 @@ impl FloodControl for Host {
         // send to all neighbors
         for (&neighbor, chan) in &self.packet_send {
             self.send_logging(
-                LogType::DEBUG,
+                LogType::INFO,
                 LogModule::FLOOD,
-                format!("Sending FloodRequest to neighbor {}", neighbor),
+                format!("Sending FloodRequest to neighbor node({})", neighbor),
             );
             let result = self.send_packet(request.clone(), Some(chan));
             self.send_logging(
                 LogType::DEBUG,
                 LogModule::FLOOD,
                 format!(
-                    "FloodRequest send result: neighbor={} result={:?}",
+                    "FloodRequest send result: neighbor({}) result={:?}",
                     neighbor, result
                 ),
             );
@@ -109,7 +109,7 @@ impl FloodControl for Host {
             LogType::DEBUG,
             LogModule::FLOOD,
             format!(
-                "Received FloodRequest: initiator={}, flood_id={}, session={}",
+                "Received FloodRequest: initiator({}), flood_id({}), session({})",
                 initiator, flood_id, session
             ),
         );

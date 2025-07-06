@@ -1400,7 +1400,18 @@ pub(super) mod chat_rendering{
         // Scroll to position the selected message in the center of the view
         let view_height = area.height as usize;
         let selected_message_height = message_heights[selected_message_index] as usize;
-        let target_scroll = cumulative_height.saturating_sub(view_height / 2).saturating_add(selected_message_height / 2);
+        let mut target_scroll = cumulative_height.saturating_sub(view_height / 2).saturating_add(selected_message_height / 2);
+        
+        // Ensure first message is fully visible at the top
+        if selected_message_index == 0 {
+            target_scroll = 0;
+        }
+        
+        // Clamp scroll so the last message is always fully visible
+        let max_scroll = total_height.saturating_sub(view_height as u16);
+        if target_scroll > max_scroll as usize {
+            target_scroll = max_scroll as usize;
+        }
         
         // Apply scroll
         for _ in 0..target_scroll {

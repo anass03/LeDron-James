@@ -19,7 +19,7 @@ use client::Client as LeClient;
 use server::ContentServer as LeContentServer;
 use server::ChatServer as LeChatServer;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
-use rand::{random_range, Rng};
+use rand::random_range;
 use simulation_controller::backend::sc_models::DroneType;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,7 +31,7 @@ pub enum ServerType {
 
 
 pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeId, JoinHandle<()>>), String> {
-    /// - Parsing the network configuration
+    // - Parsing the network configuration
     let config;
     match initializer_utils::utils::parse_and_check_config(&path.to_string()){
         Ok(temp) => {
@@ -48,7 +48,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     //  vector of servers
     // }
 
-    /// - Creating and assigning the packet channels to each node
+    // - Creating and assigning the packet channels to each node
     let mut packet_senders = HashMap::new();
     let mut packet_receivers = HashMap::new();
     // packet channels are meant to exchange packets, not commands nor events
@@ -77,10 +77,10 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
         packet_receivers.insert(server.id, r);
     }
 
-    /// - handles contains all the node's threads handles with NodeId as key
+    // - handles contains all the node's threads handles with NodeId as key
     let mut handles = HashMap::new();
 
-    /// - preparing command channels hashmaps
+    // - preparing command channels hashmaps
     let mut drone_command_senders = HashMap::new();
     let mut client_command_senders = HashMap::new();
     let mut server_command_senders = HashMap::new();
@@ -90,7 +90,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
     //among all drones
     let (drone_event_send, drone_event_recv) = unbounded();
     let mut drone_types = HashMap::new();
-    /// - Initializing the drones
+    // - Initializing the drones
     for drone in config.drone.iter() {
 
         // creating the actual drone channel for commands
@@ -109,8 +109,8 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .collect();
 
         let drone_clone = drone.clone();
-        let mut i = random_range(0..8);
-        /// - spawning the thread of the drone and collecting the handle in a vector
+        let i = random_range(0..8);
+        // - spawning the thread of the drone and collecting the handle in a vector
         match i {
             0 => {
                 drone_types.insert(drone.id, DroneType::RollingDrone);
@@ -123,7 +123,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -138,7 +138,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -153,7 +153,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -168,7 +168,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                      drone_packet_send,
                      drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -183,7 +183,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                        drone_packet_send,
                        drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -198,7 +198,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                        drone_packet_send,
                        drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -213,7 +213,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                        drone_packet_send,
                        drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -228,7 +228,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -243,7 +243,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
@@ -258,31 +258,17 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                         drone_packet_send,
                         drone_clone.pdr,
                     );
-                    /// - running the drone
+                    // - running the drone
                     drone.run();
                 }));
             },
             _ => panic!("Error initializing Drones")
         }
-        /*handles.insert(drone.id, thread::spawn(move || {
-            /*let mut drone = LeDron::new(
-                drone_clone.id,
-                drone_event_send,
-                controller_drone_recv,
-                drone_packet_recv,
-                drone_packet_send,
-                drone_clone.pdr,
-            );
-            drone.add_log_channel(log_send);
-            /// - running the drone
-            drone.run();*/
-
-        }));*/
     }
 
     let (host_event_send, host_event_recv) = unbounded();
 
-    /// - Initializing the clients
+    // - Initializing the clients
     for client in config.client.iter() {
         let client_id = client.id;
         let connected_drone_ids = client.connected_drone_ids.clone();
@@ -301,7 +287,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
             .iter()
             .map(|&id| (id, packet_senders[&id].clone()))
             .collect();
-        /// - spawning the thread of the client and collecting the handle in a vector
+        // - spawning the thread of the client and collecting the handle in a vector
         handles.insert(client.id, thread::spawn(move || {
             let mut client = LeClient::new(
                 client_id,
@@ -311,12 +297,12 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
                 packet_recv,
                 packet_send,
             );
-            /// - running the client
+            // - running the client
             client.run();
         }));
     }
 
-    /// - Initializing the servers
+    // - Initializing the servers
     for (i, server) in config.server.iter().enumerate() {
         let server_type = match i % 2 {
             0 => ServerType::Chat,
@@ -374,7 +360,7 @@ pub fn initialize(path: &str) -> Result<(SimulationControllerData, HashMap<NodeI
         handles.insert(server_id, handle);
     }
 
-    /// - Connecting the Simulation Controller to all the channels and nodes
+    // - Connecting the Simulation Controller to all the channels and nodes
     let controller = SimulationControllerData::new(
         config.clone(),
         drone_types,
