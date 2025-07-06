@@ -242,13 +242,15 @@ pub(super) mod data_rendering{
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
     use ratatui::prelude::Color;
     use ratatui::style::{Modifier, Style, Stylize};
-    use ratatui::widgets::{Block, BorderType, Borders, Widget, Paragraph, Bar, BarChart, BarGroup};
+    use ratatui::symbols;
+    use ratatui::symbols::Marker;
+    use ratatui::widgets::{Block, BorderType, Borders, Widget, Paragraph, Bar, BarChart, BarGroup, Axis, Dataset, Chart, GraphType};
     use ratatui::text::{Line, Span};
     use tui_logger::TuiLoggerWidget;
     use wg_2024::network::NodeId;
     use crate::backend::sc_models::NodeStatistics;
     use crate::frontend::app::App;
-    use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
+    use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
     use crate::frontend::app::ui::tabs::tab1::render_data_logging_section;
 
     // Function to render PDR bar chart
@@ -362,93 +364,59 @@ pub(super) mod data_rendering{
     }
 
     // Function to render download speed chart
-    fn render_download_speed_chart(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
-        // Check if we have download speed data (you may need to adjust this based on your data structure)
-        if stats.pdr_expected.is_empty() {
-            let no_data_text = Paragraph::new("No download data available")
-                .style(Style::default().fg(Color::Gray))
-                .alignment(ratatui::layout::Alignment::Center);
-            no_data_text.render(area, buf);
-            return;
-        }
+    pub fn render_download_speed_chart(app: &App, stats: &Vec<f32>, area: Rect, buf: &mut Buffer) {
+        // Fit to available width
+        let max_points = area.width as usize;
+        let total = stats.len();
+        let start = total.saturating_sub(max_points);
+        let display: Vec<f32> = stats[start..].iter().cloned().collect();
 
-        // For now, we'll create a sample chart using PDR data as download speed
-        // You should replace this with actual download speed data from your stats
-        let mut download_data: Vec<(NodeId, f64)> = stats.pdr_expected.iter()
-            .map(|(node_id, pdr)| (*node_id, *pdr * 100.0)) // Convert to Mbps (example)
-            .collect();
-        download_data.sort_by(|a, b| a.0.cmp(&b.0));
-
-        // Calculate how many bars we can fit
-        let available_width = area.width.saturating_sub(8) as usize;
-        let max_bars = available_width / 3; // Each bar takes ~3 chars (bar + gap)
-        let bar_width = 2; // Fixed bar width
-        let bar_gap = 1; // Fixed gap
-        
-        let (display_data, start_index, data_len) = if download_data.len() <= max_bars {
-            (download_data.clone(), 0, download_data.len())
-        } else {
-            let start_index = (app.cache.counter as usize / 50) % download_data.len();
-            let end_index = (start_index + max_bars).min(download_data.len());
-            (download_data[start_index..end_index].to_vec(), start_index, download_data.len())
-        };
-
-        // Create title
-        let title = if data_len > max_bars {
-            format!("Download ({}/{})", display_data.len(), data_len)
-        } else {
-            "Download Speed".to_string()
-        };
-
-        let title_para = Paragraph::new(title)
-            .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(ratatui::style::Modifier::BOLD))
-            .alignment(ratatui::layout::Alignment::Center);
-        
-        let [title_area, chart_area, rotation_area] = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1),
-                Constraint::Min(1),
-                Constraint::Length(if data_len > max_bars { 1 } else { 0 })
-            ])
-            .areas(area);
-        
-        title_para.render(title_area, buf);
-
-        // Create bars for download speed chart
-        use ratatui::widgets::{Bar, BarChart, BarGroup};
-        use ratatui::text::Line;
-        
-        let bars: Vec<Bar> = display_data
+        // Convert to (x, y) pairs
+        let data: Vec<(f64, f64)> = display
             .iter()
-            .map(|(node_id, speed)| {
-                let style = download_speed_color_style(*speed);
-                Bar::default()
-                    .value(*speed as u64)
-                    .label(Line::from(format!("N{}", node_id)))
-                    .text_value(format!("{:.0}M", *speed))
-                    .style(style)
-                    .value_style(style.reversed())
-            })
+            .enumerate()
+            .map(|(i, &v)| (i as f64, v as f64))
             .collect();
 
-        let bar_chart = BarChart::default()
-            .data(BarGroup::default().bars(&bars))
-            .bar_width(bar_width as u16)
-            .bar_gap(bar_gap as u16)
-            .bar_set(ratatui::symbols::bar::Set::default());
+        // Compute Y-axis bounds
+        let y_min = display.iter().cloned().fold(f32::INFINITY, f32::min) as f64;
+        let y_max = display.iter().cloned().fold(f32::NEG_INFINITY, f32::max) as f64;
 
-        bar_chart.render(chart_area, buf);
+        // Build the line dataset (continuous line in white)
+        let line_dataset = Dataset::default()
+            .graph_type(GraphType::Line)
+            .style(Style::default().fg(Color::White))
+            .data(&data);
 
-        if data_len > max_bars {
-            let progress_percent = ((start_index * 100) / data_len).min(100);
-            let rotation_text = format!("Rotating... ({}%)", progress_percent);
-            let rotation_para = Paragraph::new(rotation_text)
-                .style(Style::default().fg(Color::Gray))
-                .alignment(ratatui::layout::Alignment::Center);
-            
-            rotation_para.render(rotation_area, buf);
-        }
+        // Build the point dataset (red dots)
+        let point_dataset = Dataset::default()
+            .graph_type(GraphType::Scatter)
+            .marker(Marker::Dot)
+            .style(Style::default().fg(Color::Red))
+            .data(&data);
+
+        // Collect both datasets
+        let datasets = vec![line_dataset, point_dataset];
+
+        // Create the chart, applying background fill of the popup color
+        let chart = Chart::new(datasets)
+            .style(Style::default().bg(POPUP_BG_COLOR))
+            .x_axis(
+                Axis::default()
+                    .bounds([0.0, (data.len().max(1)) as f64])
+                    .labels::<Vec<Line>>(vec![]),
+            )
+            .y_axis(
+                Axis::default()
+                    .title("MB/s") // unit label under the highest tick
+                    .bounds([y_min, y_max])
+                    .labels(vec![
+                        Line::from(format!("{:.1}", y_min)),
+                        Line::from(format!("{:.1}", y_max)),
+                    ]),
+            );
+
+        chart.render(area, buf);
     }
 
     // Helper function to create temperature-like color style based on PDR value
@@ -556,9 +524,8 @@ pub(super) mod data_rendering{
             Some(stats) => {
                 // Render PDR bar chart in data_1_block
                 render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
-                
                 // Render download speed chart in data_2_block
-                render_download_speed_chart(app, stats, inner_data_2_block, buf);
+                render_download_speed_chart(app, &stats.download_at_sec, inner_data_2_block, buf);
             }
         }
 
@@ -656,7 +623,7 @@ pub(super) mod data_rendering{
                 render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
                 
                 // Render download speed chart in data_2_block
-                render_download_speed_chart(app, stats, inner_data_2_block, buf);
+                //render_download_speed_chart(app, stats, inner_data_2_block, buf);
             }
         }
 
