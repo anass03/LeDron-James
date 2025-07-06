@@ -46,7 +46,7 @@ pub struct NodeStatistics{
     pub pdr_expected: HashMap<NodeId, f64>, // Only for clients
     pub download_at_sec: Vec<f32>, // Only for clients
     pub upload_at_sec: Vec<f32>, // Only for clients
-
+    pub routh: Vec<NodeId>
     //
 }
 
