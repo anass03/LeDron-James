@@ -874,7 +874,7 @@ impl Client {
     fn handle_file_for(&mut self, cid: NodeId, sid: NodeId, fid: FileId, data: Vec<u8>) {
         let label = format!("FileFor({})", cid);
         let content_id = ContentID::File(fid.clone());
-        let cmd = ClientNetCommand::NewFile(sid, fid.clone(), data.clone());
+        let cmd = ClientNetCommand::FileFor(cid, sid, fid.clone(), data.clone());
         self.send_with_progress(Chat, sid, content_id, cmd, &label);
     }
 
@@ -882,7 +882,7 @@ impl Client {
     fn handle_media_for(&mut self, cid: NodeId, sid: NodeId, mid: MediaId, img: Image) {
         let label = format!("MediaFor({})", cid);
         let content_id = ContentID::Media(mid.clone());
-        let cmd = ClientNetCommand::NewMedia(sid, mid.clone(), img.clone());
+        let cmd = ClientNetCommand::MediaFor(cid, sid, mid.clone(), img.clone());
         self.send_with_progress(Chat, sid, content_id, cmd, &label);
     }
 }
