@@ -1,7 +1,7 @@
 use crossbeam_channel::{select_biased, tick, Receiver, Sender};
-use wg_2024::network::{NodeId};
-use wg_2024::packet::{Packet, PacketType, NodeType, Fragment};
-use std::collections::{HashMap};
+use wg_2024::network::{NodeId, SourceRoutingHeader};
+use wg_2024::packet::{Packet, PacketType, NodeType, Fragment, FRAGMENT_DSIZE};
+use std::collections::{HashMap, HashSet};
 use std::error::Error;
 use std::sync::atomic::{Ordering};
 use std::time::{Duration, Instant};
@@ -9,7 +9,7 @@ use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, C
 use host::network::Edge;
 use host::ServerTypes::{Content, Chat};
 use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer, Sending};
-use host::session::{generate_unique_session_id, RecSessionData};
+use host::session::{generate_unique_session_id, RecSessionData, SentSessionData};
 use crate::compression::{compress_data, decompress_data};
 use crate::transfer_tracker::TransferTracker;
 use crate::network_metrics::NetMetrics;
@@ -206,7 +206,7 @@ impl Client {
                 content: payload,
             };
             //let cb = Box::new(|_: usize| {});
-            if let Err(err) = self.host.build_msg_fragment(server_id, message, |_| {}) {
+            if let Err(err) = self.build_msg_fragment(server_id, message, |_| {}) {
                 self.host.send_logging(
                     LogType::ERROR, LogModule::SESSION,
                     format!("Failed to send ServerType request: {}, to server({})", err, server_id),
@@ -265,7 +265,7 @@ impl Client {
                 let mut cb: Box<dyn FnMut(usize) + Send> =
                     option.unwrap_or_else(|| Box::new(|_: usize| {}));
                 if let Err(err) =
-                    self.host.build_msg_fragment(server_id, message.clone(), cb)
+                    self.build_msg_fragment(server_id, message.clone(), cb)
                 {
                     self.host.send_logging(
                         LogType::ERROR, LogModule::SESSION,
@@ -819,6 +819,106 @@ impl Client {
         None
     }
 
+    /// Splits `message` into `FRAGMENT_DSIZE` chunks, sends each fragment, and
+    /// invokes `on_fragment_sent(bytes)` after sending each.
+    fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, mut on_fragment_sent: F, ) -> Result<(), String>
+    where
+        F: FnMut(usize),
+    {
+        self.send_logging(
+            LogType::INFO,
+            LogModule::FRAGMENT,
+            format!(
+                "Starting fragmentation session({}), destination node({})",
+                message.session_id, destination
+            ),
+        );
+        // Find best route
+        let route = self.host
+            .network
+            .find_best_route(self.host.id, destination)
+            .ok_or_else(|| {
+                let err = format!("No route to {}", destination);
+                self.send_logging(
+                    LogType::ERROR,
+                    LogModule::FRAGMENT,
+                    format!("Fragmentation error: {}", err),
+                );
+                err
+            })?;
+        match self.host.controller_send.send(HostEvent::Route(self.host.id, route.clone())){
+            Ok(_) => {},
+            Err(err) => { self.send_logging(
+                LogType::WARN,
+                LogModule::SESSION,
+                format!("error sending route to controller {}", err),
+            );}
+        }
+        // Calculate number of fragments
+        let bytes = &message.content;
+        let total = (bytes.len() + FRAGMENT_DSIZE - 1) / FRAGMENT_DSIZE;
+
+        // Initialize session data if needed
+        {
+            let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+            let entry = sent.entry(message.session_id).or_insert_with(|| {
+                self.send_logging(
+                    LogType::DEBUG,
+                    LogModule::FRAGMENT,
+                    format!("Allocating buffer for {} fragments", total),
+                );
+                SentSessionData {
+                    buffer: vec![None; total],
+                    last_activity: Instant::now(),
+                    route: route.clone(),
+                    destination,
+                    pending: total,
+                    banned_nodes: HashSet::new(),
+                }
+            });
+            entry.pending = total;
+            entry.last_activity = Instant::now();
+            if entry.buffer.len() < total {
+                entry.buffer.resize(total, None);
+            }
+        }
+
+        // Send each fragment
+        for (i, chunk) in bytes.chunks(FRAGMENT_DSIZE).enumerate() {
+            let frag = Fragment {
+                fragment_index: i as u64,
+                total_n_fragments: total as u64,
+                length: chunk.len() as u8,
+                data: {
+                    let mut buf = [0; FRAGMENT_DSIZE];
+                    buf[..chunk.len()].copy_from_slice(chunk);
+                    buf
+                },
+            };
+            {
+                let mut sent = self.host.sent_fragments.lock().unwrap();
+                sent.get_mut(&message.session_id)
+                    .unwrap()
+                    .buffer[i] = Some(frag.clone());
+            }
+            let header = SourceRoutingHeader::new(route.clone(), 1);
+            let pkt = Packet::new_fragment(header, message.session_id, frag.clone());
+            let res = self.send_packet(pkt, None);
+            on_fragment_sent(chunk.len());
+            self.send_logging(
+                LogType::DEBUG,
+                LogModule::FRAGMENT,
+                format!("Sent fragment #{} result={:?}", i, res),
+            );
+        }
+
+        self.send_logging(
+            LogType::INFO,
+            LogModule::FRAGMENT,
+            format!("Completed fragmentation session={}", message.session_id),
+        );
+        Ok(())
+    }
     /// Helper to send a command with progress tracking
     fn send_with_progress(&mut self, srv_type: ServerTypes, server_id: NodeId, content_id: ContentID, cmd: ClientNetCommand, label: &str, ) {
         // 1) Serialize
