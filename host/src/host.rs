@@ -95,8 +95,8 @@ pub enum ServerToClient{
     //chat server
     ClientList(ClientId, ServerId, Vec<ClientId>),
     MessageFrom(ServerId, ClientId, String),
-    FileFrom(ServerId, ClientId, FileId, Vec<u8>),
-    MediaFrom(ServerId, ClientId, MediaId, Image),
+    FileFrom(ServerId, ClientId /*from*/,ClientId /*to*/, FileId, Vec<u8>),
+    MediaFrom(ServerId, ClientId /*from*/,ClientId /*to*/, MediaId, Image),
 
     ErrNotFound(ServerId),
     ErrClientId(ServerId),

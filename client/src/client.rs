@@ -524,6 +524,9 @@ impl Client {
                         }
                         Sending(content_id, total_fragments) => {
                             self.pending_fragments.insert(content_id.clone(), (total_fragments, 0));
+                            if let Some(id) = packet.routing_header.source() {
+                                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(id, content_id.clone(), 0.0));
+                            }
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
@@ -547,22 +550,22 @@ impl Client {
                             );
                             send_reconstructed(MessageFrom(server_id,from, msg))?;
                         }
-                        FileFrom(server_id, from, file_id, data) => {
+                        FileFrom(server_id, from, to, file_id, data) => {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::FILE,
                                 format!("Received file `{}` from client `{}`", file_id, from),
                             );
-                            send_reconstructed(FileFrom(server_id, from, file_id, data))?;
+                            send_reconstructed(FileFrom(server_id, from, to,file_id, data))?;
                         }
 
-                        MediaFrom(server_id, from, media_id, data) => {
+                        MediaFrom(server_id, from,to, media_id, data) => {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::MEDIA,
                                 format!("Received media `{}` from client `{}`", media_id, from),
                             );
-                            send_reconstructed(MediaFrom(server_id, from, media_id, data))?;
+                            send_reconstructed(MediaFrom(server_id, from,to, media_id, data))?;
                         }
                         FilesList(client_id, server_id, files) => {
                             self.host.send_logging(
