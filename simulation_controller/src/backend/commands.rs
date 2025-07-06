@@ -37,7 +37,7 @@ impl SimulationControllerData {
         // Find the drone and collect neighbors in one pass
         let drone_neighbors = self.drones.iter()
             .find(|drone| drone.id == drone_id)
-            .map(|drone| drone.connected_node_ids.clone())
+            .map(|drone| drone.connected_node_ids)
             .ok_or_else(|| format!("Drone {drone_id} does not exist"))?;
 
         debug!(target: "main", "Trying to Crash Drone: {drone_id}");
@@ -289,11 +289,11 @@ impl SimulationControllerData {
         }
 
         debug!(target: "main", "Sending Client List Request to Client {client_id} for Server {server_id}");
-        for client in self.clients {
+        //for client in self.clients.iter() {
             let command = Net(ClientList(server_id));
-            self.send_client_command(client.id, command)?
-        }
-        Ok(())
+            self.send_client_command(client_id, command)
+        //}
+        //Ok(())
     }
 
     pub fn message_for(&mut self, sender_client_id: ClientId, receiver_client_id: ClientId, server_id: ServerId, message: String) -> Result<(), String> {

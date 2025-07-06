@@ -146,7 +146,6 @@ impl SimulationControllerData {
             ServerToClient::File(server_id, file_id, file)
             => {
                 self.update_net_cache(server_id, ContentID::File(file_id), None, Some(file), None)?;
-
                 //self.save_file(file, file_id)?
             },
             ServerToClient::MediaList(client_id, server_id, media_list)
@@ -172,7 +171,6 @@ impl SimulationControllerData {
             ServerToClient::Media(server_id, media_id, image)
             => {
                 self.update_net_cache(server_id, ContentID::Media(media_id), Some(image), None, None)?;
-
                 // Save in local folder
                 //self.save_media(&media_id, &image)?;
             },
@@ -188,11 +186,16 @@ impl SimulationControllerData {
             },
             ServerToClient::MessageFrom(server_id, client_id, message)
             => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
-            ServerToClient::FileFrom(server_id, client_id, ..)
+            ServerToClient::FileFrom(server_id, client_id, file_id, file)  // todo
             => {
+                match self.chat_cache.local_chats.get(&server_id) {
+                    Some(chat_list) => {
+
+                    }
+                }
                 self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
             }
-            ServerToClient::MediaFrom(server_id, client_id, ..)
+            ServerToClient::MediaFrom(server_id, client_id, ..) //todo
             => {
                 self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
             }
@@ -308,47 +311,6 @@ impl SimulationControllerData {
             self.stats.network_reliability = ((1.0
                 - (self.stats.total_packet_dropped as f64 / self.stats.total_packet_exchanged as f64)) * 100.0) as u8;
         }
-    }
-
-    fn save_media(&self, media_id: &MediaId, image: &Image) -> Result<(), (LogType, String)> {
-        // Get file extension
-        let extension = get_extension(media_id)
-            .ok_or_else(|| return (LogType::INFO, format!("Unknown extension for file {media_id}")))?;
-
-        // Construct path safely
-        let path = self.download_folder.join(media_id);
-
-        // Ensure download directory exists
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| (LogType::ERROR, format!("Failed to create directory {}: {}", parent.display(), e)))?;
-        }
-
-        // Create image buffer without cloning if possible
-        let rgba_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone())
-            .ok_or_else(|| (LogType::ERROR, format!("Failed to create image buffer from media {}", media_id)))?;
-
-        // Convert to DynamicImage
-        let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
-
-        // Save based on extension
-        let save_result = match extension.to_lowercase().as_str() {
-            "jpg" | "jpeg" => {
-                // Convert to RGB to drop alpha channel for JPEG
-                let rgb_image: RgbImage = dynamic_image.to_rgb8();
-                rgb_image.save(&path)
-            },
-            _ => {
-                // For PNG and other formats that support alpha
-                dynamic_image.save(&path)
-            }
-        };
-
-        save_result
-            .map_err(|e| (LogType::ERROR, format!("Error saving media {}: {}", media_id, e)))?;
-
-        info!(target: "main", "Image saved: {}", path.display());
-        Ok(())
     }
 
     fn save_file(&self, file: Vec<u8>, file_id: FileId) -> Result<(), (LogType, String)> {
