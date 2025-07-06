@@ -266,10 +266,7 @@ impl SimulationControllerData {
                                     self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
                                 },
                             }
-
-
                         Ok(())
-
                     }
                     None => {
                         Err((LogType::ERROR, format!("Media ID {media_id} entry for NetCacheMedia not found")))
