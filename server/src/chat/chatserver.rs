@@ -116,8 +116,17 @@ impl ChatServer {
             MsgFragment(fragment) => {
                 if let Some(data) = self.handle_msg_fragment(packet.clone(), fragment) {
                     match serde_json::from_slice::<ClientNetCommand>(&data) {
-                        Ok(cmd) => self.handle_command(cmd, packet.routing_header.hops[0]),
-                        Err(e) => self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Deserialization error: {e}")),
+                        Ok(cmd) => {
+                            if let Some(generator) = packet.routing_header.source() {
+                                self.handle_command(cmd,generator);
+                            }
+                        },
+                        Err(e) => {
+                            if let Some(generator) = packet.routing_header.source() {
+                                self.send_response(ServerToClient::ErrNotFound(self.info.host.id), generator);
+                            }
+                            self.send_logging(LogType::ERROR,LogModule::PACKET,format!("Deserialization error: {e}"))
+                        },
                     }
                 } else {
                     self.send_logging(LogType::WARN,LogModule::PACKET,"The packet is not complete; server is waiting.".to_string());
