@@ -161,6 +161,7 @@ impl MediaEntry {
     pub fn update_cache_media(&mut self, new_cache: NetCacheMedia) {
         self.cache = new_cache;
     }
+
 }
 
 pub struct NetCache{

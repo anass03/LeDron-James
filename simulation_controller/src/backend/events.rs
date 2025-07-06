@@ -253,6 +253,10 @@ impl SimulationControllerData {
                     None => {
                         // Update downloading progress
                         if let Some(mut entry) = self.net_cache.downloaded_medias.get_mut(&media_id) {
+                            match entry.cache {
+                                NetCacheMedia::Downloading(_) => {},
+                                _ => return Ok(())
+                            }
                             entry.update_cache_media(NetCacheMedia::Downloading(percentage.unwrap_or(0.0)));
                         } else {
                             // Create new entry if it doesn't exist
@@ -281,6 +285,12 @@ impl SimulationControllerData {
                     },
                     None => {
                         // Update downloading progress
+                        if let Some(mut entry) = self.net_cache.downloaded_files.get_mut(&file_id) {
+                            match entry {
+                                NetCacheMedia::Downloading(_) => {},
+                                _ => return Ok(())
+                            }
+                        }
                         self.net_cache.downloaded_files.insert(file_id, Downloading(percentage.unwrap_or(0.0)));
                         Ok(())
                     }
