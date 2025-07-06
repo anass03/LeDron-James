@@ -10,7 +10,7 @@ use wg_2024::network::NodeId;
 use host::{ContentID, FileId, HostEvent, Image, MediaId, ServerId, ServerToClient};
 use host::ServerTypes::{Chat, Content};
 use server::Chat as ChatStruct;
-use crate::backend::sc_models::{ChatList, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
+use crate::backend::sc_models::{ChatList, FileType, LogType, NetCacheFile, NetCacheMedia, NodeStatistics, RendererCommand, RendererResponse};
 use crate::backend::sc_models::FileType::UTF8;
 use crate::backend::simulation_controller::SimulationControllerData;
 
@@ -78,9 +78,30 @@ impl SimulationControllerData {
             },
             HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
             HostEvent::ExpectedPDR(client_id, expected_pdr) => {
-                //self.stats.node_statistic.insert
+                let expected_pdr_clone = expected_pdr.clone();
+                self.stats.node_statistic
+                    .entry(client_id)
+                    .and_modify(|node_stat| node_stat.pdr_expected = expected_pdr)
+                    .or_insert_with(|| NodeStatistics {
+                        pdr_expected: expected_pdr_clone,
+                        ..Default::default()
+                    });
+
+
             },
-            HostEvent::NetSpeed(client_id, upload, download) => {},
+            HostEvent::NetSpeed(client_id, upload, download) => {
+                self.stats.node_statistic
+                    .entry(client_id)
+                    .and_modify(|node_stat| {
+                        node_stat.upload_at_sec = upload;
+                        node_stat.download_at_sec = download;
+                    })
+                    .or_insert_with(|| NodeStatistics {
+                        upload_at_sec: upload,
+                        download_at_sec: download,
+                        ..Default::default()
+                    });
+            },
             HostEvent::Route(host_id, route) => {},
         }
         Ok(())
