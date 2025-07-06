@@ -14,7 +14,7 @@ use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas, render_add_sender_popup, render_remove_sender_popup};
-use crate::frontend::app::ui::tabs::tab1::data_rendering::render_cl_sr_data_options;
+use crate::frontend::app::ui::tabs::tab1::data_rendering::{render_cl_sr_data_options, render_drone_data_options};
 use crate::frontend::app::ui::tabs::tab1::draw_map;
 
 use ratatui::widgets::{List, ListItem};
@@ -75,7 +75,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_drone_popup(app:&App, area: Rec
 fn render_drone_options(app:&App, area:Rect, buf: &mut Buffer, drone_popup: &DronePopup, selected_node: &NodeId){
     match drone_popup{
         DronePopup::DataPage(datapage) => {
-            render_cl_sr_data_options(app, area, buf, *selected_node)
+            render_drone_data_options(app, area, buf, *selected_node)
         }
         DronePopup::SettingsPage(setpage) => {
             render_settings_page(app, area, buf, *selected_node, setpage)
