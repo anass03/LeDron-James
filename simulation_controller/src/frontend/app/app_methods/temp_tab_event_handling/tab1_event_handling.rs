@@ -1302,6 +1302,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.add_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);
@@ -1358,6 +1361,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.remove_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);
@@ -1558,6 +1564,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.add_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);
@@ -1614,6 +1623,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.remove_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);
@@ -1953,6 +1965,9 @@ impl App<'_> {
                                 match self.simulation_controller_data.remove_sender(id,id_target){
                                     Ok(_) => {
                                         command_popup.status = SettingsPopupStatus::CorrectlySent;
+                                        let new_links = self.populate_topology_links();
+                                        self.simulation_controller_data.topology_algorithm_data.initialize(new_links);
+                                        self.initialize_node_pop_map(id);
                                     }
                                     Err(err) => {
                                         command_popup.status = SettingsPopupStatus::Error(err);

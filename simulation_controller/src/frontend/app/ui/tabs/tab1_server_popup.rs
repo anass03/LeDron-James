@@ -66,7 +66,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_server_popup(app:&App, area: Re
 fn render_server_options(app:&App, area:Rect, buf: &mut Buffer, server_popup: &ServerPopup, selected_node: &NodeId){
     match server_popup{
         ServerPopup::DataPage(datapage) => {
-            render_cl_sr_data_options(app, area, buf, *selected_node)
+            render_cl_sr_data_options(app, area, buf, *selected_node,0)
         }
         ServerPopup::SettingsPage(setpage) => {
             render_settings_page(app, area, buf, *selected_node, setpage)

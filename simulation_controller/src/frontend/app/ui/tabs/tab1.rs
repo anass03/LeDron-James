@@ -239,18 +239,349 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
 
 pub(super) mod data_rendering{
     use ratatui::buffer::Buffer;
-    use ratatui::layout::{Constraint, Direction, Layout, Rect};
+    use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
     use ratatui::prelude::Color;
-    use ratatui::style::{Style, Stylize};
-    use ratatui::widgets::{Block, BorderType, Borders, Widget};
+    use ratatui::style::{Modifier, Style, Stylize};
+    use ratatui::widgets::{Block, BorderType, Borders, Widget, Paragraph, Bar, BarChart, BarGroup};
+    use ratatui::text::{Line, Span};
     use tui_logger::TuiLoggerWidget;
     use wg_2024::network::NodeId;
+    use crate::backend::sc_models::NodeStatistics;
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
     use crate::frontend::app::ui::tabs::tab1::render_data_logging_section;
 
+    // Function to render PDR bar chart
+    fn render_pdr_bar_chart(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
+        if stats.pdr_expected.is_empty() {
+            let no_data_text = Paragraph::new("No PDR data available")
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center);
+            no_data_text.render(area, buf);
+            return;
+        }
+
+        // Convert and sort PDR data
+        let mut pdr_data: Vec<(NodeId, f64)> = stats.pdr_expected.iter()
+            .map(|(node_id, pdr)| (*node_id, *pdr))
+            .collect();
+        pdr_data.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Calculate number of bars and dynamic sizing
+        let bars_count = pdr_data.len() as u16;
+        let max_gap = 1u16;
+        let total_gaps = if bars_count > 1 {
+            max_gap * (bars_count - 1)
+        } else { 0 };
+        // Determine bar width to fill available area (subtracting padding)
+        let content_width = area.width.saturating_sub(8) as u16;
+        let mut bar_width = if bars_count > 0 {
+            content_width.saturating_sub(total_gaps).checked_div(bars_count).unwrap_or(1)
+        } else { 1 };
+        if bar_width == 0 {
+            bar_width = 1;
+        }
+        let bar_gap = max_gap;
+
+        // Handle rotation if too many bars
+        let max_visible = ((content_width + bar_gap) as usize) / ((bar_width + bar_gap) as usize);
+        let (display_data, start_index, pdr_data_len) = if pdr_data.len() <= max_visible {
+            (pdr_data.clone(), 0, pdr_data.len())
+        } else {
+            let start_index = (app.cache.counter as usize / 50) % pdr_data.len();
+            let end_index = (start_index + max_visible).min(pdr_data.len());
+            (pdr_data[start_index..end_index].to_vec(), start_index, pdr_data.len())
+        };
+
+        // Title
+        let title = if pdr_data_len > max_visible {
+            format!("PDR ({}/{})", display_data.len(), pdr_data_len)
+        } else {
+            "PDR by Node".to_string()
+        };
+        let rotation_needed = pdr_data_len > max_visible;
+
+        // Layout: title, chart, optional rotation
+        let [title_area, chart_area, rotation_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(if rotation_needed { 1 } else { 0 }),
+            ])
+            .areas(area);
+
+        // Render title
+        Paragraph::new(title)
+            .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(Modifier::BOLD))
+            .alignment(Alignment::Center)
+            .render(title_area, buf);
+
+        // Center the chart horizontally
+        let total_bars_width = bars_count * bar_width + total_gaps;
+        let horizontal_padding = chart_area
+            .width
+            .saturating_sub(total_bars_width)
+            / 2;
+        let padded = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(horizontal_padding),
+                Constraint::Length(total_bars_width),
+                Constraint::Min(0),
+            ])
+            .split(chart_area);
+
+        // Prepare bars
+        let bars: Vec<Bar> = display_data.iter().map(|(node_id, pdr)| {
+            let style = pdr_color_style(*pdr);
+            Bar::default()
+                .value((*pdr * 100.0) as u64)
+                .label(Line::from(format!("N{}", node_id)))
+                .text_value(format!("{:.0}%", *pdr * 100.0))
+                .style(style)
+                .value_style(style.reversed())
+        }).collect();
+
+        // Render bar chart
+        BarChart::default()
+            .data(BarGroup::default().bars(&bars))
+            .bar_width(bar_width)
+            .bar_gap(bar_gap)
+            .bar_set(ratatui::symbols::bar::Set::default())
+            .render(padded[1], buf);
+
+        // Rotation indicator
+        if rotation_needed {
+            let progress = ((start_index * 100) / pdr_data_len).min(100);
+            Paragraph::new(format!("Rotating... ({}%)", progress))
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .render(rotation_area, buf);
+        }
+    }
+
+    // Function to render download speed chart
+    fn render_download_speed_chart(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
+        // Check if we have download speed data (you may need to adjust this based on your data structure)
+        if stats.pdr_expected.is_empty() {
+            let no_data_text = Paragraph::new("No download data available")
+                .style(Style::default().fg(Color::Gray))
+                .alignment(ratatui::layout::Alignment::Center);
+            no_data_text.render(area, buf);
+            return;
+        }
+
+        // For now, we'll create a sample chart using PDR data as download speed
+        // You should replace this with actual download speed data from your stats
+        let mut download_data: Vec<(NodeId, f64)> = stats.pdr_expected.iter()
+            .map(|(node_id, pdr)| (*node_id, *pdr * 100.0)) // Convert to Mbps (example)
+            .collect();
+        download_data.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // Calculate how many bars we can fit
+        let available_width = area.width.saturating_sub(8) as usize;
+        let max_bars = available_width / 3; // Each bar takes ~3 chars (bar + gap)
+        let bar_width = 2; // Fixed bar width
+        let bar_gap = 1; // Fixed gap
+        
+        let (display_data, start_index, data_len) = if download_data.len() <= max_bars {
+            (download_data.clone(), 0, download_data.len())
+        } else {
+            let start_index = (app.cache.counter as usize / 50) % download_data.len();
+            let end_index = (start_index + max_bars).min(download_data.len());
+            (download_data[start_index..end_index].to_vec(), start_index, download_data.len())
+        };
+
+        // Create title
+        let title = if data_len > max_bars {
+            format!("Download ({}/{})", display_data.len(), data_len)
+        } else {
+            "Download Speed".to_string()
+        };
+
+        let title_para = Paragraph::new(title)
+            .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(ratatui::style::Modifier::BOLD))
+            .alignment(ratatui::layout::Alignment::Center);
+        
+        let [title_area, chart_area, rotation_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(if data_len > max_bars { 1 } else { 0 })
+            ])
+            .areas(area);
+        
+        title_para.render(title_area, buf);
+
+        // Create bars for download speed chart
+        use ratatui::widgets::{Bar, BarChart, BarGroup};
+        use ratatui::text::Line;
+        
+        let bars: Vec<Bar> = display_data
+            .iter()
+            .map(|(node_id, speed)| {
+                let style = download_speed_color_style(*speed);
+                Bar::default()
+                    .value(*speed as u64)
+                    .label(Line::from(format!("N{}", node_id)))
+                    .text_value(format!("{:.0}M", *speed))
+                    .style(style)
+                    .value_style(style.reversed())
+            })
+            .collect();
+
+        let bar_chart = BarChart::default()
+            .data(BarGroup::default().bars(&bars))
+            .bar_width(bar_width as u16)
+            .bar_gap(bar_gap as u16)
+            .bar_set(ratatui::symbols::bar::Set::default());
+
+        bar_chart.render(chart_area, buf);
+
+        if data_len > max_bars {
+            let progress_percent = ((start_index * 100) / data_len).min(100);
+            let rotation_text = format!("Rotating... ({}%)", progress_percent);
+            let rotation_para = Paragraph::new(rotation_text)
+                .style(Style::default().fg(Color::Gray))
+                .alignment(ratatui::layout::Alignment::Center);
+            
+            rotation_para.render(rotation_area, buf);
+        }
+    }
+
+    // Helper function to create temperature-like color style based on PDR value
+    fn pdr_color_style(pdr: f64) -> Style {
+        let color = if pdr >= 0.8 {
+            Color::Rgb(0, 255, 0) // Green for high PDR
+        } else if pdr >= 0.6 {
+            Color::Rgb(255, 255, 0) // Yellow for medium-high PDR
+        } else if pdr >= 0.4 {
+            Color::Rgb(255, 165, 0) // Orange for medium PDR
+        } else if pdr >= 0.2 {
+            Color::Rgb(255, 69, 0) // Red-orange for low-medium PDR
+        } else {
+            Color::Rgb(255, 0, 0) // Red for low PDR
+        };
+        Style::new().fg(color)
+    }
+
+    // Helper function to create color style based on download speed value
+    fn download_speed_color_style(speed: f64) -> Style {
+        let color = if speed >= 80.0 {
+            Color::Rgb(0, 255, 0) // Green for high speed
+        } else if speed >= 60.0 {
+            Color::Rgb(255, 255, 0) // Yellow for medium-high speed
+        } else if speed >= 40.0 {
+            Color::Rgb(255, 165, 0) // Orange for medium speed
+        } else if speed >= 20.0 {
+            Color::Rgb(255, 69, 0) // Red-orange for low-medium speed
+        } else {
+            Color::Rgb(255, 0, 0) // Red for low speed
+        };
+        Style::new().fg(color)
+    }
+
     // For Client & Server
-    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
+    // If mode is 0 is Client, if is 1 is Server
+    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, mode:u8){
+        let [stats_area, filtered_logging_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+            .areas(area);
+        let [data_1, data_2, data_3] = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(40), Constraint::Percentage(30), Constraint::Percentage(30)])
+            .areas(stats_area);
+
+        // Expected PDR
+        let data_1_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default() .fg(
+                if app.cache.tab1_data.popup_cursor == 0 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+        let inner_data_1_block = data_1_block.inner(data_1);
+        data_1_block.render(data_1, buf);
+
+        // DOWNLOAD AT SEC IF CURSOR
+        let data_2_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 1 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+        let inner_data_2_block = data_2_block.inner(data_2);
+        data_2_block.render(data_2, buf);
+
+        // ROUTE
+        let data_3_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 2 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+
+        let inner_data_3_block = data_3_block.inner(data_3);
+        data_3_block.render(data_3, buf);
+
+
+        match app.simulation_controller_data.stats.node_statistic.get(&id){
+            None => {
+                // Render inside the graph blocks the text a canvas drawing something that says NOT VALID .
+                let no_data_text = Paragraph::new("No data available for this node")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text.render(inner_data_1_block, buf);
+                
+                // Also render no data for data_2_block
+                let no_data_text_2 = Paragraph::new("No download data available")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text_2.render(inner_data_2_block, buf);
+            }
+            Some(stats) => {
+                // Render PDR bar chart in data_1_block
+                render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
+                
+                // Render download speed chart in data_2_block
+                render_download_speed_chart(app, stats, inner_data_2_block, buf);
+            }
+        }
+
+
+
+
+        let logging_block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .border_style(Style::default().fg(
+                if app.cache.tab1_data.popup_cursor == 3 {
+                    app.animation_color()
+                }else{
+                    MAIN_BLOCK_BORDERS
+                }
+            ));
+
+        let inner_log_block = logging_block.inner(filtered_logging_area);
+        logging_block.render(filtered_logging_area, buf);
+
+        render_data_logging_section(app, id, inner_log_block, buf);
+    }
+    pub(crate) fn render_drone_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
         let [stats_area, filtered_logging_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -305,8 +636,29 @@ pub(super) mod data_rendering{
         data_3_block.render(data_3, buf);
         // Bar Chart, most received packets type
 
-
-
+        // Handle drone data display
+        match app.simulation_controller_data.stats.node_statistic.get(&id){
+            None => {
+                // Render inside the graph blocks the text a canvas drawing something that says NOT VALID .
+                let no_data_text = Paragraph::new("No data available for this drone")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text.render(inner_data_1_block, buf);
+                
+                // Also render no data for data_2_block
+                let no_data_text_2 = Paragraph::new("No download data available")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text_2.render(inner_data_2_block, buf);
+            }
+            Some(stats) => {
+                // Render PDR bar chart in data_1_block for drones too
+                render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
+                
+                // Render download speed chart in data_2_block
+                render_download_speed_chart(app, stats, inner_data_2_block, buf);
+            }
+        }
 
         let logging_block = Block::default()
             .borders(Borders::ALL)

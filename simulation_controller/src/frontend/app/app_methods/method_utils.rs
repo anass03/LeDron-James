@@ -85,7 +85,8 @@ impl App<'_> {
                                     }
                                 }
                             }
-                        }
+                        },
+                        RendererResponse::EncodedMediaChats(_) => (),
                     }
                 }
             }

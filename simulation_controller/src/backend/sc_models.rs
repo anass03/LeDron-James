@@ -130,11 +130,13 @@ pub enum RendererCommand{
     EncodeMedia((MediaId, Image)),
     EncodeFile((FileId, Vec<u8>)),
     ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>)),
-    ChangeDownloadFolder(PathBuf)
+    ChangeDownloadFolder(PathBuf),
+    SaveMediaFromChatList(Chat),
 }
 pub enum RendererResponse{
     EncodedMedia((MediaId, NetCacheMedia, Option<Receiver<FileRendererUpdate>>)),
     EncodedFile((FileId, NetCacheFile)),
+    EncodedMediaChats(Vec<PathBuf>),
     Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 
