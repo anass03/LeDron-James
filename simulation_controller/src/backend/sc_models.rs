@@ -18,7 +18,6 @@ use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 
 pub(crate) trait NodeCommand {}
-
 impl NodeCommand for DroneCommand {}
 impl NodeCommand for HostCommand {}
 impl NodeCommand for ClientCommand {}
@@ -224,18 +223,6 @@ pub enum FileType{
     UTF8(Vec<String>),
     Other(File)
 }
-
-
-/*
-Now, I want a single worker thread to render each of my files.
-First idea could be:
-
-A main crossbeam_channels / mpsc channels for direct important communications from Simulation Controller.
-- Add file channels to render
-- Render
-
-Then each file will have its own channels to identify them in a univocal way.
- */
 
 pub struct ChatCache{
     // Gets updated each time a chat-history gets modified via-server
