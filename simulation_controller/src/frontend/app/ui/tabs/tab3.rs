@@ -4,7 +4,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph, Widget, Wrap, HighlightSpacing, Clear};
+use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph, Widget, Wrap, HighlightSpacing, Clear, ListState};
 use crate::frontend::app::models::tab3_types::{Tab3MenuSelection, ViewedTab3, Tab3SettingsPage, DownloadSettingsItems, LoggingSettingsItems, NetworkSettingsItems, AppSettingsItems, LogLevel, DownloadSettingsPage, LoggingSettingsPage, NetworkSettingsPage, AppSettingsPage, DownloadSettingsCommandsPopup, LoggingSettingsCommandsPopup, NetworkSettingsCommandsPopup, AppSettingsCommandsPopup, CommandPopup, SettingsPopupStatus, RefreshTimeLevel};
 use crate::frontend::app::App;
 use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
@@ -279,13 +279,7 @@ fn render_logging_options_area(app: &App, area: Rect, buf: &mut Buffer, page: &L
         })
         .collect();
 
-    let [options_area, targets_area] = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(options_text.len() as u16 + 1),
-            Constraint::Min(0),
-        ])
-        .areas(inner_area);
+    let options_area = inner_area;
 
     let options_paragraph = Paragraph::new(options_text.join("\n"))
         .style(Style::default().fg(Color::White))
@@ -293,34 +287,7 @@ fn render_logging_options_area(app: &App, area: Rect, buf: &mut Buffer, page: &L
 
     options_paragraph.render(options_area, buf);
 
-    // Render available targets as a scrollable list
-    if !page.available_targets.is_empty() {
-        let targets_block = Block::default()
-            .title("Available Targets")
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded);
-        
-        let targets_inner = targets_block.inner(targets_area);
-        targets_block.render(targets_area, buf);
-        
-        let targets_items: Vec<ListItem> = page.available_targets.iter().map(|target| {
-            let is_selected = app.cache.logging_selected_targets.contains(target);
-            let prefix = if is_selected { "[✓]" } else { "[ ]" };
-            let display_text = if target == "All targets" {
-                format!("{} {} (select all)", prefix, target)
-            } else {
-                format!("{} {}", prefix, target)
-            };
-            ListItem::from(display_text)
-        }).collect();
-        
-        let targets_list = List::new(targets_items)
-            .block(Block::default())
-            .highlight_symbol("> ")
-            .highlight_spacing(HighlightSpacing::Always);
-        
-        targets_list.render(targets_inner, buf);
-    }
+
 
     // Render command popup if active
     render_logging_command_popup(app, area, buf, page);
@@ -521,10 +488,21 @@ fn render_set_log_targets_popup(app: &App, area: Rect, buf: &mut Buffer, page: &
         ListItem::from(display_text).style(style)
     }).collect();
     
-    let list = List::new(list_items)
-        .block(Block::default().title("Available Targets").borders(Borders::ALL));
+    // Create a scrollable list with proper state management
+    let mut list_state = ListState::default();
+    list_state.select(Some(page.target_cursor));
     
-    list.render(list_area, buf);
+    let list = List::new(list_items)
+        .block(Block::default().title("Available Targets").borders(Borders::ALL))
+        .highlight_symbol("> ")
+        .highlight_spacing(HighlightSpacing::Always);
+    
+    ratatui::widgets::StatefulWidget::render(
+        list,
+        list_area,
+        buf,
+        &mut list_state
+    );
     
     render_popup_status(status_area, buf, &cmd.status);
 }
