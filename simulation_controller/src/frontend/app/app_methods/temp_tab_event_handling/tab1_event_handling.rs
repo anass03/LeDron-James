@@ -450,7 +450,7 @@ impl App<'_> {
                                 self.handle_net_client_page(key, id, net_page)
                             }
                             ClientPopup::DataPage(data_page) => {
-
+                                self.handle_data_client_page(key, id, data_page)
                             }
                             ClientPopup::SettingsPage(sett_page) => {
                                 match sett_page.command_popup.clone(){
@@ -1246,11 +1246,81 @@ impl App<'_> {
             }
         }
     }
-    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, net_page: ClientNetPopup){
+    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, data_page: ClientDataPopup){
+        match key.code {
+            KeyCode::Up => {
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // From log box, go to rightmost upper box (data_3)
+                    self.cache.tab1_data.popup_cursor = 2;
+                } else if self.cache.tab1_data.popup_cursor > 0 {
+                    self.cache.tab1_data.popup_cursor -= 1;
+                } else {
+                    // Wrap around to the log box
+                    self.cache.tab1_data.popup_cursor = 3;
+                }
+            }
+            KeyCode::Down => {
+                if self.cache.tab1_data.popup_cursor < 3 {
+                    // From any upper box (0, 1, 2) go directly to log box (3)
+                    self.cache.tab1_data.popup_cursor = 3;
+                } else {
+                    // From log box, wrap around to first element
+                    self.cache.tab1_data.popup_cursor = 0;
+                }
+            }
+            KeyCode::Left => {
+                // Move left if possible within the horizontal layout (data_1, data_2, data_3)
+                if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 0; // From data_2 to data_1
+                } else if self.cache.tab1_data.popup_cursor == 2 {
+                    self.cache.tab1_data.popup_cursor = 1; // From data_3 to data_2
+                } else if self.cache.tab1_data.popup_cursor == 0 {
+                    // At leftmost position in top row, go back to menu selection
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 2; // Set to Data menu item
+                } else {
+                    // From filtered logging (bottom area), go back to menu area
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 2;
+                }
+            }
+            KeyCode::Right => {
+                // Move right if possible within the horizontal layout
+                if self.cache.tab1_data.popup_cursor == 0 {
+                    self.cache.tab1_data.popup_cursor = 1; // From data_1 to data_2
+                } else if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 2; // From data_2 to data_3
+                }
+                // If at rightmost or in filtered logging, no right movement
+            }
+            KeyCode::Enter => {
+                // Enter key behavior in log field - enter scrolling mode like tab0
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // Enter scrolling mode for the log field (same as tab0)
+                    self.app_mode = AppMode::Scrolling;
+                    info!(target: "main", "[LEDRON-CLI] Entered log scroll mode for node {}", id);
+                }
+                // For data charts (0, 1, 2), Enter could open detailed views
+                else {
+                    info!(target: "main", "[LEDRON-CLI] Data chart {} selected for node {}",
+                          self.cache.tab1_data.popup_cursor, id);
+                }
+            }
+            KeyCode::Esc => {
+                // ESC closes the popup completely and returns to main
+                self.cache.tab1_data.return_to_main();
+            }
+            _ => {
+                // Other keys are ignored in data page
+            }
+        }
 
+        // Update the viewing state to maintain the data page
+        self.cache.tab1_data.viewing = ViewedTab1::Popup((
+            id,
+            NodePopup::Client(ClientPopup::DataPage(data_page))
+        ));
     }
-
-
 
     fn handle_sett_client_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup){
         match self.cache.tab1_data.popup_cursor{
@@ -1457,7 +1527,76 @@ impl App<'_> {
             ))
     }
 
+    fn handle_data_server_page(&mut self, key: KeyEvent, id: NodeId, data_page: ServerDataPopup) {
+        match key.code {
+            KeyCode::Up => {
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // From log box, go to rightmost upper box (data_3)
+                    self.cache.tab1_data.popup_cursor = 2;
+                } else if self.cache.tab1_data.popup_cursor > 0 {
+                    self.cache.tab1_data.popup_cursor -= 1;
+                } else {
+                    // Wrap around to the log box
+                    self.cache.tab1_data.popup_cursor = 3;
+                }
+            }
+            KeyCode::Down => {
+                if self.cache.tab1_data.popup_cursor < 3 {
+                    // From any upper box (0, 1, 2) go directly to log box (3)
+                    self.cache.tab1_data.popup_cursor = 3;
+                } else {
+                    // From log box, wrap around to first element
+                    self.cache.tab1_data.popup_cursor = 0;
+                }
+            }
+            KeyCode::Left => {
+                // Move left if possible within the horizontal layout
+                if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 0;
+                } else if self.cache.tab1_data.popup_cursor == 2 {
+                    self.cache.tab1_data.popup_cursor = 1;
+                } else if self.cache.tab1_data.popup_cursor == 0 {
+                    // Go back to menu selection
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 0; // Set to Data menu item (servers only have Data and Settings)
+                } else {
+                    // From filtered logging area
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 0;
+                }
+            }
+            KeyCode::Right => {
+                // Move right if possible within the horizontal layout
+                if self.cache.tab1_data.popup_cursor == 0 {
+                    self.cache.tab1_data.popup_cursor = 1;
+                } else if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 2;
+                }
+            }
+            KeyCode::Enter => {
+                // Enter key behavior
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // Enter scrolling mode for the log field (same as tab0)
+                    self.app_mode = AppMode::Scrolling;
+                    info!(target: "main", "[LEDRON-CLI] Entered log scroll mode for server node {}", id);
+                } else {
+                    info!(target: "main", "[LEDRON-CLI] Server data chart {} selected for node {}",
+                          self.cache.tab1_data.popup_cursor, id);
+                }
+            }
+            KeyCode::Esc => {
+                // ESC closes the popup completely
+                self.cache.tab1_data.return_to_main();
+            }
+            _ => {}
+        }
 
+        // Update the viewing state
+        self.cache.tab1_data.viewing = ViewedTab1::Popup((
+            id,
+            NodePopup::Server(ServerPopup::DataPage(data_page))
+        ));
+    }
 
     fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){
         match self.cache.tab1_data.popup_selection {
@@ -1496,7 +1635,7 @@ impl App<'_> {
                     _ => {
                         match server_popup{
                             ServerPopup::DataPage(datapage) => {
-
+                                self.handle_data_server_page(key, id, datapage)
                             }
                             ServerPopup::SettingsPage(settpage) => {
                                 match settpage.command_popup.clone(){
@@ -1758,7 +1897,7 @@ impl App<'_> {
                     _ => {
                         match client_popup{
                             DronePopup::DataPage(datapage) => {
-
+                                self.handle_data_drone_page(key, id, datapage)
                             }
                             DronePopup::SettingsPage(settpage) => {
                                 match settpage.command_popup.clone(){
@@ -1786,7 +1925,74 @@ impl App<'_> {
         }
     }
     fn handle_data_drone_page(&mut self, key:KeyEvent,id:NodeId, data_page: DroneDataPopup){
+        match key.code {
+            KeyCode::Up => {
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // From log box, go to rightmost upper box (data_3)
+                    self.cache.tab1_data.popup_cursor = 2;
+                } else if self.cache.tab1_data.popup_cursor > 0 {
+                    self.cache.tab1_data.popup_cursor -= 1;
+                } else {
+                    // Wrap around to the log box
+                    self.cache.tab1_data.popup_cursor = 3;
+                }
+            }
+            KeyCode::Down => {
+                if self.cache.tab1_data.popup_cursor < 3 {
+                    // From any upper box (0, 1, 2) go directly to log box (3)
+                    self.cache.tab1_data.popup_cursor = 3;
+                } else {
+                    // From log box, wrap around to first element
+                    self.cache.tab1_data.popup_cursor = 0;
+                }
+            }
+            KeyCode::Left => {
+                // Move left within horizontal layout
+                if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 0;
+                } else if self.cache.tab1_data.popup_cursor == 2 {
+                    self.cache.tab1_data.popup_cursor = 1;
+                } else if self.cache.tab1_data.popup_cursor == 0 {
+                    // Go back to menu selection
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 0; // Set to Data menu item (drones have Data and Settings)
+                } else {
+                    // From bottom area
+                    self.cache.tab1_data.popup_selection = PopupSelection::MenuArea;
+                    self.cache.tab1_data.popup_cursor = 0;
+                }
+            }
+            KeyCode::Right => {
+                // Move right within horizontal layout
+                if self.cache.tab1_data.popup_cursor == 0 {
+                    self.cache.tab1_data.popup_cursor = 1;
+                } else if self.cache.tab1_data.popup_cursor == 1 {
+                    self.cache.tab1_data.popup_cursor = 2;
+                }
+            }
+            KeyCode::Enter => {
+                // Enter key behavior
+                if self.cache.tab1_data.popup_cursor == 3 {
+                    // Enter scrolling mode for the log field (same as tab0)
+                    self.app_mode = AppMode::Scrolling;
+                    info!(target: "main", "[LEDRON-CLI] Entered log scroll mode for drone node {}", id);
+                } else {
+                    info!(target: "main", "[LEDRON-CLI] Drone data chart {} selected for node {}",
+                          self.cache.tab1_data.popup_cursor, id);
+                }
+            }
+            KeyCode::Esc => {
+                // ESC closes the popup completely
+                self.cache.tab1_data.return_to_main();
+            }
+            _ => {}
+        }
 
+        // Update the viewing state
+        self.cache.tab1_data.viewing = ViewedTab1::Popup((
+            id,
+            NodePopup::Drone(DronePopup::DataPage(data_page))
+        ));
     }
     fn handle_sett_drone_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup){
         match self.cache.tab1_data.popup_cursor{
