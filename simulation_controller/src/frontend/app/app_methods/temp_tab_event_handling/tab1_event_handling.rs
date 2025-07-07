@@ -2,6 +2,7 @@ use crate::backend::sc_models::MediaEntry;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
+use std::sync::LockResult;
 use log::{error, info, warn, debug};
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -684,10 +685,16 @@ impl App<'_> {
         let chat_length = match self.simulation_controller_data.chat_cache.local_chats.get(&third_page_data.selected_server) {
             Some(chat_list) => {
                 match chat_list.chats_stored.get(&(id, third_page_data.selected_contact)) {
-                    Some(chat) => chat.chat.len(),
+                    Some(chat) => match chat.read() {
+                        Ok(ch) => ch.chat.len(),
+                        Err(_) => 0
+                    }
                     None => {
                         match chat_list.chats_stored.get(&(third_page_data.selected_contact, id)) {
-                            Some(chat) => chat.chat.len(),
+                            Some(chat) => match chat.read() {
+                                Ok(ch) => ch.chat.len(),
+                                Err(_) => 0
+                            },
                             None => 0
                         }
                     }

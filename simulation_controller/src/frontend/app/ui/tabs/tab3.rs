@@ -589,7 +589,7 @@ fn render_set_all_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &Comma
     let inner_pdr = pdr_block.inner(fields_area);
     pdr_block.render(fields_area, buf);
 
-    app.cache.text_buffer.inputfirst_text_area.render(inner_pdr, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_pdr, buf);
     
     // Send button
     let send_button = Paragraph::new("[ Set PDR for All Drones ]")
