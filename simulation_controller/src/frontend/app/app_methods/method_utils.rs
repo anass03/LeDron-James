@@ -10,7 +10,7 @@ use std::process::id;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use dashmap::mapref::one::Ref;
-use log::{info, LevelFilter};
+use log::{info, error, LevelFilter};
 use ratatui_image::thread::ResizeRequest;
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
@@ -108,10 +108,10 @@ impl App<'_> {
                     match update {
                         FileRendererUpdate::Redraw(resize_response) => {
                             protocol.update_resized_protocol(resize_response);
-                            self.simulation_controller_data.logs.push_sc_log(LogType::INFO, "Updated resized protocol".to_string());
+                            info!(target: "main", "[LEDRON-CLI] Updated resized protocol");
                         }
                         FileRendererUpdate::Error(err) => {
-                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, err);
+                            error!(target: "main", "[LEDRON-CLI] {}", err);
                         }
                     }
                 }

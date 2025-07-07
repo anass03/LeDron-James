@@ -1,7 +1,7 @@
 /*
 Each input-mode related method is found here
 */
-use log::error;
+use log::{error, info, warn, debug};
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use tui_textarea::{Input, TextArea};
 use initializer_utils::utils::parse_and_check_config;
@@ -9,13 +9,14 @@ use crate::backend::sc_models::LogType;
 use crate::frontend::app::models::general_types::TOMLmessages;
 use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::ui::tabs::SelectedTab;
+use crate::frontend::app::models::tab3_types::{ViewedTab3, Tab3SettingsPage, NetworkSettingsCommandsPopup};
 use super::super::App;
 impl App<'_>{
     // Should be handled directly by the
     pub(crate) fn handle_event_inputmode(&mut self, event: Event){
         //self.update_text_buffer();
         match self.selected_tab{
-            SelectedTab::Topology => {
+            SelectedTab::Topology | SelectedTab::Settings=> {
                 self.handle_topology_inputmode(event);
             }
             SelectedTab::TOMLEditor => {
@@ -79,14 +80,13 @@ impl App<'_>{
                                 if key.kind == KeyEventKind::Press {
                                     match key.code {
                                         KeyCode::Esc  => {
-                                            // Salvo input
+                                            // Exit input mode and return to previous state
                                             self.app_mode = AppMode::Normal;
                                         },
                                         KeyCode::F(1) => {
                                             self.cache.text_buffer.clean_topology_inputs_buffer();
                                             self.app_mode = AppMode::Normal;
                                         },
-
                                         _ => {
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
@@ -131,10 +131,7 @@ impl App<'_>{
                                                         }
                                                         Err(err) => {
                                                             // Log error and stay in input mode
-                                                            self.simulation_controller_data.logs.push_sc_log(
-                                                                LogType::ERROR,
-                                                                format!("[LEDRON-CLI] Failed to send chat message: {}", err)
-                                                            );
+                                                            error!(target: "main", "[LEDRON-CLI] Failed to send chat message: {}", err);
                                                         }
                                                     }
                                                 } else {

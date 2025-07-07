@@ -2,7 +2,7 @@ use crate::backend::sc_models::MediaEntry;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
-use log::error;
+use log::{error, info, warn, debug};
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
@@ -206,10 +206,7 @@ impl App<'_> {
                         match node_info {
                             None => {
                                 // Error: selected item doesn't exist
-                                self.simulation_controller_data.logs.push_sc_log(
-                                    LogType::ERROR,
-                                    "Selected item not found in network list".to_string()
-                                );
+                                error!(target: "main", "[LEDRON-CLI] Selected item not found in network list");
                             }
                             Some((node,is_active,_)) => {
                                 if *is_active{
@@ -250,10 +247,7 @@ impl App<'_> {
                                     }
                                 }else{
                                     // Throw a warning POPUP saying the item is not ACTIVE
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        LogType::ERROR,
-                                        "Selected node is not active".to_string()
-                                    );
+                                    error!(target: "main", "[LEDRON-CLI] Selected node is not active");
                                 }
                             }
                         }
@@ -261,10 +255,7 @@ impl App<'_> {
                     1 => {
                         // I am on Map
                         // I still don't know what could happen when I press map
-                        self.simulation_controller_data.logs.push_sc_log(
-                            LogType::INFO,
-                            "Map functionality not yet implemented".to_string()
-                        );
+                        info!(target: "main", "[LEDRON-CLI] Map functionality not yet implemented");
                     }
                     _ => ()
                 }
@@ -486,10 +477,10 @@ impl App<'_> {
                         // Send request
                         match self.simulation_controller_data.request_server_type(id){
                             Ok(_) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO,"Trying to find new servers in the network!".to_string());
+                                info!(target: "main", "[LEDRON-CLI] Trying to find new servers in the network!");
                             }
                             Err(str) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                error!(target: "main", "[LEDRON-CLI] {}", str);
                             }
                         }
                     },
@@ -532,10 +523,7 @@ impl App<'_> {
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
-                                        self.simulation_controller_data.logs.push_sc_log(
-                                            LogType::ERROR,
-                                            "Selected chat server not found".to_string()
-                                        );
+                                        error!(target: "main", "[LEDRON-CLI] Selected chat server not found");
                                     }
                                     Some(selected_server_id) => {
                                         request=true;
@@ -595,7 +583,7 @@ impl App<'_> {
                                 match self.simulation_controller_data.request_client_list(id,contacts_data.selected_server){
                                     Ok(_) => (),
                                     Err(str) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                             },
@@ -633,10 +621,7 @@ impl App<'_> {
                                                     None => {
                                                         // Bug, shouldn't arrive here.
                                                         // Means I can select non existing items
-                                                        self.simulation_controller_data.logs.push_sc_log(
-                                                            LogType::ERROR,
-                                                            "Selected contact not found".to_string()
-                                                        );
+                                                        error!(target: "main", "[LEDRON-CLI] Selected contact not found");
                                                     }
                                                     Some(contact) => {
                                                         self.cache.tab1_data.popup_cursor = 0;
@@ -788,10 +773,10 @@ impl App<'_> {
                         // Send request
                         match self.simulation_controller_data.request_server_type(id){
                             Ok(_) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO,"Sent request server-type".to_string());
+                                info!(target: "main", "[LEDRON-CLI] Sent request server-type");
                             }
                             Err(str) => {
-                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                error!(target: "main", "[LEDRON-CLI] {}", str);
                             }
                         }
                     },
@@ -831,27 +816,24 @@ impl App<'_> {
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
-                                        self.simulation_controller_data.logs.push_sc_log(
-                                            LogType::ERROR,
-                                            "Selected content server not found".to_string()
-                                        );
+                                        error!(target: "main", "[LEDRON-CLI] Selected content server not found");
                                     }
                                     Some(selected_server_id) => {
                                         let server_id = *selected_server_id;
                                         match self.simulation_controller_data.request_files_list(id, server_id){
                                             Ok(_) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request files list".to_string());
+                                                debug!(target: "main", "[LEDRON-CLI] Successfully sent request files list");
                                             }
                                             Err(str) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                                error!(target: "main", "[LEDRON-CLI] {}", str);
                                             }
                                         }
                                         match self.simulation_controller_data.request_media_list(id, server_id){
                                             Ok(_) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request media list".to_string());
+                                                debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list");
                                             }
                                             Err(str) => {
-                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                                error!(target: "main", "[LEDRON-CLI] {}", str);
                                             }
                                         }
                                         self.cache.tab1_data.popup_cursor = 0;
@@ -889,18 +871,18 @@ impl App<'_> {
                                 let server_id = ndpage.selected_server;
                                 match self.simulation_controller_data.request_files_list(id, server_id){
                                     Ok(_) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request files list".to_string());
+                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request files list");
                                     }
                                     Err(str) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                                 match self.simulation_controller_data.request_media_list(id, server_id){
                                     Ok(_) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::DEBUG,"Successfully sent request media list".to_string());
+                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list");
                                     }
                                     Err(str) => {
-                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR,str);
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                             },
@@ -1098,7 +1080,7 @@ impl App<'_> {
                                                     None => (), // Do nothing
                                                     Some(vecfiles) => {
                                                         match vecfiles.get(self.cache.tab1_data.file_list_render_utils.selected as usize){
-                                                            None => self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, "Error selecting the file, file-index out of bounds!".to_string()),
+                                                            None => error!(target: "main", "[LEDRON-CLI] Error selecting the file, file-index out of bounds!"),
                                                             Some(file_id) => {
                                                                 // Request the file
                                                                 if !self.simulation_controller_data.net_cache.downloaded_files.contains_key(file_id){
@@ -1118,6 +1100,7 @@ impl App<'_> {
                                                                         }
                                                                     }
                                                                 }else{
+                                                                    self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                                     ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
                                                                     self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                         ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
