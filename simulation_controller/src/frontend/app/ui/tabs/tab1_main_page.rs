@@ -6,17 +6,13 @@ use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyStatus;
 use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
-use crate::frontend::app::ui::tabs::tab1::draw_map;
+use crate::frontend::app::ui::tabs::tab1::{draw_map, draw_map_with_routes, get_node_routes};
 
 pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect, buf: &mut Buffer){
-    let [top_area,log_area] = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(80), Constraint::Percentage(20)])
-        .areas(area);
     let [list_area, map_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
-        .areas(top_area);
+        .areas(area);
 
     // Selection Menu
     // Render Nodes list on left column – styled after the ratatui list example
@@ -115,7 +111,32 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
 
         }
     }
-    draw_map(&app.simulation_controller_data.topology_algorithm_data, map_area, buf, canvas_block);
+    // Get the selected node and its routes for highlighting
+    let selected_node_id = if let Some(selected_idx) = app.cache.tab1_data.net_node_list.state.selected() {
+        if let Some((node, _, _)) = app.cache.tab1_data.net_node_list.items.get(selected_idx) {
+            match node {
+                Node::Client(c) => Some(c.id),
+                Node::Drone(d) => Some(d.id),
+                Node::Server(s) => Some(s.id),
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Get routes for the selected node
+    let highlighted_routes = selected_node_id.and_then(|id| get_node_routes(app, id));
+
+    // Draw map with optional route highlighting
+    draw_map_with_routes(
+        &app.simulation_controller_data.topology_algorithm_data, 
+        map_area, 
+        buf, 
+        canvas_block,
+        highlighted_routes.as_ref()
+    );
 /*    let canvas = Canvas::default()
         .block(canvas_block)
         .background_color(BG_COLOR)

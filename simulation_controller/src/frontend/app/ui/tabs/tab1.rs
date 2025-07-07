@@ -5,13 +5,13 @@ use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{NodePopup, PopupSelection, ViewedTab1};
 use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
 // popup code
-
+use ratatui::widgets::canvas::Line as CanvasLine;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets;
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
-use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, };
+use ratatui::widgets::canvas::{Canvas, Circle, Context};
 use crate::backend::sc_models::{NetNode, NodeType};
 use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
@@ -81,6 +81,16 @@ pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, 
 // Utils needed by the single tabs
 
 pub(super) fn draw_map(topology_algorithm_data:&TopologyAlgorithm, area: Rect, buf: &mut Buffer, canvas_block:Block){
+    draw_map_with_routes(topology_algorithm_data, area, buf, canvas_block, None)
+}
+
+pub(super) fn draw_map_with_routes(
+    topology_algorithm_data: &TopologyAlgorithm, 
+    area: Rect, 
+    buf: &mut Buffer, 
+    canvas_block: Block,
+    highlighted_routes: Option<&Vec<(NodeId, NodeId)>>
+) {
     let canvas = Canvas::default()
         .block(canvas_block)
         .background_color(BG_COLOR)
@@ -93,15 +103,42 @@ pub(super) fn draw_map(topology_algorithm_data:&TopologyAlgorithm, area: Rect, b
                     topology_algorithm_data.map.get(&a),
                     topology_algorithm_data.map.get(&b),
                 ) {
-                    let line = CanvasLine {
-                        x1: na.position.x as f64,
-                        y1: na.position.y as f64,
-                        x2: nb.position.x as f64,
-                        y2: nb.position.y as f64,
-                        color: Color::White,
-                        ..Default::default()
-                    };
-                    ctx.draw(&line);
+                    // Check if this link is part of a highlighted route
+                    let is_highlighted = highlighted_routes
+                        .map(|routes| {
+                            routes.iter().any(|&(r1, r2)| {
+                                (r1 == a && r2 == b) || (r1 == b && r2 == a)
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    if is_highlighted {
+                        // Draw multiple lines to create a thicker highlighted route
+                        for offset in -1..=1 {
+                            for offset2 in -1..=1 {
+                                let line = CanvasLine {
+                                    x1: na.position.x as f64 + offset as f64 * 0.5,
+                                    y1: na.position.y as f64 + offset2 as f64 * 0.5,
+                                    x2: nb.position.x as f64 + offset as f64 * 0.5,
+                                    y2: nb.position.y as f64 + offset2 as f64 * 0.5,
+                                    color: Color::Yellow,
+                                    ..Default::default()
+                                };
+                                ctx.draw(&line);
+                            }
+                        }
+                    } else {
+                        // Draw normal line
+                        let line = CanvasLine {
+                            x1: na.position.x as f64,
+                            y1: na.position.y as f64,
+                            x2: nb.position.x as f64,
+                            y2: nb.position.y as f64,
+                            color: Color::White,
+                            ..Default::default()
+                        };
+                        ctx.draw(&line);
+                    }
                 }
             }
             for (id, pos) in &topology_algorithm_data.map {
@@ -151,6 +188,28 @@ pub(super) fn draw_map(topology_algorithm_data:&TopologyAlgorithm, area: Rect, b
         });
     // Render the canvas into the allocated area
     canvas.render(area, buf);
+}
+
+/// Extract route links from a route vector (converts sequential nodes to pairs)
+pub(super) fn extract_route_links(route: &[NodeId]) -> Vec<(NodeId, NodeId)> {
+    let mut links = Vec::new();
+    for i in 0..route.len().saturating_sub(1) {
+        links.push((route[i], route[i + 1]));
+    }
+    links
+}
+
+/// Get routes from simulation controller data for a specific node
+pub(super) fn get_node_routes(app: &App, node_id: NodeId) -> Option<Vec<(NodeId, NodeId)>> {
+    app.simulation_controller_data.stats.node_statistic
+        .get(&node_id)
+        .and_then(|stats| {
+            if stats.route.len() > 1 {
+                Some(extract_route_links(&stats.route))
+            } else {
+                None
+            }
+        })
 }
 
 pub(super) fn get_settings_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&mut Context)>{
@@ -238,7 +297,9 @@ pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&
 }
 
 pub(super) mod data_rendering{
-    use ratatui::buffer::Buffer;
+    use crate::frontend::app::ui::tabs::tab1::CanvasLine;
+use crate::frontend::app::ui::tabs::tab1::Canvas;
+use ratatui::buffer::Buffer;
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
     use ratatui::prelude::Color;
     use ratatui::style::{Modifier, Style, Stylize};
@@ -246,12 +307,13 @@ pub(super) mod data_rendering{
     use ratatui::symbols::Marker;
     use ratatui::widgets::{Block, BorderType, Borders, Widget, Paragraph, Bar, BarChart, BarGroup, Axis, Dataset, Chart, GraphType};
     use ratatui::text::{Line, Span};
+    use ratatui::widgets::canvas::Circle;
     use tui_logger::TuiLoggerWidget;
     use wg_2024::network::NodeId;
     use crate::backend::sc_models::NodeStatistics;
     use crate::frontend::app::App;
     use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
-    use crate::frontend::app::ui::tabs::tab1::render_data_logging_section;
+    use crate::frontend::app::ui::tabs::tab1::{render_data_logging_section, extract_route_links};
 
     // Function to render PDR bar chart
     fn render_pdr_bar_chart(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
@@ -451,6 +513,89 @@ pub(super) mod data_rendering{
         Style::new().fg(color)
     }
 
+    // Function to render route visualization
+    pub fn render_route_visualization(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
+        if stats.route.is_empty() {
+            let no_route_text = Paragraph::new("No route data available")
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center);
+            no_route_text.render(area, buf);
+            return;
+        }
+
+        // Create a mini topology map showing the route
+        let canvas = Canvas::default()
+            .background_color(POPUP_BG_COLOR)
+            .x_bounds([0.0, 100.0])
+            .y_bounds([0.0, 80.0])
+            .paint(|ctx| {
+                let route_links = extract_route_links(&stats.route);
+                
+                // Draw route links with highlighted style
+                for &(a, b) in &route_links {
+                    // Calculate positions for the mini map
+                    let a_idx = stats.route.iter().position(|&x| x == a).unwrap_or(0);
+                    let b_idx = stats.route.iter().position(|&x| x == b).unwrap_or(0);
+                    
+                    let x1 = (a_idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
+                    let x2 = (b_idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
+                    let y1 = 40.0;
+                    let y2 = 40.0;
+                    
+                    // Draw highlighted route line (thicker by drawing multiple lines)
+                    for offset in -1..=1 {
+                        for offset2 in -1..=1 {
+                            let line = CanvasLine {
+                                x1: x1 + offset as f64 * 0.3,
+                                y1: y1 + offset2 as f64 * 0.3,
+                                x2: x2 + offset as f64 * 0.3,
+                                y2: y2 + offset2 as f64 * 0.3,
+                                color: Color::Yellow,
+                                ..Default::default()
+                            };
+                            ctx.draw(&line);
+                        }
+                    }
+                }
+                
+                // Draw nodes in the route
+                for (idx, &node_id) in stats.route.iter().enumerate() {
+                    let x = (idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
+                    let y = 40.0;
+                    let size = 2.0;
+                    
+                    // Draw node as a circle
+                    let circle = Circle {
+                        x, y,
+                        radius: size,
+                        color: Color::Cyan,
+                        ..Default::default()
+                    };
+                    ctx.draw(&circle);
+                    
+                    // Draw node ID
+                    ctx.print(x, y + 8.0, format!("{}", node_id));
+                }
+                
+                // Draw start and end indicators
+                if let Some(&start_node) = stats.route.first() {
+                    let x = 0.0;
+                    let y = 40.0;
+                    ctx.print(x, y - 15.0, "START");
+                    ctx.print(x, y - 8.0, format!("{}", start_node));
+                }
+                
+                if let Some(&end_node) = stats.route.last() {
+                    let x = 100.0;
+                    let y = 40.0;
+                    ctx.print(x - 15.0, y - 15.0, "END");
+                    ctx.print(x - 10.0, y - 8.0, format!("{}", end_node));
+                }
+            });
+        
+        canvas.render(area, buf);
+    }
+
     // For Client & Server
     // If mode is 0 is Client, if is 1 is Server
     pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, mode:u8){
@@ -497,6 +642,8 @@ pub(super) mod data_rendering{
 
         // ROUTE
         let data_3_block = Block::default()
+            .title("Route Visualization")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -526,12 +673,21 @@ pub(super) mod data_rendering{
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text_2.render(inner_data_2_block, buf);
+                
+                // Also render no data for data_3_block
+                let no_data_text_3 = Paragraph::new("No route data available")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text_3.render(inner_data_3_block, buf);
             }
             Some(stats) => {
                 // Render PDR bar chart in data_1_block
                 render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
                 // Render download speed chart in data_2_block
                 render_download_speed_chart(app, &stats.download_at_sec, inner_data_2_block, buf);
+                
+                // Render route visualization in data_3_block
+                render_route_visualization(app, stats, inner_data_3_block, buf);
             }
         }
 
@@ -595,6 +751,8 @@ pub(super) mod data_rendering{
         // CPU Utilize
 
         let data_3_block = Block::default()
+            .title("Route Visualization")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -607,7 +765,6 @@ pub(super) mod data_rendering{
 
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
-        // Bar Chart, most received packets type
 
         // Handle drone data display
         match app.simulation_controller_data.stats.node_statistic.get(&id){
@@ -623,6 +780,12 @@ pub(super) mod data_rendering{
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text_2.render(inner_data_2_block, buf);
+                
+                // Also render no data for data_3_block
+                let no_data_text_3 = Paragraph::new("No route data available")
+                    .style(Style::default().fg(Color::Gray))
+                    .alignment(ratatui::layout::Alignment::Center);
+                no_data_text_3.render(inner_data_3_block, buf);
             }
             Some(stats) => {
                 // Render PDR bar chart in data_1_block for drones too
@@ -630,6 +793,9 @@ pub(super) mod data_rendering{
                 
                 // Render download speed chart in data_2_block
                 //render_download_speed_chart(app, stats, inner_data_2_block, buf);
+                
+                // Render route visualization in data_3_block
+                render_route_visualization(app, stats, inner_data_3_block, buf);
             }
         }
 
