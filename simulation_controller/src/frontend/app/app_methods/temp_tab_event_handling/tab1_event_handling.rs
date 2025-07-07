@@ -1907,7 +1907,7 @@ impl App<'_> {
                     _ => {
                         match client_popup{
                             DronePopup::DataPage(datapage) => {
-
+                                self.handle_data_drone_page(key, id, datapage)
                             }
                             DronePopup::SettingsPage(settpage) => {
                                 match settpage.command_popup.clone(){

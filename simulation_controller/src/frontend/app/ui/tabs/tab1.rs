@@ -10,7 +10,7 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets;
-use ratatui::widgets::{Bar, BarChart, BarGroup, Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use ratatui::widgets::canvas::{Canvas, Circle, Context};
 use crate::backend::sc_models::{NetNode, NodeType};
 use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
@@ -851,6 +851,8 @@ use ratatui::buffer::Buffer;
             .areas(stats_area);
 
         let data_1_block = Block::default()
+            .title("Packets Sent")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default() .fg(
@@ -862,9 +864,10 @@ use ratatui::buffer::Buffer;
             ));
         let inner_data_1_block = data_1_block.inner(data_1);
         data_1_block.render(data_1, buf);
-        // Download Speed
 
         let data_2_block = Block::default()
+            .title("Packets Dropped")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -876,7 +879,6 @@ use ratatui::buffer::Buffer;
             ));
         let inner_data_2_block = data_2_block.inner(data_2);
         data_2_block.render(data_2, buf);
-        // CPU Utilize
 
         let data_3_block = Block::default()
             .title("Most Active Drones")
@@ -896,31 +898,48 @@ use ratatui::buffer::Buffer;
         // Render the most active nodes bar chart in the third field
         render_most_active_nodes_chart(app, inner_data_3_block, buf);
 
-        // Handle drone data display
-        match app.simulation_controller_data.stats.node_statistic.get(&id){
+        // Handle drone packet count data display
+        match app.simulation_controller_data.drone_packet_count.get(&id) {
             None => {
-                // Render inside the graph blocks the text a canvas drawing something that says NOT VALID .
-                let no_data_text = Paragraph::new("No data available for this drone")
+                // No packet data available
+                let no_data_text = Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text.render(inner_data_1_block, buf);
                 
-                // Also render no data for data_2_block
-                let no_data_text_2 = Paragraph::new("No download data available")
+                let no_data_text_2 = Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text_2.render(inner_data_2_block, buf);
 
             }
-            Some(stats) => {
-                // Render PDR bar chart in data_1_block for drones too
-                render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
+            Some((packets_sent, packets_dropped)) => {
+                // Render packets sent count in data_1_block
+                let sent_text = format!("Total Packets\nSent:\n\n{}", packets_sent);
+                let sent_para = Paragraph::new(sent_text)
+                    .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                    .alignment(ratatui::layout::Alignment::Center);
+                sent_para.render(inner_data_1_block, buf);
                 
-                // Render download speed chart in data_2_block
-                //render_download_speed_chart(app, stats, inner_data_2_block, buf);
+                // Render packets dropped count in data_2_block
+                let dropped_text = format!("Total Packets\nDropped:\n\n{}", packets_dropped);
+                let dropped_para = Paragraph::new(dropped_text)
+                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                    .alignment(ratatui::layout::Alignment::Center);
+                dropped_para.render(inner_data_2_block, buf);
                 
-                // Render route visualization in data_3_block
-                render_route_visualization(app, stats, inner_data_3_block, buf);
+                // Render route visualization in data_3_block (keep existing logic)
+                match app.simulation_controller_data.stats.node_statistic.get(&id) {
+                    Some(stats) => {
+                        render_route_visualization(app, stats, inner_data_3_block, buf);
+                    }
+                    None => {
+                        let no_data_text_3 = Paragraph::new("No route data available")
+                            .style(Style::default().fg(Color::Gray))
+                            .alignment(ratatui::layout::Alignment::Center);
+                        no_data_text_3.render(inner_data_3_block, buf);
+                    }
+                }
             }
         }
 
