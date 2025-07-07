@@ -32,7 +32,7 @@ pub struct SimulationControllerData {
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_types: HashMap<NodeId, DroneType>,
     pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has! Has to be updated by Initializer / SC Backend
-    pub drone_packet_count: HashMap<NodeId, (u64, u64)>,
+    pub drone_packet_count: HashMap<NodeId, (u64, u64)>, // (total Packet Sent, total Dropped sent)
     pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
