@@ -107,7 +107,7 @@ impl SimulationControllerData {
                 };
 
                 // Insert into cache
-                let mut chat_list = self
+                let chat_list = self
                     .chat_cache
                     .local_chats
                     .entry(server_id)
@@ -364,7 +364,7 @@ impl SimulationControllerData {
                     }
                     None => {
                         // Update downloading progress
-                        if let Some(mut entry) = self.net_cache.downloaded_files.get_mut(&file_id) {
+                        if let Some(entry) = self.net_cache.downloaded_files.get_mut(&file_id) {
                             match *entry {
                                 Downloading(_) => {}
                                 _ => return Ok(()),

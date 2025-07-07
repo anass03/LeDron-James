@@ -336,7 +336,7 @@ fn render_set_pdr_popup(
         .areas(inner);
 
     // New PDR input
-    let mut new_pdr_block = Block::default()
+    let new_pdr_block = Block::default()
         .title("New PDR (f32)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(if cmd.cursor == 0 {

@@ -42,7 +42,7 @@ pub(super) fn render_tab0(app: &mut App, area: Rect, buf: &mut Buffer) {
     use super::super::utils::chart_rendering;
     use crate::frontend::app::ui::tabs; // Statistic Block
 
-    let mut chart1_block = Block::default()
+    let chart1_block = Block::default()
         .title(" Dropped Messages ")
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
@@ -59,7 +59,7 @@ pub(super) fn render_tab0(app: &mut App, area: Rect, buf: &mut Buffer) {
         buf,
     );
 
-    let mut chart2_block = Block::default()
+    let chart2_block = Block::default()
         .title(" Sent Messages ")
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
@@ -76,7 +76,7 @@ pub(super) fn render_tab0(app: &mut App, area: Rect, buf: &mut Buffer) {
         buf,
     );
 
-    let mut chart3_block = Block::default()
+    let chart3_block = Block::default()
         .title(" Most active nodes ")
         .title_alignment(Alignment::Left)
         .borders(Borders::ALL)
@@ -133,7 +133,7 @@ impl LogFormatter for MyLogFormatter {
     }
     fn format(&self, width: usize, evt: &ExtLogRecord) -> Vec<Line> {
         let mut lines = vec![];
-        let identifier_str = match parse_node_string(evt.target()) {
+        let _identifier_str = match parse_node_string(evt.target()) {
             None => {
                 format!("Unknown Target")
             }
@@ -144,7 +144,7 @@ impl LogFormatter for MyLogFormatter {
 
         // Create the base log entry format
         let timestamp = evt.timestamp.format("%H:%M:%S").to_string();
-        let level_str = format!("{:?}", evt.level);
+        let _level_str = format!("{:?}", evt.level);
         let level_short = match evt.level {
             log::Level::Error => "ERR",
             log::Level::Debug => "DBG",
@@ -266,7 +266,7 @@ fn render_dynamic_help(app: &App, area: Rect, buf: &mut Buffer) {
 }
 
 /// Creates animated particle effects for the help area
-fn create_particle_canvas(app: &App) -> Canvas<'static, fn(&mut Context)> {
+fn create_particle_canvas(_app: &App) -> Canvas<'static, fn(&mut Context)> {
     // Use a static function that gets the counter from a global state
     Canvas::default()
         .background_color(BG_COLOR)

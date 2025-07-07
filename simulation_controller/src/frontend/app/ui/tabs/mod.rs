@@ -16,7 +16,7 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget};
 use std::io::Write;
 
 pub const BG_COLOR: Color = Color::Rgb(13, 10, 28);
@@ -128,7 +128,7 @@ pub(crate) fn render_top(app: &App, area: Rect, buf: &mut Buffer) {
     line.render(inner_main_block, buf)
 }
 pub(crate) fn render_inner(app: &mut App, area: Rect, buf: &mut Buffer) {
-    let mut main_block = Block::default()
+    let main_block = Block::default()
         .border_style(Style::default().fg(Color::Yellow))
         .border_style(Style::default().add_modifier(Modifier::BOLD))
         .style(Style::default().bg(BG_COLOR));
@@ -210,6 +210,9 @@ pub(crate) fn render_footer(app: &App, area: Rect, buf: &mut Buffer) {
         AppMode::FileExploring => {
             block = block.title(" Press a - d to change tabs | ↑ - ↓ to change tab options, ↳ to select a field | q to quit ")
         }
+        AppMode::Quitting => {
+            block = block.title(" [QUITTING MODE] ↑↓ or ←→ to select | Enter to confirm | Esc to cancel ")
+        }
     }
 
     // Render block and get inner space
@@ -244,7 +247,7 @@ pub(crate) fn render_footer(app: &App, area: Rect, buf: &mut Buffer) {
     ))
     .style(style)
     .alignment(Alignment::Center);
-    let mut net;
+    let net;
     if app.simulation_controller_data.stats.total_packet_exchanged < 1000 {
         net = Paragraph::new("Network reliability: Calculating ...")
             .style(style)

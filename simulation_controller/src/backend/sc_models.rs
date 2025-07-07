@@ -80,7 +80,7 @@ pub enum RendererCommand {
     Stop,
     EncodeMedia((MediaId, Image)),
     EncodeFile((FileId, Vec<u8>)),
-    ComputeSetOfTopologies((Vec<(NodeId, TopologyAlgorithm)>)),
+    ComputeSetOfTopologies(Vec<(NodeId, TopologyAlgorithm)>),
     ChangeDownloadFolder(PathBuf),
     SaveMediaFromChatList(Arc<RwLock<Chat>>),
 }
