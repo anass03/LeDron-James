@@ -39,9 +39,11 @@ use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, Node
 use crate::frontend::app::topology_algorithm::alg_models::{TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
 
+// LeDron Core, created with love by Saif Edine Safi and Filippo Marcatili
+// Clients & Servers ideated from the masterminds Anas Soussane and Riccardo Leone
+
 pub struct App<'a> {
     renderer: JoinHandle<()>,
-
 
     simulation_controller_data: SimulationControllerData,
     stay: bool,
