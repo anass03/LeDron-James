@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crossbeam_channel::unbounded;
 use simulation_controller::backend::simulation_controller::SimulationControllerData;
-use simulation_controller::backend::sc_models::{ChatCache, LogType, Logs, NetCache, Statistics};
+use simulation_controller::backend::sc_models::{ChatCache, LogType, NetCache, Statistics};
 use initializer::initializer::initialize;
 use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use tui_logger::*;

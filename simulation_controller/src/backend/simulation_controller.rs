@@ -14,7 +14,7 @@ use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
 use log::LevelFilter;
 use tui_logger::TuiWidgetState;
-use crate::backend::sc_models::{ChatCache, DroneType, LogType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 /// Simulation Controller struct contains:
@@ -25,8 +25,6 @@ use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 /// - the event receiver channels
 
 pub struct SimulationControllerData {
-    pub logs: Logs,
-
     // Each of the next data is going to get re-initialized each time the simulation stops!
 
     pub drones: Vec<DroneConfig>,   //vector of drones
@@ -124,7 +122,6 @@ impl SimulationControllerData {
             host_event_receiver,
             packet_sender,
             running_network,
-            logs: Logs::default(),
             stats,
             download_folder: PathBuf::from("assets"),
             topology_algorithm_data: TopologyAlgorithm::new(links.into_iter().collect()),
@@ -156,7 +153,6 @@ impl Default for SimulationControllerData {
             drone_event_receiver: unbounded().1,
             host_event_receiver: unbounded().1,
             packet_sender: Default::default(),
-            logs: Logs::default(),
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::default(),
             chat_cache: ChatCache::default(),

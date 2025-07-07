@@ -23,23 +23,9 @@ impl NodeCommand for ClientCommand {}
 /// Used in multiple crates, needs to be pub
 #[derive(Clone, Debug)]
 pub enum LogType{
-    WARN, ERROR, INFO, DEBUG, FATAL
+    WARN, ERROR, INFO, DEBUG
 }
 
-/// Used in multiple crates, needs to be pub
-#[derive(Clone)]
-pub struct Logs{
-    pub logs_memory: Vec<(LogType,String)>,
-    pub log_scroll_offset: usize,
-}
-
-impl Logs {
-    //pub(crate) fn push_sc_log(&self, _: LogType, _: String) {}
-}
-
-impl Logs {
-    //pub fn push_log(&self, _: LogType, _: &str) {}
-}
 
 pub struct Statistics{
     pub total_packet_exchanged: usize,
@@ -59,15 +45,6 @@ pub struct NodeStatistics{
 
 // Implementations
 
-impl Logs{
-    pub fn default() ->Self{
-        Self{
-            logs_memory: vec![],
-            log_scroll_offset: 0,
-        }
-    }
-
-}
 impl Statistics{
     pub fn default()->Self{
         Self{
