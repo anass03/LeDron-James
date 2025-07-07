@@ -1086,19 +1086,6 @@ pub(super) mod data_rendering {
                     .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                     .alignment(ratatui::layout::Alignment::Center);
                 dropped_para.render(inner_data_2_block, buf);
-
-                // Render route visualization in data_3_block (keep existing logic)
-                match app.simulation_controller_data.stats.node_statistic.get(&id) {
-                    Some(stats) => {
-                        render_route_visualization(app, stats, inner_data_3_block, buf);
-                    }
-                    None => {
-                        let no_data_text_3 = Paragraph::new("No route data available")
-                            .style(Style::default().fg(Color::Gray))
-                            .alignment(ratatui::layout::Alignment::Center);
-                        no_data_text_3.render(inner_data_3_block, buf);
-                    }
-                }
             }
         }
 
