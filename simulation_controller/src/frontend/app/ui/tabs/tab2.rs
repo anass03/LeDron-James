@@ -4,7 +4,7 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, List, ListItem, Padding, Paragraph, Tabs, Widget, Wrap, HighlightSpacing};
 use crate::frontend::app::App;
-use crate::frontend::app::models::general_types::TOMLmessages;
+use crate::frontend::app::models::general_types::TOMLMessages;
 use crate::frontend::app::models::main_types::AppMode;
 use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, ALTERNATE_LIST_COLOR, BG_COLOR, SELECTED_LIST_COLOR};
 
@@ -57,19 +57,19 @@ pub(super) fn render_tab2(app:&App, area: Rect, buf : &mut Buffer){
     let inner_compiler_block = compiler_block.inner(compiler_area);
     let mut compiler_status = Paragraph::default();
     match &app.cache.tab2_data.compiler_buf{
-        TOMLmessages::Correct => {
+        TOMLMessages::Correct => {
             compiler_status = Paragraph::new("Topology validation passed!")
                 .style(Style::default().fg(Color::Rgb(149, 207, 146))
                     .add_modifier(Modifier::BOLD|Modifier::ITALIC))
                 .centered();
         }
-        TOMLmessages::Error(str) => {
+        TOMLMessages::Error(str) => {
             compiler_status = Paragraph::new(format!("Error compiling: {}",str))
                 .style(Style::default().fg(Color::Red)
                     .add_modifier(Modifier::BOLD|Modifier::ITALIC))
                 .centered();
         }
-        TOMLmessages::FirstInizialized => {
+        TOMLMessages::FirstInitialized => {
             compiler_status = Paragraph::new("Compile manually to check TOML validity")
                 .style(Style::default().fg(Color::Gray)
                     .add_modifier(Modifier::BOLD| Modifier::ITALIC))

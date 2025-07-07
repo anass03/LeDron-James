@@ -1,14 +1,7 @@
-use std::sync::mpsc::{Receiver, Sender};
-use client::Client;
-use host::{ClientId, MediaId, ServerId};
-use image::math::Rect;
 use log::LevelFilter;
-use ratatui::Frame;
-use ratatui_explorer::{FileExplorer, Theme};
-use ratatui_image::thread::ResizeRequest;
-use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
+use ratatui_explorer::FileExplorer;
+use tui_logger::TuiWidgetState;
 use wg_2024::network::NodeId;
-use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
 use crate::frontend::app::models::tab3_types::Tab3;
 use crate::frontend::app::models::general_types::TextBuffer;

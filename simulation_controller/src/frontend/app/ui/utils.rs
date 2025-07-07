@@ -14,7 +14,7 @@ pub(super) mod chart_rendering{
         Sparkline::default()
             .style(Style::default().fg(Color::White))
             .block(block)
-            .data(&chdata.droppedmessages)
+            .data(&chdata.dropped_messages)
             .render(area,buf);
     }
 
@@ -23,13 +23,9 @@ pub(super) mod chart_rendering{
         Sparkline::default()
             .style(Style::default().fg(Color::White))  // Different color from dropped messages
             .block(block)
-            .data(&chdata.sentmessages)
+            .data(&chdata.sent_messages)
             .render(area,buf);
     }
-
-    // Distribuzione dei tipi di pacchetti che girano nella network,
-    // con opzione più specifica per vedere la distribuzione dei singoli
-    // tipi di NACK
 
     //BARCHART
     pub(crate) fn render_sparkline_3(chdata:&ChartsData, area:Rect, buf:&mut Buffer){

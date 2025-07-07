@@ -1,12 +1,9 @@
-/*
-Each input-mode related method is found here
-*/
-use log::error;
+use log::{debug, error};
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tui_textarea::{Input, TextArea};
+use tui_textarea::Input;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::sc_models::LogType;
-use crate::frontend::app::models::general_types::TOMLmessages;
+use crate::frontend::app::models::general_types::TOMLMessages;
 use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::ui::tabs::SelectedTab;
 use super::super::App;
@@ -36,8 +33,8 @@ impl App<'_>{
                             self.app_mode = AppMode::Normal;
                             // Aggiorno il buffer_del_compiler
                             match parse_and_check_config(&self.settings.toml_path){
-                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
-                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
+                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Correct},
+                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Error(e)}
                             }
                         },
                         KeyCode::F(1) => {
@@ -45,8 +42,8 @@ impl App<'_>{
                             self.app_mode = AppMode::Normal;
                             // Aggiorno il buffer_del_compiler
                             match parse_and_check_config(&self.settings.toml_path){
-                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
-                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
+                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Correct},
+                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Error(e)}
                             }
                         },
                         _ => {
@@ -57,7 +54,7 @@ impl App<'_>{
                                 },
                                 None => {
                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
-                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
+                                        debug!(target: "main", "[LEDRON-CLI] Pressed: {:?} + {:?}", code, modifiers);
                                     };
                                     self.cache.text_buffer.toml_text_area.input(input);
                                 }
@@ -91,10 +88,10 @@ impl App<'_>{
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
                                                 Some(c) => {
-                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
+                                                    self.cache.text_buffer.input_first_text_area.insert_char(c);
                                                 },
                                                 None => {
-                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
+                                                    self.cache.text_buffer.input_first_text_area.input(input);
                                                 }
                                             }
                                         }
@@ -131,10 +128,7 @@ impl App<'_>{
                                                         }
                                                         Err(err) => {
                                                             // Log error and stay in input mode
-                                                            self.simulation_controller_data.logs.push_sc_log(
-                                                                LogType::ERROR,
-                                                                format!("[LEDRON-CLI] Failed to send chat message: {}", err)
-                                                            );
+                                                            error!(target: "main", "[LEDRON-CLI] Failed to send chat message: {}", err);
                                                         }
                                                     }
                                                 } else {
@@ -178,13 +172,13 @@ impl App<'_>{
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
                                                 Some(c) => {
-                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
+                                                    self.cache.text_buffer.input_first_text_area.insert_char(c);
                                                 },
                                                 None => {
                                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
-                                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
+                                                        debug!(target: "main", "[LEDRON-CLI] Pressed: {:?} + {:?}", code, modifiers);
                                                     };
-                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
+                                                    self.cache.text_buffer.input_first_text_area.input(input);
                                                 }
                                             }
                                         }

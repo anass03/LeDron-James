@@ -22,7 +22,7 @@ impl Vector{
         }
     }
     pub(in crate::frontend::app) fn magnitude(&self) -> f32{
-        f32::sqrt((self.x * self.x + self.y * self.y)as f32)
+        f32::sqrt(self.x * self.x + self.y * self.y)
     }
     pub(in crate::frontend::app) fn scale(&self, scale_factor: f32) -> Vector{
         Vector::new(self.x*scale_factor, self.y*scale_factor)
@@ -52,11 +52,11 @@ impl Vector{
 
 pub(super) fn generate_force_vec(pos_a: &Vector, pos_b: &Vector, k: f32, attract: bool) -> Vector {
     let direction = pos_b.sub(pos_a);
-    let distance = direction.magnitude().max(0.5); // evita divisione per zero
+    let distance = direction.magnitude().max(0.5); // avoids dividing by zero
     let force_magnitude = if attract {
-        k * distance // forza attrattiva (Hooke)
+        k * distance // active force (Hooke)
     } else {
-        k / (distance * distance) // forza repulsiva (Coulomb)
+        k / (distance * distance) // repulsive force (Coulomb)
     };
     direction.normalize().scale(force_magnitude)
 }

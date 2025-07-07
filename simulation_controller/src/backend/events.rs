@@ -1,8 +1,10 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::mpsc;
+use std::rc::Rc;
+use std::sync::{mpsc, Arc, RwLock};
 use image::{DynamicImage, ImageBuffer, RgbImage, Rgba};
 use log::{debug, error, info};
 use wg_2024::controller::DroneEvent;
@@ -73,34 +75,42 @@ impl SimulationControllerData {
                         .known_content_servers
                         .insert(client_id, content_servers.clone());
                 }
-                info!(target: "main", "Servers discovered: {servers:?}");
+                info!(target: "main", "[LEDRON-CLI] Servers discovered: {servers:?}");
             },
             HostEvent::ChatUpdate(server_id, string) => {
                 let chat: ChatStruct = serde_json::from_str(&string)
                     .map_err(|e| (LogType::ERROR, e.to_string()))?;
 
+                // Wrap in Arc<RwLock<>>
+                let chat_arc = Arc::new(RwLock::new(chat));
+
                 match self.tx_to_renderer.as_ref() {
                     Some(sender) => {
-                        if let Err(e) = sender.send(RendererCommand::SaveMediaFromChatList(chat)) {
+                        if let Err(e) = sender.send(RendererCommand::SaveMediaFromChatList(chat_arc.clone())) {
                             return Err((LogType::ERROR, e.to_string()));
                         }
                     },
                     None => {
-                        self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                        error!(target: "main", "[LEDRON-CLI] Failed to send chat update to renderer");
                     },
                 }
 
-                let key = (chat.users.user1, chat.users.user2);
-                let mut chats_stored = HashMap::new();
-                chats_stored.insert(key, chat);
+                // Extract key for HashMap
+                let key = {
+                    let chat_ref = chat_arc.read().unwrap();
+                    (chat_ref.users.user1, chat_ref.users.user2)
+                };
 
-                let chat_list = ChatList { chats_stored };
-                self.chat_cache.local_chats.insert(server_id, chat_list);
+                // Insert into cache
+                let mut chat_list = self.chat_cache.local_chats
+                    .entry(server_id)
+                    .or_insert_with(ChatList::new);
+
+                chat_list.insert_chat_arc(key, chat_arc);
             }
             HostEvent::DownloadingInfo(server_id, content_id, percentage) => {
                 self.update_net_cache(server_id, content_id, None, None, Some(percentage))?
             },
-            HostEvent::UploadingInfo(server_id, client_id, percentage) => {},
             HostEvent::ExpectedPDR(client_id, expected_pdr) => {
                 let expected_pdr_clone = expected_pdr.clone();
                 self.stats.node_statistic
@@ -135,10 +145,11 @@ impl SimulationControllerData {
                     .entry(host_id)
                     .and_modify(|node_stat| node_stat.route = route.clone())
                     .or_insert_with(|| NodeStatistics {
-                        route: route,
+                        route,
                         ..Default::default()
                     });
             },
+            _=> {}
         }
         Ok(())
     }
@@ -147,14 +158,14 @@ impl SimulationControllerData {
         match server_to_client {
             ServerToClient::ServerType(server_type)
             => {
-                info!(target: "main", "Server type: {:?}", server_type)
+                info!(target: "main", "[LEDRON-CLI] Server type: {:?}", server_type)
             },
             ServerToClient::FilesList(client_id, server_id, file_list)
             => {
                 let filtered_file_list: Vec<FileId> = file_list
                     .into_iter()
                     .filter(|file_id| {
-                        // Rimuovi file macOS e file nascosti
+                        // Remove hidden files
                         !file_id.starts_with("._") && !file_id.starts_with(".")
                     })
                     .collect();
@@ -165,7 +176,7 @@ impl SimulationControllerData {
                     .or_default()
                     .insert(server_id, filtered_file_list.clone());
 
-                info!(target: "main", "Filtered files list from Server {server_id}: {:?}", filtered_file_list);
+                info!(target: "main", "[LEDRON-CLI] Filtered files list from Server {server_id}: {:?}", filtered_file_list);
             },
             ServerToClient::File(server_id, file_id, file)
             => {
@@ -179,9 +190,8 @@ impl SimulationControllerData {
                 let filtered_media_list: Vec<MediaId> = media_list
                     .into_iter()
                     .filter(|media_id| {
-                        // Rimuovi file che iniziano con ._
+                        // Remove hidden files
                         !media_id.starts_with("._") &&
-                            // Opzionalmente, rimuovi anche altri file nascosti
                             !media_id.starts_with(".")
                     })
                     .collect();
@@ -191,7 +201,7 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, filtered_media_list.clone());
-                info!(target: "main", "Media list from Server {server_id} received: {:?}", filtered_media_list)
+                info!(target: "main", "[LEDRON-CLI] Media list from Server {server_id} received: {:?}", filtered_media_list)
             },
             ServerToClient::Media(server_id, media_id, image)
             => {
@@ -208,21 +218,21 @@ impl SimulationControllerData {
                     .entry(client_id)
                     .or_default()
                     .insert(server_id, contacts);
-                info!(target: "main", "Client list from CatServer {server_id} received: {:?}", client_list)
+                info!(target: "main", "[LEDRON-CLI] Client list from CatServer {server_id} received: {:?}", client_list)
             },
             ServerToClient::MessageFrom(server_id, client_id, message)
-            => info!(target: "main", "Message from Client {client_id} received through Server {server_id}: {message}"),
+            => info!(target: "main", "[LEDRON-CLI] Message from Client {client_id} received through Server {server_id}: {message}"),
             ServerToClient::FileFrom(server_id, client_id, ..)
             => {
-                self.logs.push_sc_log(LogType::INFO, format!("File from Client {client_id} received through Server {server_id}"));
+                info!(target: "main", "[LEDRON-CLI] File from Client {client_id} received through Server {server_id}");
             }
             ServerToClient::MediaFrom(server_id, client_id, ..)
             => {
-                self.logs.push_sc_log(LogType::INFO, format!("Media from Client {client_id} received through Server {server_id}"));
+                info!(target: "main", "[LEDRON-CLI] Media from Client {client_id} received through Server {server_id}");
             }
             ServerToClient::WrongServer(server_id)
             => {
-                self.logs.push_sc_log(LogType::INFO, format!("Wrong Server ID: {server_id}"));
+                info!(target: "main", "[LEDRON-CLI] Wrong Server ID: {server_id}");
             }
             ServerToClient::ErrNotFound(server_id)
             => return Err((LogType::ERROR, format!("Err Not Found by Server {server_id}"))),
@@ -238,20 +248,20 @@ impl SimulationControllerData {
         while let Ok(event) = self.host_event_receiver.try_recv() {
             match self.handle_host_event(event) {
                 Ok(()) => {},
-                Err(e) => {self.logs.push_sc_log(e.0, e.1);},
+                Err(e) => error!(target: "main", "[LEDRON-CLI] {e:?}")
             }
         }
         while let Ok(event) = self.drone_event_receiver.try_recv() {
             match self.handle_drone_event(event) {
                 Ok(()) => {},
-                Err(e) => {self.logs.push_sc_log(e.0, e.1)}
+                Err(e) => error!(target: "main", "[LEDRON-CLI] {e:?}")
             }
         }
 
         self.handle_network_reliability()
     }
 
-    fn update_net_cache(&mut self, server_id: ServerId, content_id: ContentID, image: Option<Image>, file: Option<Vec<u8>>, percentage: Option<f32>) -> Result<(), (LogType, String)> {
+    fn update_net_cache(&mut self, _server_id: ServerId, content_id: ContentID, image: Option<Image>, file: Option<Vec<u8>>, percentage: Option<f32>) -> Result<(), (LogType, String)> {
         match content_id {
             ContentID::Media(media_id) => {
                 match image {
@@ -268,7 +278,7 @@ impl SimulationControllerData {
                                 }
                             },
                             None => {
-                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                                return Err((LogType::ERROR, "No tx_to_render sender found".to_string()));
                             },
                         }
                         Ok(())
@@ -301,7 +311,7 @@ impl SimulationControllerData {
                                 }
                             },
                             None => {
-                                self.logs.push_sc_log(LogType::ERROR, "No tx_to_render sender found".to_string());
+                                return Err((LogType::ERROR, "No tx_to_render sender found".to_string()));
                             },
                         }
                         Ok(())
@@ -336,7 +346,7 @@ impl SimulationControllerData {
         let path = self.download_folder.join(&file_id);
 
         match fs::write(&path, &file) {
-            Ok(_) => info!(target: "main", "File {file_id} downloaded in : {path:?}"),
+            Ok(_) => info!(target: "main", "[LEDRON-CLI] File {file_id} downloaded in : {path:?}"),
             Err(e) => return Err((LogType::INFO, format!("File {file_id} not downloaded: {e}")))
         }
         Ok(())

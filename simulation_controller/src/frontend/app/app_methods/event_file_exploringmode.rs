@@ -34,10 +34,7 @@ impl App<'_> {
                                     self.cache.tab3_data.browsing_for_download_folder = false;
                                     self.app_mode = AppMode::Normal;
 
-                                    self.simulation_controller_data.logs.push_sc_log(
-                                        LogType::INFO,
-                                        format!("Download folder set to: {}", folder_path)
-                                    );
+                                    info!(target: "main", "[LEDRON-CLI] Download folder set to: {}", folder_path)
                                 } else {
                                     // If they clicked on a file, navigate into its parent directory or show error
                                     _ = self.cache.file_explorer.handle(input);
@@ -46,7 +43,7 @@ impl App<'_> {
                                 // Original tab1 file exploring logic
                                 if self.cache.file_explorer.current().is_dir() {
                                     _ = self.cache.file_explorer.handle(input);
-                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered directory: {:?}", self.cache.file_explorer.current()));
+                                    error!(target: "main", "[LEDRON-CLI] Entered directory: {:?}", self.cache.file_explorer.current());
                                 } else {
                                     let selected_file = self.cache.file_explorer.current();
                                     // Here I should send the request, depending if I am on Net Page and Chat Page
@@ -58,7 +55,7 @@ impl App<'_> {
                                             match selected_file.name().chars().position(|ch| ch == '.') {
                                                 None => {
                                                     // Impossible? Should not be a directory!
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Entered None 1 {:?}", selected_file.name()));
+                                                    error!(target: "main", "[LEDRON-CLI] Entered None 1 {:?}", selected_file.name())
                                                 }
                                                 Some(pos) => {
                                                     let ext = selected_file.name()[pos..].to_string();
@@ -117,17 +114,17 @@ impl App<'_> {
                                                             selected_file.path().as_path(),
                                                         ) {
                                                             Ok(_) => {
-                                                                self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded media!"));
+                                                                info!(target: "main", "[LEDRON-CLI] Successfully uploaded media!");
                                                             }
                                                             Err(str) => {
-                                                                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending media {:?}", str));
+                                                                error!(target: "main", "[LEDRON-CLI] Error sending media {:?}", str);
                                                             }
                                                         }
                                                         self.cache.tab1_data.file_exploring_data.file_request_source = 0;
                                                         self.app_mode = AppMode::Normal;
                                                     } else {
-                                                        // Report error, I gotta check how to do it.
-                                                        self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Invalid media format. Only .jpg, .jpeg, .png are supported"));
+                                                        // Report error, I got to check how to do it.
+                                                        error!(target: "main", "[LEDRON-CLI] Invalid media format. Only .jpg, .jpeg, .png are supported");
                                                     }
                                                 }
                                             }
@@ -141,10 +138,10 @@ impl App<'_> {
                                                 selected_file.path().as_path(),
                                             ) {
                                                 Ok(_) => {
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::INFO, format!("Successfully uploaded file!"));
+                                                    info!(target: "main", "[LEDRON-CLI] Successfully uploaded file!");
                                                 }
                                                 Err(str) => {
-                                                    self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Error sending file {:?}", str));
+                                                    error!(target: "main", "[LEDRON-CLI] Error sending file {:?}", str);
                                                 }
                                             }
                                             self.cache.tab1_data.file_exploring_data.file_request_source = 0;
@@ -152,7 +149,7 @@ impl App<'_> {
                                         }
                                         _ => {
                                             // It should never go here.
-                                            self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, format!("Invalid file request source"));
+                                            error!(target: "main", "[LEDRON-CLI] Invalid file request source");
                                         }
                                     }
                                 }

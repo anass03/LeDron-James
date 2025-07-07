@@ -57,7 +57,7 @@ impl SimulationControllerData {
             network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
         }
 
-        debug!(target: "main", "{:?}", network_map);
+        debug!(target: "main", "[LEDRON-CLI] {:?}", network_map);
         network_map
     }
 
@@ -217,9 +217,6 @@ impl SimulationControllerData {
             if let Some(neighbors) = modified_drone_graph.get_mut(&second_id) {
                 neighbors.retain(|&id| id != first_id);
             }
-
-            self.logs.push_sc_log(LogType::DEBUG, format!("{:?}", modified_drone_graph));
-
             let is_connected = self.is_graph_connected_excluding(&modified_drone_graph, None);
             return Ok(!is_connected);
         }

@@ -49,11 +49,11 @@ pub struct TopologyAlgorithm{
     // Nodes and their resultant vector that needs to get applied
     pub nodes_resultant_vec: HashMap<NodeId, Vector>,
 
-    // All positions score, the smaller the better!
+    // All positions score, the smaller, the better!
     // How do we compute it? We get the avg of all the resultant magnitudes.
     pub avg_positioning_score: f32,
 
-    // More than K fatal errors and algorithm will stop trying to converge ( and re-run? idk )
+    // More than K fatal errors and algorithm will stop trying to converge ( and re-run? )
     counter_errors: u8,
 }
 
@@ -406,8 +406,8 @@ impl TopologyAlgorithm{
     }
 
     /// Compute repulsion forces for all nodes due to intersecting links.
-    fn general_generate_intersection_forces(&self) -> Result<std::collections::HashMap<NodeId, Vector>, String> {
-        let mut result = std::collections::HashMap::new();
+    fn general_generate_intersection_forces(&self) -> Result<HashMap<NodeId, Vector>, String> {
+        let mut result = HashMap::new();
         let links = &self.map_links;
         let map = &self.map;
 

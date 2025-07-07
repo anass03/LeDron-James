@@ -1,12 +1,9 @@
 use std::collections::{HashMap, HashSet};
 use host::{ClientId, FileId, HostCommand, Image, MediaId, ServerId};
-use toml::value::{Datetime, Time};
 use std::fmt::{Debug, Display, Formatter};
-use std::fs::File;
 use std::sync::mpsc::{Receiver, Sender};          // <-- concrete type
-use server::chat::{Chat, MessageMetaData, MessageSC::*, ChatUsers};
+use server::chat::{Chat, MessageSC::*};
 use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
-use server::MessageSC::Message;
 use std::io::Write;
 use std::path::PathBuf;
 use dashmap::DashMap;
@@ -15,6 +12,7 @@ use wg_2024::network::NodeId;
 use client::ClientCommand;
 use crate::backend::simulation_controller::SimulationControllerData;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use std::sync::{Arc, RwLock};
 
 
 pub(crate) trait NodeCommand {}
@@ -33,6 +31,14 @@ pub enum LogType{
 pub struct Logs{
     pub logs_memory: Vec<(LogType,String)>,
     pub log_scroll_offset: usize,
+}
+
+impl Logs {
+    //pub(crate) fn push_sc_log(&self, _: LogType, _: String) {}
+}
+
+impl Logs {
+    //pub fn push_log(&self, _: LogType, _: &str) {}
 }
 
 pub struct Statistics{
@@ -61,55 +67,6 @@ impl Logs{
         }
     }
 
-    pub (crate) fn push_sc_log(&mut self, log_type: LogType, text: String) {
-        // Write all logs to a text file
-        /*        match log_type{
-                    LogType::ERROR | LogType::FATAL => {*/
-        /*if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .append(true)
-            .open("logs.txt")
-        {
-            let _ = writeln!(file, "{}", text);
-        }*/
-        /*            },
-                    _ => {}
-                }*/
-
-/*        if self.logs_memory.len()>=50{
-            self.logs_memory.remove(0);
-            self.logs_memory.push((log_type, format!("[Simulation Controller] - {text}")));
-        }else{
-            self.logs_memory.push((log_type, format!("[Simulation Controller] - {text}")));
-            self.log_scroll_offset += 1;
-        }*/
-    }
-    pub fn push_log(&mut self, log_type: LogType, text: &str){
-        // Write all logs to a text file
-/*        match log_type{
-            LogType::ERROR | LogType::FATAL => {*/
-                /*if let Ok(mut file) = std::fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .append(true)
-                    .open("logs.txt")
-                {
-                    let _ = writeln!(file, "{}", text);
-                }*/
-/*            },
-            _ => {}
-        }*/
-
-/*
-        if self.logs_memory.len()>=50{
-            self.logs_memory.remove(0);
-            self.logs_memory.push((log_type, text.to_string()));
-        }else{
-            self.logs_memory.push((log_type, text.to_string()));
-            self.log_scroll_offset += 1;
-        }*/
-    }
 }
 impl Statistics{
     pub fn default()->Self{
@@ -131,7 +88,7 @@ pub enum RendererCommand{
     EncodeFile((FileId, Vec<u8>)),
     ComputeSetOfTopologies((Vec<(NodeId,TopologyAlgorithm)>)),
     ChangeDownloadFolder(PathBuf),
-    SaveMediaFromChatList(Chat),
+    SaveMediaFromChatList(Arc<RwLock<Chat>>),
 }
 pub enum RendererResponse{
     EncodedMedia((MediaId, NetCacheMedia, Option<Receiver<FileRendererUpdate>>)),
@@ -154,7 +111,7 @@ impl MediaEntry {
         }
     }
 
-    pub fn with_channels(tx: Sender<ResizeRequest>, rx: Receiver<FileRendererUpdate>, cache: NetCacheMedia) -> Self {
+    pub fn with_channels(_tx: Sender<ResizeRequest>, rx: Receiver<FileRendererUpdate>, cache: NetCacheMedia) -> Self {
         Self {
             rx: Some(rx),
             cache,
@@ -262,56 +219,54 @@ impl ChatCache{
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct ChatList{
-    // We keep a copy of the users chats even in the vec for easier finding.
 
-    // CONVERTI IN HASHMAP E SISTEMA IN TAB1 RENDERING
-    // FINISCI EVENT HANDLING CHAT
-    // IMPORTA CRATE EXTERNAL FILE EXPLORER
-    // DATA PAGE
-    pub chats_stored: HashMap<(ClientId, ClientId), Chat>
+pub(crate) struct ChatList {
+    pub chats_stored: HashMap<(ClientId, ClientId), Arc<RwLock<Chat>>>
 }
 
-impl ChatList{
-    fn default() -> Self{
-        Self{
-            chats_stored: HashMap::new(),
+impl ChatList {
+    pub fn new() -> Self {
+        Self {
+            chats_stored: HashMap::new()
         }
     }
-    fn default_dummy() -> Self {
-        // Build a dummy chat history of 20 alternating messages
-        let users_pair = (8, 9);
-        let mut history = Vec::with_capacity(20);
-        for i in 0..20 {
-            // Alternate sender: even index -> Node 2, odd -> Node 1
-            let sender = if i % 2 == 0 { 2 } else { 1 };
-            // Generate message text
-            let text = format!("Test message {}\n Hello fdjsnfjsdn fnjsdkn fknsdknfjksd njfnsdkjnfnsdkkfsdjf kdsnjfndsjfnsd jbpjhièjhihuhhuuiphhuih uhuiph gdfsughfdi gdfpihgsughupi fudsgdfuisg dfgudfhgf gsp", i + 1);
-            // Generate timestamps starting at 10:00 and +1 minute each
-            let minute = (i % 60) as u8;
-            let hour = 10 + (i / 60) as u8;
-            let timestamp = Datetime {
-                date: None,
-                time: Some(Time { hour, minute, second: 0, nanosecond: 0 }),
-                offset: None,
-            };
-            history.push((
-                Message(text),
-                MessageMetaData { id: sender, timestamp },
-            ));
-        }
-        let chat = Chat {
-            chat: history,
-            users: ChatUsers { user1: 8, user2: 9 },
-        };
-        ChatList {
-            chats_stored: {
-                let mut hash_map = HashMap::default();
-                hash_map.insert(users_pair, chat);
-                hash_map
-            },
-        }
+
+    // Insert a new chat
+    pub fn insert_chat(&mut self, key: (ClientId, ClientId), chat: Chat) {
+        let chat_arc = Arc::new(RwLock::new(chat));
+        self.chats_stored.insert(key, chat_arc);
+    }
+
+    // Insert an already wrapped chat
+    pub fn insert_chat_arc(&mut self, key: (ClientId, ClientId), chat_arc: Arc<RwLock<Chat>>) {
+        self.chats_stored.insert(key, chat_arc);
+    }
+
+    // Get a chat for reading
+    pub fn get_chat(&self, key: &(ClientId, ClientId)) -> Option<Arc<RwLock<Chat>>> {
+        self.chats_stored.get(key).cloned()
+    }
+
+    // Read from a chat safely
+    pub fn read_chat<F, R>(&self, key: &(ClientId, ClientId), f: F) -> Option<R>
+    where
+        F: FnOnce(&Chat) -> R,
+    {
+        self.chats_stored.get(key).map(|chat_arc| {
+            let chat = chat_arc.read().unwrap();
+            f(&*chat)
+        })
+    }
+
+    // Write to a chat safely
+    pub fn write_chat<F, R>(&self, key: &(ClientId, ClientId), f: F) -> Option<R>
+    where
+        F: FnOnce(&mut Chat) -> R,
+    {
+        self.chats_stored.get(key).map(|chat_arc| {
+            let mut chat = chat_arc.write().unwrap();
+            f(&mut *chat)
+        })
     }
 }
 

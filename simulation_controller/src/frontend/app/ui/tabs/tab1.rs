@@ -708,7 +708,7 @@ pub(super) fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, c
             }));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
-    app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
         .style(Style::default().fg(
@@ -773,7 +773,7 @@ pub(super) fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer
         ));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
-    app.cache.text_buffer.inputfirst_text_area.render(inner_nodeid, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
         .style(Style::default().fg(

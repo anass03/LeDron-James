@@ -1,5 +1,3 @@
-use crate::frontend::app::App;
-
 /// Tab n.00 data
 pub(in crate::frontend::app) struct Tab0{
     pub selected_chart: usize,
@@ -28,9 +26,9 @@ impl Tab0 {
 }
 
 pub(in crate::frontend::app) struct ChartsData{ // Each CONST sec data, NOT TOTAL
-    pub droppedmessages: Vec<u64>, // We will show max n gauges
+    pub dropped_messages: Vec<u64>, // We will show max n gauges
     pub dropped_cache: usize,
-    pub sentmessages: Vec<u64>,
+    pub sent_messages: Vec<u64>,
     pub sent_cache: usize,
     pub dropped_packets_chart_width: usize,
 }
@@ -38,9 +36,9 @@ pub(in crate::frontend::app) struct ChartsData{ // Each CONST sec data, NOT TOTA
 impl ChartsData {
     fn default()->Self{
         Self{
-            droppedmessages:Vec::new(),
+            dropped_messages:Vec::new(),
             dropped_cache:0,
-            sentmessages:Vec::new(),
+            sent_messages:Vec::new(),
             sent_cache:0,
             dropped_packets_chart_width:0
         }
@@ -54,9 +52,9 @@ impl ChartsData {
             0 // Add zero when no change to keep chart moving
         };
 
-        self.droppedmessages.push(diff);
-        if self.droppedmessages.len() > width { // Smaller fixed size
-            self.droppedmessages.remove(0);
+        self.dropped_messages.push(diff);
+        if self.dropped_messages.len() > width { // Smaller fixed size
+            self.dropped_messages.remove(0);
         }
 
     }
@@ -70,11 +68,9 @@ impl ChartsData {
             0 // Add zero when no change to keep chart moving
         };
 
-        self.sentmessages.push(diff);
-        if self.sentmessages.len() > width {
-            self.sentmessages.remove(0);
+        self.sent_messages.push(diff);
+        if self.sent_messages.len() > width {
+            self.sent_messages.remove(0);
         }
     }
-    fn plussentmessages(){}
-    fn reset(){}
 }

@@ -3,11 +3,6 @@ In this module we will handle the specific events related to single tabs.
 Our event handler from main App file, will delegate these methods those said events.
  */
 use super::super::App;
-use crate::backend::sc_models::LogType;
-use crate::frontend::app::models::general_types::Node;
-use ratatui::crossterm::event::{KeyCode, KeyEvent};
-use wg_2024::network::NodeId;
-use crate::frontend::app::models::main_types::AppMode;
 
 impl App<'_> {
 

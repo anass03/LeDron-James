@@ -32,7 +32,7 @@ use ratatui_image::thread::{ResizeRequest, ResizeResponse, ThreadProtocol};
 use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
-use models::general_types::TOMLmessages;
+use models::general_types::TOMLMessages;
 use crate::backend::sc_models::{FileRendererUpdate, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::backend::sc_models::RendererCommand::ComputeSetOfTopologies;
 use crate::backend::sc_models::RendererResponse::Computed;
@@ -227,12 +227,12 @@ impl App<'_>{
 
         // We initialize the TOML buffer with the file indicated in the settings
         match self.cache.tab2_data.compiler_buf{
-            TOMLmessages::FirstInizialized => {
+            TOMLMessages::FirstInitialized => {
                 self.reload_file_to_buf();
 
                 match parse_and_check_config(&self.settings.toml_path){
-                    Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
-                    Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
+                    Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Correct},
+                    Err(e) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Error(e)}
                 }
             }
             _ => ()

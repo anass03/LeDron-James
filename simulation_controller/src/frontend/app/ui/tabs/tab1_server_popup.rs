@@ -150,7 +150,7 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
             }
         ));
 
-    for (node,_,top_alg) in &app.cache.tab1_data.netnode_list.items{
+    for (node,_,top_alg) in &app.cache.tab1_data.net_node_list.items{
         match node{
             Node::Client(id_1) => {
                 if id_1.id.eq(&id) {

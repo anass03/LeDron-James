@@ -3,17 +3,15 @@ use ratatui::widgets::ListState;
 use wg_2024::config::{Client as ClientConfig, Drone as DroneConfig, Server as ServerConfig};
 use wg_2024::network::NodeId;
 use std::str::FromStr;
-use tui_textarea::CursorMove::Top;
-use crate::frontend::app::App;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub(in crate::frontend::app) struct TextBuffer<'a>{
     pub text_buffer: Vec<String>,
     pub toml_text_area: TextArea<'a>,
     pub chat_text_area: TextArea<'a>,
-    pub inputfirst_text_area: TextArea<'a>,
-    pub inputsecond_text_area: TextArea<'a>,
-    pub inputthird_text_area: TextArea<'a>
+    pub input_first_text_area: TextArea<'a>,
+    pub input_second_text_area: TextArea<'a>,
+    pub input_third_text_area: TextArea<'a>
 }
 
 pub(in crate::frontend::app) struct FnList{
@@ -101,7 +99,7 @@ impl NetNodeList {
         }
     }
     pub(in crate::frontend::app) fn select_next(&mut self){
-        if self.selected + 1 < (self.items.len()) as u8{
+        if self.selected + 1 < self.items.len() as u8{
             self.selected += 1;
             self.state.select(Some(self.selected as usize));
         }
@@ -133,20 +131,20 @@ impl<'a> TextBuffer<'_>{
             text_buffer: Vec::new(),
             toml_text_area: Default::default(),
             chat_text_area: Default::default(),
-            inputfirst_text_area: Default::default(),
-            inputsecond_text_area: Default::default(),
-            inputthird_text_area: Default::default()
+            input_first_text_area: Default::default(),
+            input_second_text_area: Default::default(),
+            input_third_text_area: Default::default()
         }
     }
     pub(crate) fn clean_topology_inputs_buffer(&mut self){
-        self.inputfirst_text_area = TextArea::default();
-        self.inputsecond_text_area = TextArea::default();
-        self.inputthird_text_area = TextArea::default();
+        self.input_first_text_area = TextArea::default();
+        self.input_second_text_area = TextArea::default();
+        self.input_third_text_area = TextArea::default();
         self.chat_text_area = TextArea::default();
     }
 
     pub(crate) fn first_field_parse_f32(&mut self, clean_after: bool) -> Result<f32,String>{
-        let lines = self.inputfirst_text_area.clone().into_lines();
+        let lines = self.input_first_text_area.clone().into_lines();
         match lines.get(0) {
             None => {
                 Err("Couldn't parse nothing!".to_string())
@@ -167,7 +165,7 @@ impl<'a> TextBuffer<'_>{
         }
     }
     pub(crate) fn first_field_parse_u8(&mut self, clean_after: bool) -> Result<u8,String>{
-        let lines = self.inputfirst_text_area.clone().into_lines();
+        let lines = self.input_first_text_area.clone().into_lines();
         match lines.get(0) {
             None => {
                 Err("Couldn't parse nothing!".to_string())
@@ -193,12 +191,12 @@ impl<'a> TextBuffer<'_>{
     fn get_parsed_data(&self, n:u8)->Result<ParsedBuffer, String>{
         match n{
             1 => {
-                match self.inputfirst_text_area.clone().into_lines().first(){
+                match self.input_first_text_area.clone().into_lines().first(){
                     None => {
                         Err("Nothing to parse".to_string())
                     }
-                    Some(mystr) => {
-                        match f32::from_str(mystr){
+                    Some(my_str) => {
+                        match f32::from_str(my_str){
                             Ok(num) => {Ok(ParsedBuffer::OneParsed(num))}
                             Err(err) => {Err(format!("{}", err))}
                         }
@@ -206,20 +204,20 @@ impl<'a> TextBuffer<'_>{
                 }
             },
             2 => {
-                match self.inputfirst_text_area.clone().into_lines().first(){
+                match self.input_first_text_area.clone().into_lines().first(){
                     None => {
                         Err("Nothing to parse on I buffer".to_string())
                     }
-                    Some(mystr) => {
-                        match u8::from_str(mystr){
+                    Some(my_str) => {
+                        match u8::from_str(my_str){
                             Ok(x) => {
                                 // Now we parse the 2nd one
-                                match self.inputfirst_text_area.clone().into_lines().first(){
+                                match self.input_first_text_area.clone().into_lines().first(){
                                     None => {
                                         Err("Nothing to parse on II buffer".to_string())
                                     }
-                                    Some(mystr2) => {
-                                        Ok(ParsedBuffer::TwoParsed(x, mystr2.to_string()))
+                                    Some(my_str_2) => {
+                                        Ok(ParsedBuffer::TwoParsed(x, my_str_2.to_string()))
                                     }
                                 }
                             }
@@ -237,8 +235,8 @@ enum ParsedBuffer {
     OneParsed(f32), TwoParsed(u8, String)
 }
 
-pub(in crate::frontend::app) enum TOMLmessages{
+pub(in crate::frontend::app) enum TOMLMessages {
     Correct,
     Error(String),
-    FirstInizialized
+    FirstInitialized
 }

@@ -14,7 +14,7 @@ use wg_2024::packet::Packet;
 use host::{HostCommand, HostEvent};
 use log::LevelFilter;
 use tui_logger::TuiWidgetState;
-use crate::backend::sc_models::{ChatCache, DroneType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
+use crate::backend::sc_models::{ChatCache, DroneType, LogType, Logs, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
 use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 /// Simulation Controller struct contains:
@@ -98,7 +98,6 @@ impl SimulationControllerData {
             host_log_state.insert(server_id, (format!("{server_id}_Server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_Server").as_str(), LevelFilter::max())));
             total_active_connections += 1;
         }
-
 
         // Collect unique, undirected links
         let mut links = HashSet::new();

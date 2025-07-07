@@ -1,17 +1,10 @@
-use std::collections::HashMap;
 use host::{ClientId, FileId, MediaId, ServerId};
-use ratatui::layout::Rect;
-use ratatui::symbols::bar::Set;
-use ratatui::widgets::ListState;
-use tui_textarea::TextArea;
-use wg_2024::network::NodeId;
-use crate::backend::sc_models::ChatCache;
+use ratatui::layout::Rect;use wg_2024::network::NodeId;
 use crate::frontend::app::models::general_types::{FnList, NetNodeList};
-use crate::frontend::app::topology_algorithm::vectors::Vector;
 
 /// Tab n.01 data
 pub(in crate::frontend::app) struct Tab1{
-    pub netnode_list: NetNodeList,
+    pub net_node_list: NetNodeList,
 
     pub media_list_render_utils: MediaListRenderUtils,
     pub file_list_render_utils: FileListRenderUtils,
@@ -80,7 +73,7 @@ impl FileListRenderUtils{
 #[derive(Clone, Debug)]
 pub(crate) struct FileExploring {
     pub file_request_source: u8, // 0 for none, 1 for Chat Page, 2 for NetPage Media, 3 for NetPage File
-    // All the fields that come here doesn't need a None, as they are gonna get overwrote by the new selected client, etc.
+    // All the fields that come here doesn't need a None, as they are going to get overwrote by the new selected client, etc.
     pub last_selected_cl_sender: ClientId,
     pub last_selected_cl_receiver: ClientId,
     pub last_selected_sr: ServerId,
@@ -128,19 +121,19 @@ pub(crate) enum NodePopup{
 #[derive(Debug, Clone)]
 pub(crate) enum ClientPopup {
     ChatPage(ClientChatPopup), // Choose the server to communicate with
-    InternetPage(ClientNetPopup), // Choose the contact you wanna chat with
+    InternetPage(ClientNetPopup), // Choose the contact you want to chat with
     DataPage(ClientDataPopup), // Message with the selected contact
     SettingsPage(ClientSettingsPopup)
 }
 #[derive(Debug, Clone)]
 pub(crate) enum ClientChatPopup{
     FirstPage(ChFirstPage), // Choose the server to communicate with
-    SecondPage(ChSecondPage), // Choose the contact you wanna chat with
+    SecondPage(ChSecondPage), // Choose the contact you want to chat with
     ThirdPage(ChThirdPage) // Message with the selected contact
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ChFirstPage {
-    // Depending on the selected client, we gotta view the available servers the client knows.
+    // Depending on the selected client, we got to view the available servers the client knows.
     pub scroll_offset:u8
 }
 #[derive(Debug, Clone)]
@@ -169,7 +162,7 @@ pub(crate) enum ClientNetPopup{
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetFirstPage {
-    // Depending on the selected client, we gotta view the available servers the client knows.
+    // Depending on the selected client, we got to view the available servers the client knows.
     pub scroll_offset:u8
 }
 #[derive(Debug, Clone, Default)]
@@ -178,7 +171,7 @@ pub(crate) struct NetSecondPage {
     pub selected_file: SelectedFileMedia,
     pub image_rendering_data: RenderingImage,
     pub selected_item: NetSecondPageItems,
-    // Depending on the selected client, we gotta view the available servers the client knows.
+    // Depending on the selected client, we got to view the available servers the client knows.
     pub scroll_offset:u8
 
 }
@@ -328,7 +321,7 @@ pub(crate) enum SettingsPopupStatus{
 impl Tab1{
     pub(crate) fn default() ->Self{
         Self{
-            netnode_list: NetNodeList::default(),
+            net_node_list: NetNodeList::default(),
             media_list_render_utils: MediaListRenderUtils::default(),
             file_list_render_utils: FileListRenderUtils::default(),
             selected_fn: FnList::default(),

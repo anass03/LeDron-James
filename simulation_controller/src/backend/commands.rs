@@ -298,7 +298,12 @@ impl SimulationControllerData {
         let media_vec = fs::read(&path)
             .map_err(|e| format!("Failed to read media {}: {}", path.as_ref().display(), e))?;
 
-        let media = ImageReader::new(Cursor::new(&media_vec))
+        let (image, media_id) = match read_image(&media_vec, path) {
+            Ok((image, media_id)) => (image, media_id),
+            Err(e) => return Err(e),
+        };
+
+        /*let media = ImageReader::new(Cursor::new(&media_vec))
             .with_guessed_format()
             .map_err(|e| e.to_string())?
             .decode()
@@ -311,7 +316,7 @@ impl SimulationControllerData {
         };
 
         let media_id = get_filename(path)
-            .ok_or_else(|| "Failed to get Media ID".to_string())?;
+            .ok_or_else(|| "Failed to get Media ID".to_string())?;*/
 
         debug!(target: "main", "Sending Media For Request to Client {sender_client_id} for Server {server_id} to Client {receiver_client_id}");
         let command = Net(MediaFor(receiver_client_id, server_id, media_id, image));
@@ -334,20 +339,10 @@ impl SimulationControllerData {
         let media_vec = fs::read(&path)
             .map_err(|e| format!("Failed to read media {}: {}", path.as_ref().display(), e))?;
 
-        let media = ImageReader::new(Cursor::new(&media_vec))
-            .with_guessed_format()
-            .map_err(|e| e.to_string())?
-            .decode()
-            .map_err(|e| e.to_string())?;
-
-        let image = Image {
-            width: media.width(),
-            height: media.height(),
-            data: media.to_rgba8().to_vec(),
+        let (image, media_id) = match read_image(&media_vec, path) {
+            Ok((image, media_id)) => (image, media_id),
+            Err(e) => return Err(e),
         };
-
-        let media_id = get_filename(path)
-            .ok_or_else(|| "Failed to get Media ID".to_string())?;
 
         debug!(target: "main", "Sending New Media Request from Client {sender_client_id} to Server {server_id}");
         let command = Net(NewMedia(server_id, media_id, image));
@@ -404,4 +399,23 @@ fn forward_node_command<T: NodeCommand>(sender: &Sender<T>, command: T, first_id
     sender.send(command)
         .map_err(|e| e.to_string())
         .map(|_| debug!(target: "main", "Asking to add {second_type} {second_id} Sender to {first_type} {first_id}"))
+}
+
+#[inline]
+fn read_image<P: AsRef<Path>>(media_vec: &Vec<u8>, path: P) -> Result<(Image, MediaId), String> {
+    let media = ImageReader::new(Cursor::new(&media_vec))
+        .with_guessed_format()
+        .map_err(|e| e.to_string())?
+        .decode()
+        .map_err(|e| e.to_string())?;
+
+    let image = Image {
+        width: media.width(),
+        height: media.height(),
+        data: media.to_rgba8().to_vec(),
+    };
+
+    let media_id = get_filename(path)
+        .ok_or_else(|| "Failed to get Media ID".to_string())?;
+    Ok((image, media_id))
 }

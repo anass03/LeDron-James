@@ -4,7 +4,7 @@ use super::super::App;
 use super::super::ui;
 use std::io::Write;
 use log::*;
-fn wrap_text(text: &str, min: usize, max: usize) -> String {
+fn wrap_text(text: &str, _min: usize, max: usize) -> String {
     let mut result = String::new();
     let mut buffer = String::new();
 

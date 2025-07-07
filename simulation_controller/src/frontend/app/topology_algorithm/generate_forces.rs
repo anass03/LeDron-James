@@ -1,4 +1,3 @@
-use ratatui::layout::Rect;
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
@@ -7,7 +6,6 @@ use crate::frontend::app::topology_algorithm::vectors::{
     generate_force_exponential_repulsion_vec,
     Vector,
 };
-use std::collections::HashMap;
 
 impl App<'_>{
 
@@ -15,11 +13,11 @@ impl App<'_>{
         todo!()
     }
 
-    fn generate_client_force(&self, id:NodeId)->Result<(),String>{
+    fn generate_client_force(&self, _id:NodeId)->Result<(),String>{
         todo!()
 
     }
-    fn generate_server_force(&self, id:NodeId)->Result<(),String>{
+    fn generate_server_force(&self, _id:NodeId)->Result<(),String>{
         todo!()
 
     }
@@ -83,7 +81,7 @@ impl App<'_>{
         let k_spring = 3.75;
         // Determine this node as a NetNode variant
 
-        let netnode = if self.simulation_controller_data.running_network.contains_key(&NetNode::Drone(id)) {
+        let net_node = if self.simulation_controller_data.running_network.contains_key(&NetNode::Drone(id)) {
             NetNode::Drone(id)
         } else if self.simulation_controller_data.running_network.contains_key(&NetNode::Client(id)) {
             NetNode::Client(id)
@@ -93,7 +91,7 @@ impl App<'_>{
         let neighbors = self
             .simulation_controller_data
             .running_network
-            .get(&netnode)
+            .get(&net_node)
             .ok_or("Node connections not found")?;
         let pos_a = self
             .simulation_controller_data

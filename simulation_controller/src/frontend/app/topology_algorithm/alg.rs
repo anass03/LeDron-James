@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
-use log::{info, warn};
+use log::{error, info, warn};
 use wg_2024::network::NodeId;
 use crate::backend::sc_models::{LogType, RendererCommand};
 use crate::backend::simulation_controller::SimulationControllerData;
@@ -59,7 +59,7 @@ impl App<'_>{
         // First, determine the node type from the UI list
         let node_type = {
             let mut found_type = NetNode::Client(id); // fallback
-            for (x,_,_) in &self.cache.tab1_data.netnode_list.items {
+            for (x,_,_) in &self.cache.tab1_data.net_node_list.items {
                 match x {
                     Node::Client(cl) if cl.id == id => { found_type = NetNode::Client(id); break; },
                     Node::Server(sr) if sr.id == id => { found_type = NetNode::Server(id); break; },
@@ -71,7 +71,7 @@ impl App<'_>{
         };
 
         let mut maybe_alg = None;
-        for (x,y,z) in &mut self.cache.tab1_data.netnode_list.items{
+        for (x,_y,z) in &mut self.cache.tab1_data.net_node_list.items{
             match x{
                 Node::Client(cl) => {
                     if cl.id == id{
@@ -200,7 +200,7 @@ impl App<'_>{
             }
             Err(str) => {
                 self.simulation_controller_data.topology_algorithm_data.increase_counter(1);
-                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str);
+                error!(target: "topology", "[TOPOLOGY] - {str}")
             }
         }
         match self.apply_all_forces(){
@@ -209,7 +209,7 @@ impl App<'_>{
             }
             Err(str) => {
                 self.simulation_controller_data.topology_algorithm_data.increase_counter(1);
-                self.simulation_controller_data.logs.push_sc_log(LogType::ERROR, str);
+                error!(target: "topology", "[TOPOLOGY] - {str}")
             }
         }
         self.compute_and_set_avg_magnitude();
@@ -222,7 +222,7 @@ impl App<'_>{
     fn generate_all_forces(&self)->Result<HashMap<NodeId, Vector>,String>{
         let mut ret_hash:HashMap<NodeId, Vector> = HashMap::new();
 
-        for (node_id, displayable) in &self.simulation_controller_data.topology_algorithm_data.map{
+        for (_node_id, displayable) in &self.simulation_controller_data.topology_algorithm_data.map{
             match displayable.clone().node{
                 NetNode::Drone(id) => {
                     let res = self.generate_fundamental_force(id, displayable.position)?;

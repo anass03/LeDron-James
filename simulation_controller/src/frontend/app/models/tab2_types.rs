@@ -1,9 +1,9 @@
 use ratatui::widgets::ListState;
-use crate::frontend::app::models::general_types::TOMLmessages;
+use crate::frontend::app::models::general_types::TOMLMessages;
 
 /// Tab n.02 data
 pub(in crate::frontend::app) struct Tab2{
-    pub compiler_buf: TOMLmessages,
+    pub compiler_buf: TOMLMessages,
     pub topology_list_state: ListState,
 }
 
@@ -13,7 +13,7 @@ impl Tab2{
         let mut topology_state = ListState::default();
         topology_state.select(Some(0)); // Start with first item selected
         Self{
-            compiler_buf:TOMLmessages::FirstInizialized,
+            compiler_buf: TOMLMessages::FirstInitialized,
             topology_list_state: topology_state,
         }
     }

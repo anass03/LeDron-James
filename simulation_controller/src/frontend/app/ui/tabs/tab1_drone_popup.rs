@@ -161,7 +161,7 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
             }
         ));
 
-    for (node,_,top_alg) in &app.cache.tab1_data.netnode_list.items{
+    for (node,_,top_alg) in &app.cache.tab1_data.net_node_list.items{
         match node{
             Node::Client(id_1) => {
                 if id_1.id.eq(&id) {
@@ -270,7 +270,7 @@ fn render_set_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::fr
     let inner_new_pdr = new_pdr_block.inner(fields_area);
     new_pdr_block.render(fields_area, buf);
 
-    app.cache.text_buffer.inputfirst_text_area.render(inner_new_pdr, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_new_pdr, buf);
     // Send button
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)

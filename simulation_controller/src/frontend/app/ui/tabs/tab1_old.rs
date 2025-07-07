@@ -46,7 +46,7 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
     let list_items = app
         .cache
         .tab1_data
-        .netnode_list
+        .net_node_list
         .items
         .iter()
         .map(|(n, b,_)| ListItem::from(n)) // Into<ListItem> because you impl From<&Node>
@@ -66,7 +66,7 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
         list,
         left_column,
         buf,
-        &mut app.cache.tab1_data.netnode_list.state.clone(),
+        &mut app.cache.tab1_data.net_node_list.state.clone(),
     );
 
     render_selected_fns(app, available_fns, buf);
@@ -84,8 +84,8 @@ pub(super) fn demo_render_tab1(app: &App, area: Rect, buf: &mut Buffer) {
 // Render functions depending on the item currently selected
 fn render_selected_fns(app: &App, area: Rect, buf: &mut Buffer) {
     use super::super::super::super::app::models;
-    let selected_n = app.cache.tab1_data.netnode_list.selected;
-    match app.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
+    let selected_n = app.cache.tab1_data.net_node_list.selected;
+    match app.cache.tab1_data.net_node_list.items.get(selected_n as usize) {
         Some((n, b, _)) => {
             // Function Process
             let mut vec_and_block = match n {
@@ -195,8 +195,8 @@ fn render_drone_opt<'a>(bl: &bool) -> (Vec<Line<'a>>, Block<'a>) {
 // Render output depending on the item currently selected
 // In case of a client showing: Chat
 fn render_selected_out(app:&App, area:Rect, buf: &mut Buffer) {
-    let selected_n = app.cache.tab1_data.netnode_list.selected;
-    match app.cache.tab1_data.netnode_list.items.get(selected_n as usize) {
+    let selected_n = app.cache.tab1_data.net_node_list.selected;
+    match app.cache.tab1_data.net_node_list.items.get(selected_n as usize) {
         None => {
             let paragraph = Paragraph::new("finirà mai sto progetto di merda?")
                 .block(
@@ -327,7 +327,7 @@ fn render_one_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     let inner_first_block = first_block.inner(input_area);
 
     first_block.render(input_area, buf);
-    app.cache.text_buffer.inputfirst_text_area.render(inner_first_block, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_first_block, buf);
 
 }
 fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
@@ -369,7 +369,7 @@ fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     }
     let inner_first_block = first_block.inner(first_input_area);
     first_block.render(first_input_area, buf);
-    app.cache.text_buffer.inputfirst_text_area.render(inner_first_block, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_first_block, buf);
 
     let mut second_block = Block::new()
         .title(Span::from(" insert the server ID ( u8 ) "))
@@ -380,7 +380,7 @@ fn render_two_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     }
     let inner_second_block = second_block.inner(second_input_area);
     second_block.render(second_input_area, buf);
-    app.cache.text_buffer.inputsecond_text_area.render(inner_second_block, buf);
+    app.cache.text_buffer.input_second_text_area.render(inner_second_block, buf);
 
 }
 
@@ -418,7 +418,7 @@ fn render_three_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     }
     let inner_first_block = first_block.inner(first_input_area);
     first_block.render(first_input_area, buf);
-    app.cache.text_buffer.inputfirst_text_area.render(inner_first_block, buf);
+    app.cache.text_buffer.input_first_text_area.render(inner_first_block, buf);
 
 
     let mut second_block = Block::new()
@@ -430,7 +430,7 @@ fn render_three_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     }
     let inner_second_block = second_block.inner(second_input_area);
     second_block.render(second_input_area, buf);
-    app.cache.text_buffer.inputsecond_text_area.render(inner_second_block, buf);
+    app.cache.text_buffer.input_second_text_area.render(inner_second_block, buf);
 
 
     let mut third_block = Block::new()
@@ -442,6 +442,6 @@ fn render_three_input_fn(app:&App, area:Rect, buf:&mut Buffer){
     }
     let inner_third_block = third_block.inner(third_input_area);
     third_block.render(third_input_area, buf);
-    app.cache.text_buffer.inputthird_text_area.render(inner_third_block, buf);
+    app.cache.text_buffer.input_third_text_area.render(inner_third_block, buf);
 
 }

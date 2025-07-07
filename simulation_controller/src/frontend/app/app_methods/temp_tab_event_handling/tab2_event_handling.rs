@@ -1,4 +1,4 @@
-use log::debug;
+use log::{debug, info};
 use crate::frontend::app::App;
 use ratatui::crossterm::event::KeyCode;
 use std::fs::File;
@@ -9,14 +9,6 @@ use crate::frontend::app::models::main_types::{AppMode, InputMode};
 impl App<'_> {
     pub(crate) fn handle_event_tab2(&mut self, key: KeyCode) {
         match key {
-            KeyCode::Backspace => {
-                // Backspace at main level does nothing (could be used for other purposes)
-                // For now, just log that it was pressed
-                self.simulation_controller_data.logs.push_sc_log(
-                    crate::backend::sc_models::LogType::INFO,
-                    "Backspace pressed at TOML editor level".to_string()
-                );
-            }
             KeyCode::Left => {
                 if self.cache.cursor > 0 {
                     self.cache.cursor -= 1
