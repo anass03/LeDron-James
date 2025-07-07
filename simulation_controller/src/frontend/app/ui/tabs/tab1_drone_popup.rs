@@ -13,7 +13,7 @@ use crate::backend::sc_models::DroneType;
 use crate::backend::sc_models::NetNode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
-use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas, render_add_sender_popup, render_remove_sender_popup};
+use crate::frontend::app::ui::tabs::tab1::{get_data_canvas, get_settings_canvas, render_add_sender_popup, render_remove_sender_popup, draw_map_with_routes, get_node_routes};
 use crate::frontend::app::ui::tabs::tab1::data_rendering::{render_cl_sr_data_options, render_drone_data_options};
 use crate::frontend::app::ui::tabs::tab1::draw_map;
 
@@ -161,23 +161,26 @@ fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_pa
             }
         ));
 
+    // Get routes for the current node
+    let highlighted_routes = get_node_routes(app, id);
+
     for (node,_,top_alg) in &app.cache.tab1_data.net_node_list.items{
         match node{
             Node::Client(id_1) => {
                 if id_1.id.eq(&id) {
-                    draw_map(top_alg, map_area, buf, map_block.clone());
+                    draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                     break;
                 }
             }
             Node::Server(id_1) => {
                 if id_1.id.eq(&id){
-                    draw_map(top_alg,map_area,buf,map_block.clone());
+                    draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                     break;
                 }
             }
             Node::Drone(id_1) => {
                 if id_1.id.eq(&id){
-                    draw_map(top_alg,map_area,buf,map_block.clone());
+                    draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                     break;
                 }
             }

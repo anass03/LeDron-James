@@ -1100,6 +1100,8 @@ impl App<'_> {
                                                 self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                 self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 2);
                                                 self.app_mode = AppMode::FileExploring;
+                                                ndpage.selected_file = SelectedFileMedia::None;
+                                                ndpage.image_rendering_data = RenderingImage::False;
                                                 self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                     ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                 )));
@@ -1124,7 +1126,10 @@ impl App<'_> {
                                                 }
                                             }
                                             3 => {
+                                                ndpage.selected_file = SelectedFileMedia::None;
                                                 self.cache.tab1_data.image_rendering_data = RenderingImage::False;
+                                                ndpage.image_rendering_data = RenderingImage::False;
+
                                                 self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
                                                 self.app_mode = AppMode::FileExploring;
                                                 self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
@@ -1175,6 +1180,7 @@ impl App<'_> {
                                                                             );
                                                                             ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
                                                                             self.cache.tab1_data.image_rendering_data = RenderingImage::False;
+                                                                            ndpage.image_rendering_data = RenderingImage::False;
                                                                             self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                                 ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                                             )));
@@ -1186,6 +1192,7 @@ impl App<'_> {
                                                                 }else{
                                                                     self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                                     ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
+                                                                    ndpage.image_rendering_data = RenderingImage::False;
                                                                     self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                         ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
                                                                     )));
@@ -1321,6 +1328,8 @@ impl App<'_> {
             NodePopup::Client(ClientPopup::DataPage(data_page))
         ));
     }
+
+
 
     fn handle_sett_client_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:ClientSettingsPopup){
         match self.cache.tab1_data.popup_cursor{
@@ -1526,7 +1535,6 @@ impl App<'_> {
                 )
             ))
     }
-
     fn handle_data_server_page(&mut self, key: KeyEvent, id: NodeId, data_page: ServerDataPopup) {
         match key.code {
             KeyCode::Up => {
@@ -1597,6 +1605,8 @@ impl App<'_> {
             NodePopup::Server(ServerPopup::DataPage(data_page))
         ));
     }
+
+
 
     fn handle_server_popup(&mut self, key: KeyEvent,id:NodeId, server_popup: ServerPopup){
         match self.cache.tab1_data.popup_selection {
@@ -1897,7 +1907,7 @@ impl App<'_> {
                     _ => {
                         match client_popup{
                             DronePopup::DataPage(datapage) => {
-                                self.handle_data_drone_page(key, id, datapage)
+
                             }
                             DronePopup::SettingsPage(settpage) => {
                                 match settpage.command_popup.clone(){

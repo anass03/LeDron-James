@@ -136,11 +136,11 @@ fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &C
             opt_block = opt_block.title_bottom(format!("📲 Download ( MB/s ): {:?} | ⬋ Upload ( MB/s ): {:?}",
                                                        match app.simulation_controller_data.stats.node_statistic.get(selected_node){
                                                            None => 0f32,
-                                                           Some(st) => st.download_at_sec.get(0).unwrap_or(&0f32 ).clone()
+                                                           Some(st) => {st.download_at_sec.last().unwrap_or(&0f32 ).clone()}
                                                        },
                                                        match app.simulation_controller_data.stats.node_statistic.get(selected_node){
                                                            None => 0f32,
-                                                           Some(st) => st.upload_at_sec.get(0).unwrap_or(&0f32 ).clone()
+                                                           Some(st) => st.upload_at_sec.last().unwrap_or(&0f32 ).clone()
                                                        }
             )).title_alignment(Alignment::Right);
             opt_block.render(area, buf);
@@ -2834,7 +2834,7 @@ pub(super) mod settings_rendering{
     use crate::frontend::app::models::general_types::Node;
     use crate::frontend::app::models::tab1_types::{ClientSettingsCommandsPopup, ClientSettingsPopup, DroneSettingsPopup};
     use crate::frontend::app::ui::tabs::MAIN_BLOCK_BORDERS;
-    use crate::frontend::app::ui::tabs::tab1::{draw_map, render_add_sender_popup, render_remove_sender_popup};
+    use crate::frontend::app::ui::tabs::tab1::{draw_map, draw_map_with_routes, get_node_routes, render_add_sender_popup, render_remove_sender_popup};
 
     pub(super) fn render_settings_page(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, set_page:&ClientSettingsPopup) {
         let [sett_area, view_area] = Layout::default()
@@ -2913,23 +2913,26 @@ pub(super) mod settings_rendering{
                 }
             ));
 
+        // Get routes for the current node
+        let highlighted_routes = get_node_routes(app, id);
+
         for (node,_,top_alg) in &app.cache.tab1_data.net_node_list.items{
             match node{
                 Node::Client(id_1) => {
                     if id_1.id.eq(&id) {
-                        draw_map(top_alg, map_area, buf, map_block.clone());
+                        draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                         break;
                     }
                 }
                 Node::Server(id_1) => {
                     if id_1.id.eq(&id){
-                        draw_map(top_alg,map_area,buf,map_block.clone());
+                        draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                         break;
                     }
                 }
                 Node::Drone(id_1) => {
                     if id_1.id.eq(&id){
-                        draw_map(top_alg,map_area,buf,map_block.clone());
+                        draw_map_with_routes(top_alg, map_area, buf, map_block.clone(), highlighted_routes.as_ref());
                         break;
                     }
                 }
