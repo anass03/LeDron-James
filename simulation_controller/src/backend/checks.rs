@@ -1,4 +1,4 @@
-use crate::backend::sc_models::{LogType, NetNode, NetworkState, NodeMap};
+use crate::backend::sc_models::{NetNode, NetworkState, NodeMap};
 use crate::backend::simulation_controller::SimulationControllerData;
 use log::debug;
 use std::collections::{HashMap, HashSet};

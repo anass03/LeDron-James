@@ -1,6 +1,3 @@
-use crate::backend::sc_models::{
-    ChatList, FileRendererUpdate, LogType, NetCacheMedia, RendererCommand, RendererResponse,
-};
 use crate::backend::sc_models::{NetNode, NodeCommand, NodeType};
 use crate::backend::simulation_controller::SimulationControllerData;
 use crate::frontend::app::topology_algorithm::alg_models::{
