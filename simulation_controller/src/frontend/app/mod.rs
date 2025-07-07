@@ -270,11 +270,6 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
     let (tx_cmd, rx_cmd) = mpsc::channel::<RendererCommand>();
     let (tx_rsp, rx_rsp) = mpsc::channel::<RendererResponse>();
 
-    // Performance optimized renderer thread:
-    // - Removed 1.5s sleep that was causing lag
-    // - Optimized channel processing for better performance
-    // - Simplified image processing flow
-    // - Removed unnecessary frame rate limiting
 
     ((tx_cmd,rx_rsp),thread::spawn(move || {
         let mut download_folder = PathBuf::from("assets");
