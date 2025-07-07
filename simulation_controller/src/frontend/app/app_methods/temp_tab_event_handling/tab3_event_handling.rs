@@ -395,7 +395,7 @@ impl App<'_> {
                                                     let mut last_error:String = "".to_string();
 
                                                     // Set PDR for all drones
-                                                    for (node,_,_) in &self.cache.tab1_data.netnode_list.items {
+                                                    for (node,_,_) in &self.cache.tab1_data.net_node_list.items {
                                                         match node{
                                                             Node::Drone(dr) => {
                                                                 match self.simulation_controller_data.set_pdr(dr.id,pdr){

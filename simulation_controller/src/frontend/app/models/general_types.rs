@@ -235,7 +235,7 @@ enum ParsedBuffer {
     OneParsed(f32), TwoParsed(u8, String)
 }
 
-pub(in crate::frontend::app) enum TOMLMessages {
+pub enum TOMLMessages {
     Correct,
     Error(String),
     FirstInitialized

@@ -176,10 +176,10 @@ impl App<'_> {
     fn handle_main(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up => {
-                self.cache.tab1_data.netnode_list.select_prev();
+                self.cache.tab1_data.net_node_list.select_prev();
             }
             KeyCode::Down => {
-                self.cache.tab1_data.netnode_list.select_next();
+                self.cache.tab1_data.net_node_list.select_next();
             }
             KeyCode::Right | KeyCode::Left=>{
                 // Depending on where we I handle the right key
@@ -200,8 +200,8 @@ impl App<'_> {
                     0 => {
                         // I am on List
                         // Which item I've selected?
-                        let selected_cursor_item = self.cache.tab1_data.netnode_list.selected as usize;
-                        let node_info = self.cache.tab1_data.netnode_list.items.get(selected_cursor_item);
+                        let selected_cursor_item = self.cache.tab1_data.net_node_list.selected as usize;
+                        let node_info = self.cache.tab1_data.net_node_list.items.get(selected_cursor_item);
                         
                         match node_info {
                             None => {
