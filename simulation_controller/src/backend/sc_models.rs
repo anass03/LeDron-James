@@ -34,6 +34,8 @@ pub struct Statistics{
     pub network_reliability: u8,
     pub node_statistic: HashMap<NodeId, NodeStatistics>,
 }
+
+
 #[derive(Default)]
 pub struct NodeStatistics{
     pub pdr_expected: HashMap<NodeId, f64>, // Only for clients
@@ -46,12 +48,12 @@ pub struct NodeStatistics{
 // Implementations
 
 impl SimulationControllerData {
-    fn packet_sent(&mut self, id: NodeId) {
+    pub(crate) fn packet_sent(&mut self, id: NodeId) {
         let entry = self.drone_packet_count.entry(id).or_insert((0, 0));
         entry.0 += 1;
     }
 
-    fn packet_dropped(&mut self, id: NodeId) {
+    pub(crate) fn packet_dropped(&mut self, id: NodeId) {
         let entry = self.drone_packet_count.entry(id).or_insert((0, 0));
         entry.1 += 1;
     }
