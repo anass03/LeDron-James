@@ -78,12 +78,120 @@ impl App<'_> {
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown_file")
                     .to_string();
-                
-                info!(target: "main", "[LEDRON-CLI] File selected for chat: {}", file_name);
+
+                match file_name.chars().position(|ch| ch == '.') {
+                    None => (),
+                    Some(pos) => {
+                        let ext = file_name[pos..].to_string();
+                        info!(target: "main", "[LEDRON-CLI] File selected for chat: {}", file_name);
+
+                        if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+                            // Send media
+                            let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                            match self.simulation_controller_data.media_for(
+                                sending_data.last_selected_cl_sender,
+                                sending_data.last_selected_cl_receiver,
+                                sending_data.last_selected_sr,
+                                path)
+                            {
+                                Ok(_) => {
+                                    info!(target:"main", "[LEDRON-CLI] Sent media-for request")
+                                }
+                                Err(str) => {
+                                    error!(target:"main", "[LEDRON-CLI] Error sending media-for request:\n{}", str)
+                                }
+                            }
+                            self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                            self.app_mode = AppMode::Normal;
+                        } else {
+                            // Send file
+                            let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                            match self.simulation_controller_data.file_for(
+                                sending_data.last_selected_cl_sender,
+                                sending_data.last_selected_cl_receiver,
+                                sending_data.last_selected_sr,
+                                path)
+                            {
+                                Ok(_) => {
+                                    info!(target:"main", "[LEDRON-CLI] Sent file-for request")
+                                }
+                                Err(str) => {
+                                    error!(target:"main", "[LEDRON-CLI] Error sending file-for request:\n{}", str)
+                                }
+                            }
+                            self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                            self.app_mode = AppMode::Normal;
+                        }
+                    }
+                }
+
+
+
                 
                 // TODO: Implement file attachment logic for chat
                 self.app_mode = AppMode::Normal;
                 self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+            }
+            2 => {
+                // NetPage Media upload
+                let selected_file = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown_file")
+                    .to_string();
+
+                info!(target: "main", "[LEDRON-CLI] Media file selected for upload: {}", selected_file);
+                match selected_file.chars().position(|ch| ch == '.') {
+                    None => (),
+                    Some(pos) => {
+                        let ext = selected_file[pos..].to_string();
+                        if ext == ".jpg" || ext == ".jpeg" || ext == ".png" {
+                            // Send media
+                            let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                            match self.simulation_controller_data.new_media(
+                                sending_data.last_selected_cl_sender,
+                                sending_data.last_selected_sr,
+                                path,
+                            ) {
+                                Ok(_) => info!(target:"main", "[LEDRON-CLI] Sent new-media request"),
+                                Err(str) => error!(target: "main", "{}", str)
+                            }
+                            self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                            self.app_mode = AppMode::Normal;
+                        } else {}
+                    }
+                }
+
+                self.app_mode = AppMode::Normal;
+                self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+            }
+            3 => {
+                // NetPage Media upload
+                let selected_file = path.file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or("unknown_file")
+                    .to_string();
+
+                info!(target: "main", "[LEDRON-CLI] Media file selected for upload: {}", selected_file);
+                match selected_file.chars().position(|ch| ch == '.') {
+                    None => (),
+                    Some(pos) => {
+                        let ext = selected_file[pos..].to_string();
+                        if !(ext == ".jpg" || ext == ".jpeg" || ext == ".png") {
+                            // Send file
+                            let sending_data = self.cache.tab1_data.file_exploring_data.clone();
+                            match self.simulation_controller_data.new_file(
+                                sending_data.last_selected_cl_sender,
+                                sending_data.last_selected_sr,
+                                path,
+                            ) {
+                                Ok(_) => info!(target:"main", "[LEDRON-CLI] Sent new-file request"),
+                                Err(str) => error!(target: "main", "{}", str)
+                            }
+                            self.cache.tab1_data.file_exploring_data.file_request_source = 0;
+                            self.app_mode = AppMode::Normal;
+                        } else {}
+                    }
+                }
             }
             _ => {
                 // Unknown source, just navigate

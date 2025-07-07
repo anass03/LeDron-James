@@ -724,7 +724,55 @@ impl App<'_> {
                         }
                     }
                     KeyCode::Enter => {
-                        // todo!
+                        // Get the currently selected message
+                        let selected_message_index = if third_page_data.scroll_offset == 0 {
+                            chat_length.saturating_sub(1) // Last message (most recent)
+                        } else {
+                            chat_length.saturating_sub(third_page_data.scroll_offset as usize + 1)
+                        };
+
+                        // Get the chat to access the selected message
+                        if let Some(chat_list) = self.simulation_controller_data.chat_cache.local_chats.get(&third_page_data.selected_server) {
+                            let chat_key = (id, third_page_data.selected_contact);
+                            let alt_chat_key = (third_page_data.selected_contact, id);
+                            
+                            let chat_arc = chat_list.chats_stored.get(&chat_key)
+                                .or_else(|| chat_list.chats_stored.get(&alt_chat_key));
+                            
+                            if let Some(chat_arc) = chat_arc {
+                                if let Ok(chat) = chat_arc.read() {
+                                    if let Some((message, _)) = chat.chat.get(selected_message_index) {
+                                        // Check if the message is a MediaSC
+                                        if let server::MessageSC::Media(media_sc) = message {
+                                            match media_sc {
+                                                server::MediaSC::Image(media_id, _) => {
+                                                    // Check if this media is in downloaded_chat_files
+                                                    if let Some(file_path) = self.simulation_controller_data.downloaded_chat_files.get(media_id) {
+                                                        // Open the file using the open_file function
+                                                        let path_str = file_path.to_string_lossy();
+                                                        crate::frontend::app::app_methods::method_utils::open_file(&path_str);
+                                                        info!(target: "main", "[LEDRON-CLI] Opening media file: {}", path_str);
+                                                    } else {
+                                                        warn!(target: "main", "[LEDRON-CLI] Media file {} not found in downloaded files", media_id);
+                                                    }
+                                                }
+                                                server::MediaSC::File(file_id, _) => {
+                                                    // Check if this file is in downloaded_chat_files
+                                                    if let Some(file_path) = self.simulation_controller_data.downloaded_chat_files.get(file_id) {
+                                                        // Open the file using the open_file function
+                                                        let path_str = file_path.to_string_lossy();
+                                                        crate::frontend::app::app_methods::method_utils::open_file(&path_str);
+                                                        info!(target: "main", "[LEDRON-CLI] Opening file: {}", path_str);
+                                                    } else {
+                                                        warn!(target: "main", "[LEDRON-CLI] File {} not found in downloaded files", file_id);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                     _ => (),
                 }
