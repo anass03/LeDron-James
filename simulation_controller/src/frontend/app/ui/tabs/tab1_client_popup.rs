@@ -7,7 +7,7 @@ use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Map}
 use std::ops::Add;
 use ratatui::style::{Color, Modifier, Style, Styled, Stylize};
 use ratatui::text::{Line, Text, ToSpan};
-use crate::backend::sc_models::NetNode;
+use crate::backend::sc_models::{NetNode, NodeStatistics};
 use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{ClientPopup, PopupSelection};
 use crate::frontend::app::ui::tabs::POPUP_BG_COLOR;
@@ -108,6 +108,13 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
     let settings_canvas = get_settings_canvas(app, NetNode::Client(0));
     settings_canvas.render(settings_symb, buf);
 
+
+
+    // Now I render the selected option in opt_area
+    render_client_options(app, opt_area, buf, client_popup,&id)
+}
+
+fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientPopup, selected_node: &NodeId)->Option<Rect>{
     let mut opt_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded);
@@ -118,29 +125,35 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(app:&App, area: Re
             opt_block = opt_block.border_style(Style::default().fg(app.animation_color()));
         }
     }
-    let opt_inner = opt_block.inner(opt_area);
-    opt_block.render(opt_area, buf);
+    let opt_inner = opt_block.inner(area);
 
-    // Now I render the selected option in opt_area
-    render_client_options(app, opt_inner, buf, client_popup,&id)
-}
-
-fn render_client_options(app:&App, area:Rect, buf: &mut Buffer, client_popup: &ClientPopup, selected_node: &NodeId)->Option<Rect>{
     // Now here based on the information we have in the struct we draw the menu's
     match client_popup{
         ClientPopup::ChatPage(chat_page_data) => {
-            render_chat_options(app,area, buf, chat_page_data, selected_node);
+            render_chat_options(app,opt_inner, buf, chat_page_data, selected_node);
         }
         ClientPopup::InternetPage(net_page_data) => {
-            return render_net_options(app, area, buf, net_page_data, selected_node)
+            opt_block = opt_block.title_bottom(format!("📲 Download ( MB/s ): {:?} | ⬋ Upload ( MB/s ): {:?}",
+                                                       match app.simulation_controller_data.stats.node_statistic.get(selected_node){
+                                                           None => 0f32,
+                                                           Some(st) => st.download_at_sec.get(0).unwrap_or(&0f32 ).clone()
+                                                       },
+                                                       match app.simulation_controller_data.stats.node_statistic.get(selected_node){
+                                                           None => 0f32,
+                                                           Some(st) => st.upload_at_sec.get(0).unwrap_or(&0f32 ).clone()
+                                                       }
+            )).title_alignment(Alignment::Right);
+            opt_block.render(area, buf);
+            return render_net_options(app, opt_inner, buf, net_page_data, selected_node)
         }
         ClientPopup::DataPage(data_page_data) => {
-            render_cl_sr_data_options(app, area, buf, *selected_node,0);
+            render_cl_sr_data_options(app, opt_inner, buf, *selected_node,0);
         }
         ClientPopup::SettingsPage(cmd) => {
-            render_settings_page(app,area,buf,*selected_node,cmd);
+            render_settings_page(app,opt_inner,buf,*selected_node,cmd);
         }
     }
+    opt_block.render(area, buf);
     None
 }
 

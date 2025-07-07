@@ -232,25 +232,31 @@ pub(crate) fn open_file(path: &str) {
     {
         let path_str = path.to_string();
         //let quoted_path = format!("\"{}\"", path_str);
-        Command::new("cmd")
+        match Command::new("cmd")
             .args(&["/C", "start", "", &path_str])
-            .spawn()
-            .expect("Unable to open file on Windows");
+            .spawn(){
+            Ok(_) => (),
+            Err(err) => error!(target: "main", "[LEDRON-CLI] Error opening file: {:?}", err),
+        }
     }
 
     #[cfg(target_os = "macos")]
     {
-        Command::new("open")
+        match Command::new("open")
             .arg(&path)
-            .spawn()
-            .expect("Unable to open file on macOS");
+            .spawn(){
+            Ok(_) => (),
+            Err(err) => error!(target: "main", "[LEDRON-CLI] Error opening file: {:?}", err),
+        }
     }
 
     #[cfg(target_os = "linux")]
     {
-        Command::new("xdg-open")
+        match Command::new("xdg-open")
             .arg(&path)
-            .spawn()
-            .expect("Unable to open file on Linux");
+            .spawn(){
+            Ok(_) => (),
+            Err(err) => error!(target: "main", "[LEDRON-CLI] Error opening file: {:?}", err),
+        }
     }
 }

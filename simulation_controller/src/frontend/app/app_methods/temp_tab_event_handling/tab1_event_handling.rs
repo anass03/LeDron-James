@@ -3,6 +3,7 @@ use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
 use std::sync::LockResult;
+use dashmap::mapref::one::Ref;
 use log::{error, info, warn, debug};
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
@@ -10,6 +11,7 @@ use wg_2024::network::NodeId;
 use server::chat::Chat;
 use crate::backend::sc_models::{ChatList, LogType, NetCacheFile, NetCacheMedia};
 use crate::frontend::app::App;
+use crate::frontend::app::app_methods::method_utils::open_file;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::models::main_types::InputMode::Two;
@@ -1095,8 +1097,12 @@ impl App<'_> {
                                                 // Upload your media
                                                 // Attach a file, il restituito andrà direttamente inviato
                                                 // Devo settare i fields in modo corretto
+                                                self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                 self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 2);
                                                 self.app_mode = AppMode::FileExploring;
+                                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                )));
                                             }
                                             2 => {
                                                 match self.simulation_controller_data.net_cache.known_media_list.get(&id){
@@ -1106,6 +1112,7 @@ impl App<'_> {
                                                             None => (), // Do nothing
                                                             Some(vecfiles) => {
                                                                 if !vecfiles.is_empty(){
+
                                                                     ndpage.selected_item = NetSecondPageItems::FileList;
                                                                     self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                         ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
@@ -1117,12 +1124,34 @@ impl App<'_> {
                                                 }
                                             }
                                             3 => {
+                                                self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                 self.cache.tab1_data.file_exploring_data.set_fields(id, 255, ndpage.selected_server , 3);
                                                 self.app_mode = AppMode::FileExploring;
+                                                self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
+                                                    ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
+                                                )));
                                             }
                                             4 => {
-                                                // Open the media if it is selected!
-                                                //
+                                                match ndpage.selected_file{
+                                                    SelectedFileMedia::None => {}
+                                                    SelectedFileMedia::File(cy) => {
+                                                        match self.simulation_controller_data.download_folder.join(cy).to_str(){
+                                                            None => (),
+                                                            Some(str) => {
+                                                                open_file(str);
+                                                            }
+                                                        }
+                                                    }
+                                                    SelectedFileMedia::Media(cy) => {
+                                                        match self.simulation_controller_data.download_folder.join(cy).to_str(){
+                                                            None => (),
+                                                            Some(str) => {
+                                                                open_file(str);
+
+                                                            }
+                                                        }
+                                                    }
+                                                }
                                             }
                                             _ => (),
                                         }
