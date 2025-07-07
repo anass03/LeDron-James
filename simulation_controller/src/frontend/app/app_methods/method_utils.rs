@@ -10,7 +10,7 @@ use std::process::id;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use dashmap::mapref::one::Ref;
-use log::{error, info, LevelFilter};
+use log::{info, error, LevelFilter};
 use ratatui_image::thread::ResizeRequest;
 use tui_logger::TuiWidgetState;
 use tui_textarea::TextArea;
@@ -72,7 +72,7 @@ impl App<'_> {
                         }
                         RendererResponse::Computed((ret_vec)) => {
                             for (id,top) in ret_vec{
-                                'inner: for (node,_act,ref mut current_alg) in &mut self.cache.tab1_data.net_node_list.items{
+                                'inner: for (node,act,ref mut current_alg) in &mut self.cache.tab1_data.netnode_list.items{
                                     let maybe_target = match node {
                                         Node::Client(cl) => cl.id,
                                         Node::Server(sr) => sr.id,
@@ -111,7 +111,7 @@ impl App<'_> {
                             info!(target: "main", "[LEDRON-CLI] Updated resized protocol");
                         }
                         FileRendererUpdate::Error(err) => {
-                            error!(target: "main", "[LEDRON-CLI] {err}");
+                            error!(target: "main", "[LEDRON-CLI] {}", err);
                         }
                     }
                 }
@@ -120,7 +120,7 @@ impl App<'_> {
     }
 
     pub(crate) fn check_lists_initialized(&mut self){
-        if !self.cache.tab1_data.net_node_list.initialized{
+        if !self.cache.tab1_data.netnode_list.initialized{
             let dronec = self.simulation_controller_data.drones.clone();
             let serverc = self.simulation_controller_data.servers.clone();
             let clientc = self.simulation_controller_data.clients.clone();
@@ -161,10 +161,10 @@ impl App<'_> {
         }
 
         // Set the items first
-        self.cache.tab1_data.net_node_list.items = nodes;
-        self.cache.tab1_data.net_node_list.selected= 0;
-        self.cache.tab1_data.net_node_list.state.select(Some(self.cache.tab1_data.net_node_list.selected as usize));
-        self.cache.tab1_data.net_node_list.initialized= true;
+        self.cache.tab1_data.netnode_list.items = nodes;
+        self.cache.tab1_data.netnode_list.selected= 0;
+        self.cache.tab1_data.netnode_list.state.select(Some(self.cache.tab1_data.netnode_list.selected as usize));
+        self.cache.tab1_data.netnode_list.initialized= true;
 
         // Debug logging for running_network
         info!(target: "main", "[INIT] - Running network contains {} nodes", self.simulation_controller_data.running_network.len());
@@ -186,7 +186,7 @@ impl App<'_> {
                 }
             }
             Err(e) => {
-                error!(target: "main", "[LEDRON-CLI] {e}");
+                self.simulation_controller_data.logs.push_log(LogType::ERROR, e.to_string().as_str());
             }
         }
 
@@ -199,12 +199,12 @@ impl App<'_> {
                         self.cache.text_buffer.toml_text_area = text;
                     }
                     Err(e) => {
-                        error!(target: "main", "[LEDRON-CLI] Error reading file: {e}");
+                        self.simulation_controller_data.logs.push_log(LogType::ERROR,format!("Error reading file: {:?}", e).as_str());
                     }
                 }
             }
             Err(e) => {
-                error!(target: "main", "[LEDRON-CLI] Error opening file: {e}");
+                self.simulation_controller_data.logs.push_log(LogType::ERROR,format!("Error opening file: {:?}", e).as_str());
                 // File doesn't exist
                 // 1 - Create file
                 // 2 - Link new created file path to settings

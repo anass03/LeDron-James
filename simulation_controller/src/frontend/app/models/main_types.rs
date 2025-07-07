@@ -1,20 +1,30 @@
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::Duration;
+use client::Client;
+use host::{ClientId, MediaId, ServerId};
+use image::math::Rect;
 use log::LevelFilter;
-use ratatui_explorer::FileExplorer;
-use tui_logger::TuiWidgetState;
+use ratatui::Frame;
+use ratatui_explorer::{FileExplorer, Theme};
+use ratatui_image::thread::ResizeRequest;
+use tui_logger::{TuiLoggerSmartWidget, TuiWidgetState};
 use wg_2024::network::NodeId;
+use crate::backend::sc_models::{FileRendererUpdate, LogType};
 use crate::frontend::app::models::tab2_types::Tab2;
-use crate::frontend::app::models::tab3_types::Tab3;
+use crate::frontend::app::models::tab3_types::{Tab3, LogLevel};
 use crate::frontend::app::models::general_types::TextBuffer;
 use crate::frontend::app::models::tab0_types::Tab0;
 use crate::frontend::app::models::tab1_types::{ChThirdPage, Tab1};
 
 pub(in crate::frontend::app) struct Settings{
     pub toml_path: String,
+    pub refresh_polling: Duration,
 }
 impl Settings{
     pub(in crate::frontend::app) fn load() ->Self{
         Self{
-            toml_path: "topologies/chosen_network.toml".to_string()
+            toml_path: "topologies/personalized_network.toml".to_string(),
+            refresh_polling: Duration::from_millis(40),
         }
     }
 }
@@ -38,7 +48,12 @@ pub(in crate::frontend::app) struct Cache<'a> {
     pub cursor: u8, // Cursor to know which menu on-tab is selected.
     pub colors_vec: (usize, Vec<(u8, u8, u8)>), // List of RGB codes colors fading from Yellow to Purple
     pub counter: u8, // Counting cycles, used to update colors in TUI
+    
     pub main_log_state: (bool, TuiWidgetState),
+    
+    // Logging settings state (persisted across navigation)
+    pub logging_selected_targets: Vec<String>,
+    pub logging_selected_levels: Vec<LogLevel>,
 
     pub text_buffer: TextBuffer<'a>,
     pub file_explorer: FileExplorer,
@@ -168,6 +183,8 @@ impl<'a> Cache<'a> {
             main_log_state: (false,TuiWidgetState::default()
                 .set_default_display_level(LevelFilter::Off)
                 .set_level_for_target("main", LevelFilter::max())),
+            logging_selected_targets: vec!["main".to_string()],
+            logging_selected_levels: vec![LogLevel::Info],
         }
     }
     pub(in crate::frontend::app) fn update_counter(&mut self) {

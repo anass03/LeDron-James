@@ -1,10 +1,16 @@
 use ratatui::crossterm::event::KeyCode;
 use crate::frontend::app::App;
 use crate::frontend::app::models::main_types::AppMode;
+use log::info;
 
 impl App<'_> {
     pub(in super::super) fn handle_event_tab0(&mut self, key: KeyCode) {
         match key {
+            KeyCode::Backspace => {
+                // Backspace at main level does nothing (could be used for other purposes)
+                // For now, just log that it was pressed
+                info!(target: "main", "[LEDRON-CLI] Backspace pressed at main level");
+            }
             KeyCode::Up => {
                 if self.cache.cursor > 0 && self.cache.cursor < 3{
                     self.cache.cursor -= 1

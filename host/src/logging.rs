@@ -35,10 +35,10 @@ impl LogControl for Host {
         let formatted = format!("[{}] {}", module, msg);
 
         match level {
-            LogType::ERROR => error!("{} - {}", target, formatted),
-            LogType::WARN  => warn!("{} - {}", target, formatted),
-            LogType::INFO  => info!("{} - {}", target, formatted),
-            LogType::DEBUG => debug!("{} - {}", target, formatted),
+            LogType::ERROR => error!(target:format!("{}",target).as_str(),"{}", formatted),
+            LogType::WARN  => warn!(target:format!("{}",target).as_str(),"{}", formatted),
+            LogType::INFO  => info!(target:format!("{}",target).as_str(),"{}", formatted),
+            LogType::DEBUG => debug!(target:format!("{}",target).as_str(),"{}", formatted),
         }
     }
 }

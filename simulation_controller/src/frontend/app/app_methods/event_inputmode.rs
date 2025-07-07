@@ -1,18 +1,22 @@
-use log::{debug, error};
+/*
+Each input-mode related method is found here
+*/
+use log::{error, info, warn, debug};
 use ratatui::crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
-use tui_textarea::Input;
+use tui_textarea::{Input, TextArea};
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::sc_models::LogType;
-use crate::frontend::app::models::general_types::TOMLMessages;
+use crate::frontend::app::models::general_types::TOMLmessages;
 use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::ui::tabs::SelectedTab;
+use crate::frontend::app::models::tab3_types::{ViewedTab3, Tab3SettingsPage, NetworkSettingsCommandsPopup};
 use super::super::App;
 impl App<'_>{
     // Should be handled directly by the
     pub(crate) fn handle_event_inputmode(&mut self, event: Event){
         //self.update_text_buffer();
         match self.selected_tab{
-            SelectedTab::Topology => {
+            SelectedTab::Topology | SelectedTab::Settings=> {
                 self.handle_topology_inputmode(event);
             }
             SelectedTab::TOMLEditor => {
@@ -33,8 +37,8 @@ impl App<'_>{
                             self.app_mode = AppMode::Normal;
                             // Aggiorno il buffer_del_compiler
                             match parse_and_check_config(&self.settings.toml_path){
-                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Correct},
-                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Error(e)}
+                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
+                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                             }
                         },
                         KeyCode::F(1) => {
@@ -42,8 +46,8 @@ impl App<'_>{
                             self.app_mode = AppMode::Normal;
                             // Aggiorno il buffer_del_compiler
                             match parse_and_check_config(&self.settings.toml_path){
-                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Correct},
-                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLMessages::Error(e)}
+                                Ok(_) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Correct},
+                                Err(e) => {self.cache.tab2_data.compiler_buf = TOMLmessages::Error(e)}
                             }
                         },
                         _ => {
@@ -54,7 +58,7 @@ impl App<'_>{
                                 },
                                 None => {
                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
-                                        debug!(target: "main", "[LEDRON-CLI] Pressed: {:?} + {:?}", code, modifiers);
+                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
                                     };
                                     self.cache.text_buffer.toml_text_area.input(input);
                                 }
@@ -76,22 +80,21 @@ impl App<'_>{
                                 if key.kind == KeyEventKind::Press {
                                     match key.code {
                                         KeyCode::Esc  => {
-                                            // Salvo input
+                                            // Exit input mode and return to previous state
                                             self.app_mode = AppMode::Normal;
                                         },
                                         KeyCode::F(1) => {
                                             self.cache.text_buffer.clean_topology_inputs_buffer();
                                             self.app_mode = AppMode::Normal;
                                         },
-
                                         _ => {
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
                                                 Some(c) => {
-                                                    self.cache.text_buffer.input_first_text_area.insert_char(c);
+                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
                                                 },
                                                 None => {
-                                                    self.cache.text_buffer.input_first_text_area.input(input);
+                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
                                                 }
                                             }
                                         }
@@ -172,13 +175,13 @@ impl App<'_>{
                                             let input = Input::from(event.clone());
                                             match Self::map_italian_brackets(&event){
                                                 Some(c) => {
-                                                    self.cache.text_buffer.input_first_text_area.insert_char(c);
+                                                    self.cache.text_buffer.inputfirst_text_area.insert_char(c);
                                                 },
                                                 None => {
                                                     if let Event::Key(KeyEvent { code, modifiers, .. }) = event {
-                                                        debug!(target: "main", "[LEDRON-CLI] Pressed: {:?} + {:?}", code, modifiers);
+                                                        self.simulation_controller_data.logs.push_log(LogType::DEBUG, format!("Pressed: {:?} + {:?}", code, modifiers).as_str());
                                                     };
-                                                    self.cache.text_buffer.input_first_text_area.input(input);
+                                                    self.cache.text_buffer.inputfirst_text_area.input(input);
                                                 }
                                             }
                                         }

@@ -2,7 +2,7 @@ use crate::backend::sc_models::MediaEntry;
 use std::cmp::PartialEq;
 use std::collections::HashMap;
 use std::ops::DerefMut;
-use log::{debug, error, info};
+use log::{error, info, warn, debug};
 use host::{ClientId, FileId, MediaId, ServerId};
 use ratatui::crossterm::event::{KeyCode, KeyEvent};
 use wg_2024::network::NodeId;
@@ -42,7 +42,7 @@ impl App<'_> {
                 // (or could be used for other purposes like clearing selection)
                 return;
             }
-            ViewedTab1::Popup((_id, node_popup)) => {
+            ViewedTab1::Popup((id, node_popup)) => {
                 // Check if we're inside a block (file list, media list, etc.)
                 if self.is_inside_block(&node_popup) {
                     // Go back to navigate through blocks
@@ -176,13 +176,13 @@ impl App<'_> {
     fn handle_main(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Up => {
-                self.cache.tab1_data.net_node_list.select_prev();
+                self.cache.tab1_data.netnode_list.select_prev();
             }
             KeyCode::Down => {
-                self.cache.tab1_data.net_node_list.select_next();
+                self.cache.tab1_data.netnode_list.select_next();
             }
             KeyCode::Right | KeyCode::Left=>{
-                // Depending on where we handle the right key
+                // Depending on where we I handle the right key
                 match self.cache.cursor{
                     0 => {
                         // I am on List
@@ -200,8 +200,8 @@ impl App<'_> {
                     0 => {
                         // I am on List
                         // Which item I've selected?
-                        let selected_cursor_item = self.cache.tab1_data.net_node_list.selected as usize;
-                        let node_info = self.cache.tab1_data.net_node_list.items.get(selected_cursor_item);
+                        let selected_cursor_item = self.cache.tab1_data.netnode_list.selected as usize;
+                        let node_info = self.cache.tab1_data.netnode_list.items.get(selected_cursor_item);
                         
                         match node_info {
                             None => {
@@ -247,7 +247,7 @@ impl App<'_> {
                                     }
                                 }else{
                                     // Throw a warning POPUP saying the item is not ACTIVE
-                                    error!(target: "main", "[LEDRON-CLI] Selected node not active");
+                                    error!(target: "main", "[LEDRON-CLI] Selected node is not active");
                                 }
                             }
                         }
@@ -255,7 +255,7 @@ impl App<'_> {
                     1 => {
                         // I am on Map
                         // I still don't know what could happen when I press map
-                        error!(target: "main", "[LEDRON-CLI] Map functionality not yet implemented");
+                        info!(target: "main", "[LEDRON-CLI] Map functionality not yet implemented");
                     }
                     _ => ()
                 }
@@ -446,7 +446,7 @@ impl App<'_> {
                             ClientPopup::InternetPage(net_page) => {
                                 self.handle_net_client_page(key, id, net_page)
                             }
-                            ClientPopup::DataPage(_data_page) => {
+                            ClientPopup::DataPage(data_page) => {
 
                             }
                             ClientPopup::SettingsPage(sett_page) => {
@@ -470,17 +470,17 @@ impl App<'_> {
     }
     fn handle_chat_page(&mut self, key: KeyEvent,id:NodeId, chat_page: ClientChatPopup){
         match chat_page {
-            ClientChatPopup::FirstPage(_landing_data) => {
+            ClientChatPopup::FirstPage(landing_data) => {
                 // I am outside because this is shared by the two known_chat_servers cases
                 match key.code.to_string().to_lowercase().as_str(){
                     "r" => {
                         // Send request
                         match self.simulation_controller_data.request_server_type(id){
                             Ok(_) => {
-                                info!(target: "main", "[LEDRON-CLI] Trying to find new servers in the network!")
+                                info!(target: "main", "[LEDRON-CLI] Trying to find new servers in the network!");
                             }
                             Err(str) => {
-                                error!(target: "main", "[LEDRON-CLI] {str}");
+                                error!(target: "main", "[LEDRON-CLI] {}", str);
                             }
                         }
                     },
@@ -583,21 +583,21 @@ impl App<'_> {
                                 match self.simulation_controller_data.request_client_list(id,contacts_data.selected_server){
                                     Ok(_) => (),
                                     Err(str) => {
-                                        error!(target: "main", "[LEDRON-CLI] {str}");
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                             },
                             _ => (),
                         }
-                        // Where am I
+                        // Devo capire dove mi trovo
                         match self.simulation_controller_data.chat_cache.known_contacts.get(&id){
                             None => {
-                                // Empty page
+                                // Pagina vuota
                             },
                             Some(known_contacts) => {
                                 match known_contacts.get(&contacts_data.selected_server){
                                     None => {
-                                        // Empty page
+                                        // Pagina vuota
                                     }
                                     Some(contacts) => {
                                         let contacts_len = contacts.len();
@@ -620,7 +620,7 @@ impl App<'_> {
                                                 match contacts.get(self.cache.tab1_data.popup_cursor){
                                                     None => {
                                                         // Bug, shouldn't arrive here.
-                                                        // Means I can select not existing items
+                                                        // Means I can select non existing items
                                                         error!(target: "main", "[LEDRON-CLI] Selected contact not found");
                                                     }
                                                     Some(contact) => {
@@ -766,17 +766,17 @@ impl App<'_> {
 
     fn handle_net_client_page(&mut self, key: KeyEvent, id:NodeId, net_page:ClientNetPopup){
         match net_page {
-            ClientNetPopup::FirstPage(_stpage) => {
+            ClientNetPopup::FirstPage(stpage) => {
                 // I am outside because this is shared by the two known_chat_servers cases
                 match key.code.to_string().to_lowercase().as_str(){
                     "r" => {
                         // Send request
                         match self.simulation_controller_data.request_server_type(id){
                             Ok(_) => {
-                                info!(target: "main", "[LEDRON-CLI] Sent request server-type")
+                                info!(target: "main", "[LEDRON-CLI] Sent request server-type");
                             }
                             Err(str) => {
-                                error!(target: "main", "[LEDRON-CLI] {str}")
+                                error!(target: "main", "[LEDRON-CLI] {}", str);
                             }
                         }
                     },
@@ -816,7 +816,7 @@ impl App<'_> {
                                     None => {
                                         // Should be impossible
                                         // THROW FATAL
-                                        error!(target: "main", "[LEDRON-CLI] Selected content server not found")
+                                        error!(target: "main", "[LEDRON-CLI] Selected content server not found");
                                     }
                                     Some(selected_server_id) => {
                                         let server_id = *selected_server_id;
@@ -825,15 +825,15 @@ impl App<'_> {
                                                 debug!(target: "main", "[LEDRON-CLI] Successfully sent request files list");
                                             }
                                             Err(str) => {
-                                                error!(target: "main", "[LEDRON-CLI] {str}")
+                                                error!(target: "main", "[LEDRON-CLI] {}", str);
                                             }
                                         }
                                         match self.simulation_controller_data.request_media_list(id, server_id){
                                             Ok(_) => {
-                                                debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list")
+                                                debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list");
                                             }
                                             Err(str) => {
-                                                error!(target: "main", "[LEDRON-CLI] {str}")
+                                                error!(target: "main", "[LEDRON-CLI] {}", str);
                                             }
                                         }
                                         self.cache.tab1_data.popup_cursor = 0;
@@ -871,18 +871,18 @@ impl App<'_> {
                                 let server_id = ndpage.selected_server;
                                 match self.simulation_controller_data.request_files_list(id, server_id){
                                     Ok(_) => {
-                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request file list")
+                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request files list");
                                     }
                                     Err(str) => {
-                                        error!(target: "main", "[LEDRON-CLI] {str}")
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                                 match self.simulation_controller_data.request_media_list(id, server_id){
                                     Ok(_) => {
-                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list")
+                                        debug!(target: "main", "[LEDRON-CLI] Successfully sent request media list");
                                     }
                                     Err(str) => {
-                                        error!(target: "main", "[LEDRON-CLI] {str}")
+                                        error!(target: "main", "[LEDRON-CLI] {}", str);
                                     }
                                 }
                             },
@@ -1100,6 +1100,7 @@ impl App<'_> {
                                                                         }
                                                                     }
                                                                 }else{
+                                                                    self.cache.tab1_data.image_rendering_data = RenderingImage::False;
                                                                     ndpage.selected_file = SelectedFileMedia::File(file_id.clone());
                                                                     self.cache.tab1_data.viewing = ViewedTab1::Popup((id, NodePopup::Client(
                                                                         ClientPopup::InternetPage(ClientNetPopup::SecondPage(ndpage))
@@ -1161,7 +1162,7 @@ impl App<'_> {
             }
         }
     }
-    fn handle_data_client_page(&mut self, _key: KeyEvent, _id:NodeId, _net_page: ClientNetPopup){
+    fn handle_data_client_page(&mut self, key: KeyEvent, id:NodeId, net_page: ClientNetPopup){
 
     }
 
@@ -1410,7 +1411,7 @@ impl App<'_> {
                     }
                     _ => {
                         match server_popup{
-                            ServerPopup::DataPage(_datapage) => {
+                            ServerPopup::DataPage(datapage) => {
 
                             }
                             ServerPopup::SettingsPage(settpage) => {
@@ -1672,7 +1673,7 @@ impl App<'_> {
                     }
                     _ => {
                         match client_popup{
-                            DronePopup::DataPage(_datapage) => {
+                            DronePopup::DataPage(datapage) => {
 
                             }
                             DronePopup::SettingsPage(settpage) => {
@@ -1700,7 +1701,7 @@ impl App<'_> {
             }
         }
     }
-    fn handle_data_drone_page(&mut self, _key:KeyEvent, _id:NodeId, _data_page: DroneDataPopup){
+    fn handle_data_drone_page(&mut self, key:KeyEvent,id:NodeId, data_page: DroneDataPopup){
 
     }
     fn handle_sett_drone_page(&mut self, key:KeyEvent, id:NodeId, mut sett_page:DroneSettingsPopup){
