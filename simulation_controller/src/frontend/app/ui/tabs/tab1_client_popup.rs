@@ -660,82 +660,144 @@ pub(super) mod chat_rendering{
                     last_msg.render(info_msg, buf);
                 }
                 Some(chat_list) => {
+
                     let mut found_chat:Option<&Chat> = None;
                     match chat_list.chats_stored.get(&(selected_cl,**contact_id )){
                         None => {
                             match chat_list.chats_stored.get(&(**contact_id, selected_cl)){
-                                None => (),
+                                None => {let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                    .alignment(Alignment::Left)
+                                    .wrap(Wrap { trim: true });
+                                    last_msg.render(info_msg, buf);},
                                 Some(ch) => {
-                                    found_chat = Some(ch);
+                                    match ch.read() {
+                                        Ok(ch) => {
+                                            match ch.get_last_message(){
+                                            None => {
+                                                let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                    .alignment(Alignment::Left)
+                                                    .wrap(Wrap { trim: true });
+                                                last_msg.render(info_msg, buf);
+                                            }
+                                            Some((mess,messdata)) => {
+                                                if messdata.id==selected_cl {
+                                                    match mess{
+                                                        Message(str) => {
+                                                            let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                                       messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                            let last_msg = Paragraph::new(Line::from(vec![initial_mess
+                                                                                                              .set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                                          str.to_span()]))
+                                                                .alignment(Alignment::Left)
+                                                                .wrap(Wrap { trim: true });
+                                                            last_msg.render(info_msg, buf);
+                                                        }
+                                                        Media(med) => {
+                                                            let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                                       messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                            let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                                .alignment(Alignment::Left)
+                                                                .wrap(Wrap { trim: true });
+                                                            last_msg.render(info_msg, buf);
+                                                        }
+                                                    }
+                                                }else {
+                                                    match mess{
+                                                        Message(str) => {
+                                                            let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                                       messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
+                                                                                       messdata.id);
+                                                            let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                                          str.to_span()]))
+                                                                .alignment(Alignment::Left)
+                                                                .wrap(Wrap { trim: true });
+                                                            last_msg.render(info_msg, buf);
+                                                        }
+                                                        Media(med) => {
+                                                            let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                                       messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
+                                                                                       ,messdata.id);
+                                                            let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                                .alignment(Alignment::Left)
+                                                                .wrap(Wrap { trim: true });
+                                                            last_msg.render(info_msg, buf);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        },
+                                        Err(_) => {let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                            .alignment(Alignment::Left)
+                                            .wrap(Wrap { trim: true });
+                                            last_msg.render(info_msg, buf);},
+                                    };
                                 }
                             }
                         }
                         Some(ch) => {
-                            found_chat = Some(ch);
-                        }
-                    }
-                    match found_chat{
-                        None => {
-                            let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                .alignment(Alignment::Left)
-                                .wrap(Wrap { trim: true });
-                            last_msg.render(info_msg, buf);
-                        }
-                        Some(ch) => {
-                            match ch.get_last_message(){
-                                None => {
-                                    let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                        .alignment(Alignment::Left)
-                                        .wrap(Wrap { trim: true });
-                                    last_msg.render(info_msg, buf);
-                                }
-                                Some((mess,messdata)) => {
-                                    if messdata.id==selected_cl {
-                                        match mess{
-                                            Message(str) => {
-                                                let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
-                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess
-                                                                                                  .set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
-                                                                                              str.to_span()]))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
+                            match ch.read() {
+                                Ok(ch) => {
+                                    match ch.get_last_message(){
+                                    None => {
+                                        let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                            .alignment(Alignment::Left)
+                                            .wrap(Wrap { trim: true });
+                                        last_msg.render(info_msg, buf);
+                                    }
+                                    Some((mess,messdata)) => {
+                                        if messdata.id==selected_cl {
+                                            match mess{
+                                                Message(str) => {
+                                                    let initial_mess = format!("{:?}:{:?} - YOU: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                               messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                    let last_msg = Paragraph::new(Line::from(vec![initial_mess
+                                                                                                      .set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                                  str.to_span()]))
+                                                        .alignment(Alignment::Left)
+                                                        .wrap(Wrap { trim: true });
+                                                    last_msg.render(info_msg, buf);
+                                                }
+                                                Media(med) => {
+                                                    let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                               messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
+                                                    let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                        .alignment(Alignment::Left)
+                                                        .wrap(Wrap { trim: true });
+                                                    last_msg.render(info_msg, buf);
+                                                }
                                             }
-                                            Media(med) => {
-                                                let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
-                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                        }
-                                    }else {
-                                        match mess{
-                                            Message(str) => {
-                                                let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
-                                                                           messdata.id);
-                                                let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
-                                                                                              str.to_span()]))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
-                                            }
-                                            Media(med) => {
-                                                let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
-                                                                           messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
-                                                                           ,messdata.id);
-                                                let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
-                                                    .alignment(Alignment::Left)
-                                                    .wrap(Wrap { trim: true });
-                                                last_msg.render(info_msg, buf);
+                                        }else {
+                                            match mess{
+                                                Message(str) => {
+                                                    let initial_mess = format!("{:?}:{:?} - ID {:?}: ",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                               messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute,
+                                                                               messdata.id);
+                                                    let last_msg = Paragraph::new(Line::from(vec![initial_mess.set_style(Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)),
+                                                                                                  str.to_span()]))
+                                                        .alignment(Alignment::Left)
+                                                        .wrap(Wrap { trim: true });
+                                                    last_msg.render(info_msg, buf);
+                                                }
+                                                Media(med) => {
+                                                    let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
+                                                                               messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
+                                                                               ,messdata.id);
+                                                    let last_msg = Paragraph::new(Text::styled(initial_mess, Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                                        .alignment(Alignment::Left)
+                                                        .wrap(Wrap { trim: true });
+                                                    last_msg.render(info_msg, buf);
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
+                                },
+                                Err(_) => {let last_msg = Paragraph::new(Text::styled("Send the first message!", Style::default().add_modifier(Modifier::ITALIC).fg(Color::Gray)))
+                                    .alignment(Alignment::Left)
+                                    .wrap(Wrap { trim: true });
+                                    last_msg.render(info_msg, buf);},
+                            };
                         }
                     }
                 }
@@ -1036,12 +1098,18 @@ pub(super) mod chat_rendering{
                                 render_empty_chat(app,chat_area,buf);
                             }
                             Some(ch) => {
-                                render_chats_2(app,chat_area,buf,selected_cl,third_page_data,ch)
+                                match ch.read() {
+                                    Ok(ch) => render_chats_2(app,chat_area,buf,selected_cl,third_page_data,&ch),
+                                    Err(_) => render_empty_chat(app,chat_area,buf),
+                                };
                             }
                         }
                     }
                     Some(ch) => {
-                        render_chats_2(app,chat_area,buf,selected_cl,third_page_data,ch)
+                        match ch.read() {
+                            Ok(ch) => render_chats_2(app,chat_area,buf,selected_cl,third_page_data,&ch),
+                            Err(_) => render_empty_chat(app,chat_area,buf),
+                        };
                     }
                 }
             }

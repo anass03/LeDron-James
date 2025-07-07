@@ -31,7 +31,7 @@ fn main() -> std::io::Result<()> {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;
         },
-        Err(error) => {simulation_controller_data.logs.push_log(LogType::FATAL, format!("[Simulation Controller] - Failed to initialize: {}", error).as_str());}
+        Err(error) => {error!(target:"main", "[Simulation Controller] - Failed to initialize: {}", error);}
     }
 
     // Initialize terminal with image support
