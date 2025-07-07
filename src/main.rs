@@ -1,12 +1,12 @@
-use std::collections::HashMap;
 use crossbeam_channel::unbounded;
-use simulation_controller::backend::simulation_controller::SimulationControllerData;
-use simulation_controller::backend::sc_models::{ChatCache, LogType, NetCache, Statistics};
-use initializer::initializer::initialize;
-use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
-use tui_logger::*;
-use log::*;
 use crossterm;
+use initializer::initializer::initialize;
+use log::*;
+use simulation_controller::backend::sc_models::{ChatCache, LogType, NetCache, Statistics};
+use simulation_controller::backend::simulation_controller::SimulationControllerData;
+use simulation_controller::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use std::collections::HashMap;
+use tui_logger::*;
 
 fn main() -> std::io::Result<()> {
     // 1) initialize tui-logger
@@ -30,8 +30,10 @@ fn main() -> std::io::Result<()> {
         Ok((simulation_controller, handles)) => {
             simulation_controller_data = simulation_controller;
             thread_handles = handles;
-        },
-        Err(error) => {error!(target:"main", "[Simulation Controller] - Failed to initialize: {}", error);}
+        }
+        Err(error) => {
+            error!(target:"main", "[Simulation Controller] - Failed to initialize: {}", error);
+        }
     }
 
     // Initialize terminal with image support
@@ -42,12 +44,13 @@ fn main() -> std::io::Result<()> {
         crossterm::event::EnableMouseCapture,
         crossterm::terminal::Clear(crossterm::terminal::ClearType::All),
     )?;
-    
-    let mut terminal = ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
-    
+
+    let mut terminal =
+        ratatui::Terminal::new(ratatui::backend::CrosstermBackend::new(std::io::stdout()))?;
+
     let mut app = simulation_controller::frontend::app::App::default(simulation_controller_data);
     let app_result = app.run(&mut terminal);
-    
+
     // Restore terminal
     crossterm::execute!(
         std::io::stdout(),
@@ -58,7 +61,10 @@ fn main() -> std::io::Result<()> {
 
     for (node_id, handle) in thread_handles {
         handle.join().unwrap();
-        println!("[Simulation Controller] - Closing thread of node: {:?}", node_id);
+        println!(
+            "[Simulation Controller] - Closing thread of node: {:?}",
+            node_id
+        );
     }
     app_result
 }

@@ -1,10 +1,10 @@
-use log::{debug, info};
+use crate::frontend::app::models::main_types::{AppMode, InputMode};
 use crate::frontend::app::App;
+use log::{debug, info};
 use ratatui::crossterm::event::KeyCode;
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
-use crate::frontend::app::models::main_types::{AppMode, InputMode};
 
 impl App<'_> {
     pub(crate) fn handle_event_tab2(&mut self, key: KeyCode) {
@@ -57,10 +57,10 @@ impl App<'_> {
         ];
 
         if let Some(filename) = topology_files.get(topology_index) {
-            let file_path = match *filename{
+            let file_path = match *filename {
                 "Personalized Network" => "topologies/personalized_network.toml",
                 "Star Network" => "topologies/star_network.toml",
-                "Double Chain Network"=> "topologies/double_chain_network.toml",
+                "Double Chain Network" => "topologies/double_chain_network.toml",
                 "Sub-Stars Network" => "topologies/sub_stars_network.toml",
                 "Tree Network" => "topologies/tree_network.toml",
                 "Butterfly Network" => "topologies/butterfly_network.toml",
@@ -73,11 +73,11 @@ impl App<'_> {
             match std::fs::read_to_string(&file_path) {
                 Ok(content) => {
                     // Load the file content into the TOML text area
-                    self.cache.text_buffer.toml_text_area = tui_textarea::TextArea::from(content.lines());
+                    self.cache.text_buffer.toml_text_area =
+                        tui_textarea::TextArea::from(content.lines());
 
                     // Automatically save to chosen_topology.toml
                     self.save_text_buffer();
-
                 }
                 Err(err) => {
                     // Log error if file can't be read
@@ -87,4 +87,3 @@ impl App<'_> {
         }
     }
 }
-

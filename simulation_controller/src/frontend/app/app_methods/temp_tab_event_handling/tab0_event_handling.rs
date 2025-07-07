@@ -1,7 +1,7 @@
-use ratatui::crossterm::event::KeyCode;
-use crate::frontend::app::App;
 use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::App;
 use log::info;
+use ratatui::crossterm::event::KeyCode;
 
 impl App<'_> {
     pub(in super::super) fn handle_event_tab0(&mut self, key: KeyCode) {
@@ -12,15 +12,15 @@ impl App<'_> {
                 info!(target: "main", "[LEDRON-CLI] Backspace pressed at main level");
             }
             KeyCode::Up => {
-                if self.cache.cursor > 0 && self.cache.cursor < 3{
+                if self.cache.cursor > 0 && self.cache.cursor < 3 {
                     self.cache.cursor -= 1
                 }
             }
             KeyCode::Down => {
-                if self.cache.cursor < 2{
+                if self.cache.cursor < 2 {
                     //println!("zio");
                     self.cache.cursor += 1
-                }else if self.cache.cursor == 2{
+                } else if self.cache.cursor == 2 {
                     self.cache.cursor = 0;
                 }
             }
@@ -28,7 +28,7 @@ impl App<'_> {
                 if self.cache.cursor == 3 {
                     //println!("zio");
                     self.cache.cursor = 1
-                }else{
+                } else {
                     self.cache.cursor = 3;
                 }
             }
@@ -36,19 +36,17 @@ impl App<'_> {
                 if self.cache.cursor != 3 {
                     //println!("zio");
                     self.cache.cursor = 3
-                }else{
+                } else {
                     self.cache.cursor = 1
                 }
             }
-            KeyCode::Enter => {
-                match self.cache.cursor {
-                    0 => {}
-                    3 => {
-                        self.app_mode = AppMode::Scrolling;
-                    }
-                    _ => (),
+            KeyCode::Enter => match self.cache.cursor {
+                0 => {}
+                3 => {
+                    self.app_mode = AppMode::Scrolling;
                 }
-            }
+                _ => (),
+            },
             _ => (),
         }
     }

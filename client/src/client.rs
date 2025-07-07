@@ -1,21 +1,27 @@
-use crossbeam_channel::{select_biased, tick, Receiver, Sender};
-use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Packet, PacketType, NodeType, Fragment, FRAGMENT_DSIZE};
-use std::collections::{HashMap, HashSet};
-use std::error::Error;
-use std::sync::atomic::{Ordering};
-use std::time::{Duration, Instant};
-use host::{HostCommand, Message, Host, ServerTypes, ServerToClient, HostEvent, ClientNetCommand, ContentID, FileId, MediaId, Image, ServerId, SendingCodes};
-use host::network::Edge;
-use host::ServerTypes::{Content, Chat};
-use host::ServerToClient::{ClientList, ServerType, FilesList, File, Media, MediaList, MessageFrom, ErrNotFound, ErrClientId, FileFrom, MediaFrom, WrongServer, Sending};
-use host::session::{generate_unique_session_id, RecSessionData, SentSessionData};
 use crate::compression::{compress_data, decompress_data};
-use crate::transfer_tracker::TransferTracker;
 use crate::network_metrics::NetMetrics;
+use crate::transfer_tracker::TransferTracker;
+use crossbeam_channel::{select_biased, tick, Receiver, Sender};
 use host::flood::FloodControl;
 use host::functionality::Functionality;
 use host::logging::{LogControl, LogModule, LogType};
+use host::network::Edge;
+use host::session::{generate_unique_session_id, RecSessionData, SentSessionData};
+use host::ServerToClient::{
+    ClientList, ErrClientId, ErrNotFound, File, FileFrom, FilesList, Media, MediaFrom, MediaList,
+    MessageFrom, Sending, ServerType, WrongServer,
+};
+use host::ServerTypes::{Chat, Content};
+use host::{
+    ClientNetCommand, ContentID, FileId, Host, HostCommand, HostEvent, Image, MediaId, Message,
+    SendingCodes, ServerId, ServerToClient, ServerTypes,
+};
+use std::collections::{HashMap, HashSet};
+use std::error::Error;
+use std::sync::atomic::Ordering;
+use std::time::{Duration, Instant};
+use wg_2024::network::{NodeId, SourceRoutingHeader};
+use wg_2024::packet::{Fragment, NodeType, Packet, PacketType, FRAGMENT_DSIZE};
 
 /// Top‐level client wrapping a Host.
 ///
@@ -23,13 +29,13 @@ use host::logging::{LogControl, LogModule, LogType};
 /// and forwards reconstructed `ServerToClient` events back to the simulation controller.
 pub struct Client {
     pub(crate) host: Host,
-    controller_recv:Receiver<ClientCommand>,
+    controller_recv: Receiver<ClientCommand>,
     servers: HashMap<ServerTypes, Vec<NodeId>>,
     servers_discovered: usize,
     net_metrics: NetMetrics,
     tracker: TransferTracker,
     pub(crate) pending_fragments: HashMap<ContentID, (usize, usize)>, // ContentID → (totali, ricevuti finora)
-    known_file_data:  HashMap<(ServerId, FileId), Vec<u8>>,
+    known_file_data: HashMap<(ServerId, FileId), Vec<u8>>,
     known_media_data: HashMap<(ServerId, MediaId), Image>,
 }
 impl Client {
@@ -44,15 +50,16 @@ impl Client {
     /// - `packet_recv`: channel for incoming low‐level `Packet`s.
     /// - `packet_send`: map of neighbor `NodeId` to their send‐channels.
     /// - `log_sender`: channel to emit structured `LogEntry`s.
-    pub fn new(id:NodeId,
-               type_host:NodeType,
-               controller_send:Sender<HostEvent>,
-               controller_recv:Receiver<ClientCommand>,
-               packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>) ->Self{
-
-        let host = Host::new(id, type_host, controller_send,  packet_recv, packet_send);
-        Self{
+    pub fn new(
+        id: NodeId,
+        type_host: NodeType,
+        controller_send: Sender<HostEvent>,
+        controller_recv: Receiver<ClientCommand>,
+        packet_recv: Receiver<Packet>,
+        packet_send: HashMap<NodeId, Sender<Packet>>,
+    ) -> Self {
+        let host = Host::new(id, type_host, controller_send, packet_recv, packet_send);
+        Self {
             host,
             controller_recv,
             servers: HashMap::new(),
@@ -60,7 +67,7 @@ impl Client {
             net_metrics: NetMetrics::new(),
             tracker: TransferTracker::new(),
             pending_fragments: HashMap::new(),
-            known_file_data:  HashMap::new(),
+            known_file_data: HashMap::new(),
             known_media_data: HashMap::new(),
         }
     }
@@ -79,7 +86,7 @@ impl Client {
 
         self.host.initiate_flood();
         loop {
-            select_biased!{
+            select_biased! {
                 recv(self.controller_recv) -> cmd => {
                     if let Ok(command) = cmd {
                         self.handle_command(command);
@@ -132,7 +139,8 @@ impl Client {
 
         if self.servers_discovered != expected {
             self.host.send_logging(
-                LogType::INFO, LogModule::SESSION,
+                LogType::INFO,
+                LogModule::SESSION,
                 format!("Discovering {} servers ", expected),
             );
             self.request_server_type();
@@ -164,7 +172,8 @@ impl Client {
             }
 
             self.host.send_logging(
-                LogType::INFO, LogModule::SESSION,
+                LogType::INFO,
+                LogModule::SESSION,
                 format!("Discovered all {} servers", expected),
             );
         }
@@ -175,14 +184,16 @@ impl Client {
     fn request_server_type(&mut self) {
         for server_id in self.host.network.servers.clone() {
             self.host.send_logging(
-                LogType::INFO, LogModule::SESSION,
+                LogType::INFO,
+                LogModule::SESSION,
                 format!("Requesting ServerType from server({})", server_id),
             );
             let raw = match serde_json::to_vec(&ClientNetCommand::ServerType) {
                 Ok(buf) => buf,
                 Err(e) => {
                     self.host.send_logging(
-                        LogType::WARN, LogModule::SESSION,
+                        LogType::WARN,
+                        LogModule::SESSION,
                         format!("Serialization failed: {}", e),
                     );
                     return;
@@ -192,14 +203,17 @@ impl Client {
                 Ok(c) => c,
                 Err(err) => {
                     self.host.send_logging(
-                        LogType::WARN, LogModule::SESSION,
+                        LogType::WARN,
+                        LogModule::SESSION,
                         format!("Compression failed, sending raw: {}", err),
                     );
                     raw
                 }
             };
 
-            self.net_metrics.tx_bytes.fetch_add(payload.len(), Ordering::Relaxed);
+            self.net_metrics
+                .tx_bytes
+                .fetch_add(payload.len(), Ordering::Relaxed);
 
             let message = Message {
                 session_id: generate_unique_session_id(),
@@ -208,12 +222,17 @@ impl Client {
             //let cb = Box::new(|_: usize| {});
             if let Err(err) = self.build_msg_fragment(server_id, message, |_| {}) {
                 self.host.send_logging(
-                    LogType::ERROR, LogModule::SESSION,
-                    format!("Failed to send ServerType request: {}, to server({})", err, server_id),
+                    LogType::ERROR,
+                    LogModule::SESSION,
+                    format!(
+                        "Failed to send ServerType request: {}, to server({})",
+                        err, server_id
+                    ),
                 );
             } else {
                 self.host.send_logging(
-                    LogType::INFO, LogModule::SESSION,
+                    LogType::INFO,
+                    LogModule::SESSION,
                     format!("Sent ServerType request to server({})", server_id),
                 );
             }
@@ -226,9 +245,17 @@ impl Client {
     ///
     /// `Some((server_id, message))` if the server was valid and fragmentation started;
     /// otherwise `None`.
-    pub fn send_net_cmd(&mut self, srv_type: ServerTypes, server_id: NodeId, cmd: ClientNetCommand, label: &str, option: Option<Box<dyn FnMut(usize) + Send + 'static>>)->Option<(ServerId,Message)>{
+    pub fn send_net_cmd(
+        &mut self,
+        srv_type: ServerTypes,
+        server_id: NodeId,
+        cmd: ClientNetCommand,
+        label: &str,
+        option: Option<Box<dyn FnMut(usize) + Send + 'static>>,
+    ) -> Option<(ServerId, Message)> {
         self.host.send_logging(
-            LogType::INFO, LogModule::SESSION,
+            LogType::INFO,
+            LogModule::SESSION,
             format!("Preparing {} request", label),
         );
         match self.servers.get(&srv_type) {
@@ -237,7 +264,8 @@ impl Client {
                     Ok(buf) => buf,
                     Err(e) => {
                         self.host.send_logging(
-                            LogType::ERROR, LogModule::SESSION,
+                            LogType::ERROR,
+                            LogModule::SESSION,
                             format!("Serialization failed: {}", e),
                         );
                         return None;
@@ -248,7 +276,8 @@ impl Client {
                     Ok(c) => c,
                     Err(err) => {
                         self.host.send_logging(
-                            LogType::WARN, LogModule::SESSION,
+                            LogType::WARN,
+                            LogModule::SESSION,
                             format!("Compression failed, sending raw: {}", err),
                         );
                         raw.clone()
@@ -256,7 +285,9 @@ impl Client {
                 };
 
                 // aggiorno il contatore di upload con la lunghezza del payload effettivo
-                self.net_metrics.tx_bytes.fetch_add(payload.len(), Ordering::Relaxed);
+                self.net_metrics
+                    .tx_bytes
+                    .fetch_add(payload.len(), Ordering::Relaxed);
 
                 let message = Message {
                     session_id: generate_unique_session_id(),
@@ -264,31 +295,33 @@ impl Client {
                 };
                 let mut cb: Box<dyn FnMut(usize) + Send> =
                     option.unwrap_or_else(|| Box::new(|_: usize| {}));
-                if let Err(err) =
-                    self.build_msg_fragment(server_id, message.clone(), cb)
-                {
+                if let Err(err) = self.build_msg_fragment(server_id, message.clone(), cb) {
                     self.host.send_logging(
-                        LogType::ERROR, LogModule::SESSION,
+                        LogType::ERROR,
+                        LogModule::SESSION,
                         format!("Failed to send {}: {}", label, err),
                     );
                 } else {
                     self.host.send_logging(
-                        LogType::INFO, LogModule::SESSION,
+                        LogType::INFO,
+                        LogModule::SESSION,
                         format!("{} sent to server({})", label, server_id),
                     );
                 }
-                Some((server_id,message))
+                Some((server_id, message))
             }
             Some(_) => {
                 self.host.send_logging(
-                    LogType::WARN, LogModule::SESSION,
+                    LogType::WARN,
+                    LogModule::SESSION,
                     format!("{} is not a {:?} server", server_id, srv_type),
                 );
                 None
             }
             None => {
                 self.host.send_logging(
-                    LogType::WARN, LogModule::SESSION,
+                    LogType::WARN,
+                    LogModule::SESSION,
                     format!("No {:?} server available for {}", srv_type, label),
                 );
                 None
@@ -305,7 +338,7 @@ impl Client {
     fn handle_command(&mut self, client_command: ClientCommand) {
         match client_command {
             ClientCommand::Net(net_command) => {
-                if let Err(e) = self.ensure_all_servers_discovered(){
+                if let Err(e) = self.ensure_all_servers_discovered() {
                     self.host.send_logging(
                         LogType::ERROR,
                         LogModule::SESSION,
@@ -326,51 +359,100 @@ impl Client {
                             LogModule::SESSION,
                             format!("Servers discovered: {:?}", snapshot),
                         );
-                        let _ = self.host.controller_send.send(HostEvent::ServersDiscovered(self.host.id, snapshot));
+                        let _ = self
+                            .host
+                            .controller_send
+                            .send(HostEvent::ServersDiscovered(self.host.id, snapshot));
                     }
 
                     // Content-server
                     ClientNetCommand::FilesList(sid) => {
-                        self.send_net_cmd(Content, sid, ClientNetCommand::FilesList(sid), "FilesList", None);
+                        self.send_net_cmd(
+                            Content,
+                            sid,
+                            ClientNetCommand::FilesList(sid),
+                            "FilesList",
+                            None,
+                        );
                     }
                     ClientNetCommand::File(sid, id) => {
                         if let Some(cached) = self.known_file_data.get(&(sid, id.clone())) {
-                            let _ = self.host.controller_send.send(HostEvent::PacketReconstructed(
-                                File(sid, id.clone(), cached.clone())
-                            ));
+                            let _ = self
+                                .host
+                                .controller_send
+                                .send(HostEvent::PacketReconstructed(File(
+                                    sid,
+                                    id.clone(),
+                                    cached.clone(),
+                                )));
                         } else {
                             let label = format!("File({})", id);
-                            self.send_net_cmd(Content, sid, ClientNetCommand::File(sid, id.clone()), &label, None);
+                            self.send_net_cmd(
+                                Content,
+                                sid,
+                                ClientNetCommand::File(sid, id.clone()),
+                                &label,
+                                None,
+                            );
                         }
                     }
                     ClientNetCommand::NewFile(sid, id, data) => {
                         self.add_new_file(sid, id, data);
                     }
                     ClientNetCommand::MediaList(sid) => {
-                        self.send_net_cmd(Content, sid, ClientNetCommand::MediaList(sid), "MediaList", None);
+                        self.send_net_cmd(
+                            Content,
+                            sid,
+                            ClientNetCommand::MediaList(sid),
+                            "MediaList",
+                            None,
+                        );
                     }
                     ClientNetCommand::Media(sid, id) => {
                         if let Some(cached) = self.known_media_data.get(&(sid, id.clone())) {
-                            let _ = self.host.controller_send.send(HostEvent::PacketReconstructed(
-                                Media(sid, id.clone(), cached.clone())
-                            ));
+                            let _ = self
+                                .host
+                                .controller_send
+                                .send(HostEvent::PacketReconstructed(Media(
+                                    sid,
+                                    id.clone(),
+                                    cached.clone(),
+                                )));
                         } else {
                             let label = format!("Media({})", id);
-                            self.send_net_cmd(Content, sid, ClientNetCommand::Media(sid, id.clone()), &label, None);
+                            self.send_net_cmd(
+                                Content,
+                                sid,
+                                ClientNetCommand::Media(sid, id.clone()),
+                                &label,
+                                None,
+                            );
                         }
                     }
                     ClientNetCommand::NewMedia(sid, id, img) => {
-                       self.add_new_media(sid, id, img);
+                        self.add_new_media(sid, id, img);
                     }
                     // Chat-server
                     ClientNetCommand::RegistrationToChat(sid) => {
-                        self.send_net_cmd(Chat, sid, ClientNetCommand::RegistrationToChat(sid), "RegistrationToChat", None);
+                        self.send_net_cmd(
+                            Chat,
+                            sid,
+                            ClientNetCommand::RegistrationToChat(sid),
+                            "RegistrationToChat",
+                            None,
+                        );
                     }
                     ClientNetCommand::ClientList(sid) => {
-                        self.send_net_cmd(Chat, sid, ClientNetCommand::ClientList(sid), "ClientList", None);
+                        self.send_net_cmd(
+                            Chat,
+                            sid,
+                            ClientNetCommand::ClientList(sid),
+                            "ClientList",
+                            None,
+                        );
                     }
                     ClientNetCommand::MessageFor(cid, sid, msg) => {
-                       self.handle_message_for(cid, sid, msg);
+                        self.handle_message_for(cid, sid, msg);
                     }
                     ClientNetCommand::FileFor(cid, sid, fid, data) => {
                         self.handle_file_for(cid, sid, fid, data);
@@ -380,72 +462,82 @@ impl Client {
                     }
                 }
             }
-            ClientCommand::Internal(host_command) => {
-                match host_command {
-                    HostCommand::AddSender(id, sender) => {
-                        let current = self.host.packet_send.len();
-                        if self.host.packet_send.contains_key(&id) {
-                            self.host.send_logging(
-                                LogType::WARN,
-                                LogModule::SESSION,
-                                "Channel already present".into(),
-                            );
-                        } else if current >= 2 {
-                            self.host.send_logging(
-                                LogType::WARN,
-                                LogModule::SESSION,
-                                "Cannot add more than 2 channels: limit reached".into(),
-                            );
-                        } else {
-                            self.host.packet_send.insert(id, sender);
-                            self.host.send_logging(
-                                LogType::INFO,
-                                LogModule::SESSION,
-                                format!("Added sender for node({})", id),
-                            );
-                            let entry = self.host.network.nodes
-                                .entry(self.host.id)
-                                .or_insert_with(|| (NodeType::Client, Vec::new()));
-                            entry.1.push(Edge { to: id, weight: 0.0 });
+            ClientCommand::Internal(host_command) => match host_command {
+                HostCommand::AddSender(id, sender) => {
+                    let current = self.host.packet_send.len();
+                    if self.host.packet_send.contains_key(&id) {
+                        self.host.send_logging(
+                            LogType::WARN,
+                            LogModule::SESSION,
+                            "Channel already present".into(),
+                        );
+                    } else if current >= 2 {
+                        self.host.send_logging(
+                            LogType::WARN,
+                            LogModule::SESSION,
+                            "Cannot add more than 2 channels: limit reached".into(),
+                        );
+                    } else {
+                        self.host.packet_send.insert(id, sender);
+                        self.host.send_logging(
+                            LogType::INFO,
+                            LogModule::SESSION,
+                            format!("Added sender for node({})", id),
+                        );
+                        let entry = self
+                            .host
+                            .network
+                            .nodes
+                            .entry(self.host.id)
+                            .or_insert_with(|| (NodeType::Client, Vec::new()));
+                        entry.1.push(Edge {
+                            to: id,
+                            weight: 0.0,
+                        });
 
-                            let entry = self.host.network.nodes
-                                .entry(id)
-                                .or_insert_with(|| (NodeType::Drone, Vec::new()));
-                            entry.1.push(Edge { to: self.host.id, weight: 0.0 });
-                        }
+                        let entry = self
+                            .host
+                            .network
+                            .nodes
+                            .entry(id)
+                            .or_insert_with(|| (NodeType::Drone, Vec::new()));
+                        entry.1.push(Edge {
+                            to: self.host.id,
+                            weight: 0.0,
+                        });
                     }
-                    HostCommand::RemoveSender(id) => {
-                        let current = self.host.packet_send.len();
-                        if !self.host.packet_send.contains_key(&id) {
-                            self.host.send_logging(
-                                LogType::WARN,
-                                LogModule::SESSION,
-                                "Channel not found".into(),
-                            );
-                        } else if current <= 1 {
-                            self.host.send_logging(
-                                LogType::WARN,
-                                LogModule::SESSION,
-                                "Cannot remove last channel: at least one required".into(),
-                            );
-                        } else {
-                            self.host.packet_send.remove(&id);
-                            self.host.send_logging(
-                                LogType::INFO,
-                                LogModule::SESSION,
-                                format!("Removed sender for node({})", id),
-                            );
+                }
+                HostCommand::RemoveSender(id) => {
+                    let current = self.host.packet_send.len();
+                    if !self.host.packet_send.contains_key(&id) {
+                        self.host.send_logging(
+                            LogType::WARN,
+                            LogModule::SESSION,
+                            "Channel not found".into(),
+                        );
+                    } else if current <= 1 {
+                        self.host.send_logging(
+                            LogType::WARN,
+                            LogModule::SESSION,
+                            "Cannot remove last channel: at least one required".into(),
+                        );
+                    } else {
+                        self.host.packet_send.remove(&id);
+                        self.host.send_logging(
+                            LogType::INFO,
+                            LogModule::SESSION,
+                            format!("Removed sender for node({})", id),
+                        );
 
-                            if let Some((_, edges)) = self.host.network.nodes.get_mut(&self.host.id) {
-                                edges.retain(|e| e.to != id);
-                            }
-                            if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
-                                edges.retain(|e| e.to != self.host.id);
-                            }
+                        if let Some((_, edges)) = self.host.network.nodes.get_mut(&self.host.id) {
+                            edges.retain(|e| e.to != id);
+                        }
+                        if let Some((_, edges)) = self.host.network.nodes.get_mut(&id) {
+                            edges.retain(|e| e.to != self.host.id);
                         }
                     }
                 }
-            }
+            },
             ClientCommand::ControllerShortcut(packet) => {
                 self.host.send_logging(
                     LogType::INFO,
@@ -477,10 +569,13 @@ impl Client {
                 Ok(())
             }
             PacketType::MsgFragment(fragment) => {
-                self.net_metrics.rx_bytes.fetch_add(fragment.length as usize, Ordering::Relaxed);
+                self.net_metrics
+                    .rx_bytes
+                    .fetch_add(fragment.length as usize, Ordering::Relaxed);
                 if let Some(compressed_bytes) = self.process_fragment(packet.clone(), fragment) {
                     // 1) prima decomprimo
-                    let raw = decompress_data(&compressed_bytes).unwrap_or_else(|_| compressed_bytes);
+                    let raw =
+                        decompress_data(&compressed_bytes).unwrap_or_else(|_| compressed_bytes);
 
                     // 2) poi deserializzo
                     let cmd = match serde_json::from_slice::<ServerToClient>(&raw) {
@@ -494,13 +589,12 @@ impl Client {
                             return Ok(());
                         }
                     };
-                    let send_reconstructed =
-                        |evt: ServerToClient| {
-                            self.host
-                                .controller_send
-                                .send(HostEvent::PacketReconstructed(evt))
-                                .map_err(|e| e.to_string())
-                        };
+                    let send_reconstructed = |evt: ServerToClient| {
+                        self.host
+                            .controller_send
+                            .send(HostEvent::PacketReconstructed(evt))
+                            .map_err(|e| e.to_string())
+                    };
                     match cmd {
                         ServerType(st) => {
                             if let Some(src) = packet.routing_header.source() {
@@ -523,32 +617,40 @@ impl Client {
                             }
                         }
                         Sending(content_id, total_fragments) => {
-                            self.pending_fragments.insert(content_id.clone(), (total_fragments, 0));
+                            self.pending_fragments
+                                .insert(content_id.clone(), (total_fragments, 0));
                             if let Some(id) = packet.routing_header.source() {
-                                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(id, content_id.clone(), 0.0));
+                                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(
+                                    id,
+                                    content_id.clone(),
+                                    0.0,
+                                ));
                             }
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
-                                format!("Incoming content {:?}: {} fragments", content_id, total_fragments),
+                                format!(
+                                    "Incoming content {:?}: {} fragments",
+                                    content_id, total_fragments
+                                ),
                             );
                         }
-                        ClientList(client_id, server_id,clients) => {
+                        ClientList(client_id, server_id, clients) => {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
                                 format!("Client list from({}): {:?}", server_id, clients),
                             );
-                            send_reconstructed(ClientList(client_id, server_id,clients))?;
+                            send_reconstructed(ClientList(client_id, server_id, clients))?;
                         }
 
-                        MessageFrom(server_id,from, msg) => {
+                        MessageFrom(server_id, from, msg) => {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::SESSION,
                                 format!("Message from({}): {}", from, msg),
                             );
-                            send_reconstructed(MessageFrom(server_id,from, msg))?;
+                            send_reconstructed(MessageFrom(server_id, from, msg))?;
                         }
                         FileFrom(server_id, from, to, file_id, data) => {
                             self.host.send_logging(
@@ -556,16 +658,16 @@ impl Client {
                                 LogModule::FILE,
                                 format!("Received file({}) from client({})", file_id, from),
                             );
-                            send_reconstructed(FileFrom(server_id, from, to,file_id, data))?;
+                            send_reconstructed(FileFrom(server_id, from, to, file_id, data))?;
                         }
 
-                        MediaFrom(server_id, from,to, media_id, data) => {
+                        MediaFrom(server_id, from, to, media_id, data) => {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::MEDIA,
                                 format!("Received media({}) from client({})", media_id, from),
                             );
-                            send_reconstructed(MediaFrom(server_id, from,to, media_id, data))?;
+                            send_reconstructed(MediaFrom(server_id, from, to, media_id, data))?;
                         }
                         FilesList(client_id, server_id, files) => {
                             self.host.send_logging(
@@ -580,9 +682,15 @@ impl Client {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::FILE,
-                                format!("Received file({}) ({} bytes) from server({})", file_id, data.len(), server_id),
+                                format!(
+                                    "Received file({}) ({} bytes) from server({})",
+                                    file_id,
+                                    data.len(),
+                                    server_id
+                                ),
                             );
-                            self.known_file_data.insert((server_id, file_id.clone()), data.clone());
+                            self.known_file_data
+                                .insert((server_id, file_id.clone()), data.clone());
                             send_reconstructed(File(server_id, file_id, data))?;
                         }
 
@@ -598,9 +706,15 @@ impl Client {
                             self.host.send_logging(
                                 LogType::INFO,
                                 LogModule::MEDIA,
-                                format!("Received media({}) ({} bytes) from server({})", media_id, media.data.len(), server_id),
+                                format!(
+                                    "Received media({}) ({} bytes) from server({})",
+                                    media_id,
+                                    media.data.len(),
+                                    server_id
+                                ),
                             );
-                            self.known_media_data.insert((server_id, media_id.clone()), media.clone());
+                            self.known_media_data
+                                .insert((server_id, media_id.clone()), media.clone());
                             send_reconstructed(Media(server_id, media_id, media))?;
                         }
 
@@ -636,10 +750,7 @@ impl Client {
                     self.host.send_logging(
                         LogType::DEBUG,
                         LogModule::SESSION,
-                        format!(
-                            "Fragment {} pending assembly",
-                            packet.session_id
-                        ),
+                        format!("Fragment {} pending assembly", packet.session_id),
                     );
                     Ok(())
                 }
@@ -651,18 +762,24 @@ impl Client {
             }
 
             PacketType::Ack(ack) => {
-                self.host.handle_ack(ack,packet.routing_header.hops.as_slice(), packet.session_id);
+                self.host.handle_ack(
+                    ack,
+                    packet.routing_header.hops.as_slice(),
+                    packet.session_id,
+                );
                 Ok(())
             }
 
             PacketType::Nack(nack) => {
                 if let Some(src) = packet.routing_header.source() {
                     self.host.handle_nack(nack, src, packet.session_id);
-                }else { self.host.send_logging(
-                    LogType::ERROR,
-                    LogModule::SESSION,
-                    "NACK packet missing source".into(),
-                ); }
+                } else {
+                    self.host.send_logging(
+                        LogType::ERROR,
+                        LogModule::SESSION,
+                        "NACK packet missing source".into(),
+                    );
+                }
                 Ok(())
             }
         }
@@ -671,7 +788,8 @@ impl Client {
     /// Cleans up expired or fully‐confirmed send sessions after `timeout`.
     fn cleanup_expired_sessions(&self, timeout: Duration) {
         self.host.send_logging(
-            LogType::DEBUG, LogModule::SESSION,
+            LogType::DEBUG,
+            LogModule::SESSION,
             format!("Starting cleanup timeout={:?}", timeout),
         );
         let now = Instant::now();
@@ -687,7 +805,8 @@ impl Client {
             }
         } else {
             self.host.send_logging(
-                LogType::WARN, LogModule::SESSION,
+                LogType::WARN,
+                LogModule::SESSION,
                 "Failed to lock sent_fragments for cleanup".into(),
             );
             return;
@@ -698,13 +817,15 @@ impl Client {
                 sent.remove(&sid);
                 let reason = if expired { "expired" } else { "completed" };
                 self.host.send_logging(
-                    LogType::INFO, LogModule::SESSION,
+                    LogType::INFO,
+                    LogModule::SESSION,
                     format!("Removed {} session {}", reason, sid),
                 );
             }
         } else {
             self.host.send_logging(
-                LogType::WARN, LogModule::SESSION,
+                LogType::WARN,
+                LogModule::SESSION,
                 "Failed to lock sent_fragments for removal".into(),
             );
         }
@@ -719,7 +840,7 @@ impl Client {
         let idx = fragment.fragment_index as usize;
         let total = fragment.total_n_fragments as usize;
         let mut server_id = 0;
-        if let Some(id)  = packet.routing_header.hops.first(){
+        if let Some(id) = packet.routing_header.hops.first() {
             server_id = id.clone();
         }
 
@@ -728,7 +849,8 @@ impl Client {
             Ok(r) => r,
             Err(e) => {
                 self.host.send_logging(
-                    LogType::ERROR, LogModule::SESSION,
+                    LogType::ERROR,
+                    LogModule::SESSION,
                     format!("Failed to lock received_fragments: {}", e),
                 );
                 return None;
@@ -739,7 +861,7 @@ impl Client {
             RecSessionData {
                 buffer: vec![None; total],
                 last_activity: Instant::now(),
-                pending: total,  // <— inizializzo qui
+                pending: total, // <— inizializzo qui
             }
         });
 
@@ -752,51 +874,67 @@ impl Client {
             session.pending = session.pending.saturating_sub(1);
 
             self.host.send_logging(
-                LogType::INFO, LogModule::SESSION,
+                LogType::INFO,
+                LogModule::SESSION,
                 format!("Fragment({}) stored, pending({})", idx, session.pending),
             );
 
-            if let Some(content_id) = self.pending_fragments.iter_mut().find_map(|(cid, (total, received))| {
-                // Criterio: la sessione è ancora attiva e non completata
-                if *received < *total {
-                    *received += 1;
-                    Some(cid.clone())
-                } else {
-                    None
-                }
-            }) {
-
+            if let Some(content_id) =
+                self.pending_fragments
+                    .iter_mut()
+                    .find_map(|(cid, (total, received))| {
+                        // Criterio: la sessione è ancora attiva e non completata
+                        if *received < *total {
+                            *received += 1;
+                            Some(cid.clone())
+                        } else {
+                            None
+                        }
+                    })
+            {
                 // Notifica il Simulation Controller
                 let (total, received) = self.pending_fragments[&content_id];
                 let percent = (received as f32 / total as f32) * 100.0;
 
-                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(server_id, content_id.clone(), percent));
+                let _ = self.host.controller_send.send(HostEvent::DownloadingInfo(
+                    server_id,
+                    content_id.clone(),
+                    percent,
+                ));
                 self.host.send_logging(
-                    LogType::INFO, LogModule::SESSION,
+                    LogType::INFO,
+                    LogModule::SESSION,
                     format!("Info download {:?}", percent),
                 );
                 // Rimuovi se completato
                 if received == total {
                     self.pending_fragments.remove(&content_id);
                     self.host.send_logging(
-                        LogType::INFO, LogModule::SESSION,
+                        LogType::INFO,
+                        LogModule::SESSION,
                         format!("Completed download {:?}", content_id),
                     );
                 }
             }
-
         }
 
         // invia ACK
-        let mut ack = self.host.build_packet_ack(packet.clone(), Some(fragment.fragment_index));
+        let mut ack = self
+            .host
+            .build_packet_ack(packet.clone(), Some(fragment.fragment_index));
         ack.routing_header.hop_index += 1;
         let _ = self.host.send_packet(ack, None);
 
-        let drone_hops: Vec<NodeId> = packet.routing_header.hops.iter()
-            .filter(|&&nid| { matches!(
+        let drone_hops: Vec<NodeId> = packet
+            .routing_header
+            .hops
+            .iter()
+            .filter(|&&nid| {
+                matches!(
                     self.host.network.nodes.get(&nid).map(|(ty, _)| ty),
-                    Some(NodeType::Drone))}
-            )
+                    Some(NodeType::Drone)
+                )
+            })
             .copied()
             .collect();
         self.host.network.pdr_helper(&drone_hops);
@@ -804,11 +942,14 @@ impl Client {
         // se finito, reassembly e rimozione
         if session.pending == 0 {
             self.host.send_logging(
-                LogType::INFO, LogModule::SESSION,
+                LogType::INFO,
+                LogModule::SESSION,
                 format!("All fragments received for session({})", session_id),
             );
 
-            let data = session.buffer.iter()
+            let data = session
+                .buffer
+                .iter()
                 .filter_map(|f| f.as_ref())
                 .flat_map(|f| f.data[..f.length as usize].iter().cloned())
                 .collect::<Vec<u8>>();
@@ -821,7 +962,12 @@ impl Client {
 
     /// Splits `message` into `FRAGMENT_DSIZE` chunks, sends each fragment, and
     /// invokes `on_fragment_sent(bytes)` after sending each.
-    fn build_msg_fragment<F>(&mut self, destination: NodeId, message: Message, mut on_fragment_sent: F, ) -> Result<(), String>
+    fn build_msg_fragment<F>(
+        &mut self,
+        destination: NodeId,
+        message: Message,
+        mut on_fragment_sent: F,
+    ) -> Result<(), String>
     where
         F: FnMut(usize),
     {
@@ -834,7 +980,8 @@ impl Client {
             ),
         );
         // Find best route
-        let route = self.host
+        let route = self
+            .host
             .network
             .find_best_route(self.host.id, destination)
             .ok_or_else(|| {
@@ -846,13 +993,19 @@ impl Client {
                 );
                 err
             })?;
-        match self.host.controller_send.send(HostEvent::Route(self.host.id, route.clone())){
-            Ok(_) => {},
-            Err(err) => { self.host.send_logging(
-                LogType::WARN,
-                LogModule::SESSION,
-                format!("error sending route to controller {}", err),
-            );}
+        match self
+            .host
+            .controller_send
+            .send(HostEvent::Route(self.host.id, route.clone()))
+        {
+            Ok(_) => {}
+            Err(err) => {
+                self.host.send_logging(
+                    LogType::WARN,
+                    LogModule::SESSION,
+                    format!("error sending route to controller {}", err),
+                );
+            }
         }
         // Calculate number of fragments
         let bytes = &message.content;
@@ -860,7 +1013,11 @@ impl Client {
 
         // Initialize session data if needed
         {
-            let mut sent = self.host.sent_fragments.lock().map_err(|_| "Mutex poisoned")?;
+            let mut sent = self
+                .host
+                .sent_fragments
+                .lock()
+                .map_err(|_| "Mutex poisoned")?;
             let entry = sent.entry(message.session_id).or_insert_with(|| {
                 self.host.send_logging(
                     LogType::DEBUG,
@@ -897,14 +1054,12 @@ impl Client {
             };
             {
                 let mut sent = self.host.sent_fragments.lock().unwrap();
-                sent.get_mut(&message.session_id)
-                    .unwrap()
-                    .buffer[i] = Some(frag.clone());
+                sent.get_mut(&message.session_id).unwrap().buffer[i] = Some(frag.clone());
             }
             let header = SourceRoutingHeader::new(route.clone(), 1);
             let pkt = Packet::new_fragment(header, message.session_id, frag.clone());
             let res = self.host.send_packet(pkt, None);
-            if matches!(res,SendingCodes::NoNextHop(_)) {
+            if matches!(res, SendingCodes::NoNextHop(_)) {
                 self.host.initiate_flood();
             }
             on_fragment_sent(chunk.len());
@@ -923,19 +1078,30 @@ impl Client {
         Ok(())
     }
     /// Helper to send a command with progress tracking
-    fn send_with_progress(&mut self, srv_type: ServerTypes, server_id: NodeId, content_id: ContentID, cmd: ClientNetCommand, label: &str, ) {
+    fn send_with_progress(
+        &mut self,
+        srv_type: ServerTypes,
+        server_id: NodeId,
+        content_id: ContentID,
+        cmd: ClientNetCommand,
+        label: &str,
+    ) {
         // 1) Serialize
         let raw = match serde_json::to_vec(&cmd) {
             Ok(buf) => buf,
             Err(e) => {
-                self.host.send_logging(LogType::WARN, LogModule::SESSION, format!("Serialization failed: {}", e));
+                self.host.send_logging(
+                    LogType::WARN,
+                    LogModule::SESSION,
+                    format!("Serialization failed: {}", e),
+                );
                 return;
             }
         };
 
         // 2) Compress
         let payload = match compress_data(&raw) {
-            Ok(c)  => c,
+            Ok(c) => c,
             Err(_) => raw.clone(),
         };
 
@@ -943,8 +1109,11 @@ impl Client {
         self.tracker.start(content_id.clone(), payload.len());
 
         // 4) Build the closure to update progress
-        let mut on_fragment_sent = self.tracker
-            .get_closure(content_id.clone(), server_id, self.host.controller_send.clone());
+        let mut on_fragment_sent = self.tracker.get_closure(
+            content_id.clone(),
+            server_id,
+            self.host.controller_send.clone(),
+        );
         let cb = Box::new(move |chunk_len: usize| on_fragment_sent(chunk_len));
 
         // 5) Delegate to send_net_cmd
@@ -969,7 +1138,13 @@ impl Client {
     /// Forwards a chat message to another client.
     fn handle_message_for(&mut self, cid: NodeId, sid: NodeId, msg: String) {
         let label = format!("MessageFor({})", cid);
-        self.send_net_cmd(Chat, sid, ClientNetCommand::MessageFor(cid, sid, msg), &label, None);
+        self.send_net_cmd(
+            Chat,
+            sid,
+            ClientNetCommand::MessageFor(cid, sid, msg),
+            &label,
+            None,
+        );
     }
 
     /// Forwards a file via chat.

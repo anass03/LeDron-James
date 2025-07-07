@@ -1,14 +1,21 @@
-use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem};
-use ratatui::prelude::{Color, Line, Modifier, Span, StatefulWidget, Style};
-use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
-use ratatui::buffer::Buffer;
-use crate::frontend::app::App;
 use crate::frontend::app::models::general_types::Node;
 use crate::frontend::app::topology_algorithm::alg_models::TopologyStatus;
-use crate::frontend::app::ui::tabs::{ALTERNATE_LIST_COLOR, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR};
 use crate::frontend::app::ui::tabs::tab1::{draw_map, draw_map_with_routes, get_node_routes};
+use crate::frontend::app::ui::tabs::{
+    ALTERNATE_LIST_COLOR, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR,
+    MAIN_BLOCK_BORDERS, SELECTED_LIST_COLOR,
+};
+use crate::frontend::app::App;
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
+use ratatui::prelude::{Color, Line, Modifier, Span, StatefulWidget, Style};
+use ratatui::widgets::{Block, BorderType, Borders, HighlightSpacing, List, ListItem};
 
-pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect, buf: &mut Buffer){
+pub(in crate::frontend::app::ui::tabs) fn render_main_page(
+    app: &App,
+    area: Rect,
+    buf: &mut Buffer,
+) {
     let [list_area, map_area] = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([Constraint::Percentage(20), Constraint::Percentage(80)])
@@ -17,7 +24,10 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
     // Selection Menu
     // Render Nodes list on left column – styled after the ratatui list example
     let mut nodes_block = Block::default()
-        .title(Span::styled(" Available Nodes ", Style::default().add_modifier(Modifier::BOLD)))
+        .title(Span::styled(
+            " Available Nodes ",
+            Style::default().add_modifier(Modifier::BOLD),
+        ))
         .title_alignment(Alignment::Center)
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -68,7 +78,6 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
         &mut app.cache.tab1_data.net_node_list.state.clone(),
     );
 
-
     // Drawing canvas section
     let mut canvas_block = Block::default()
         .borders(Borders::ALL)
@@ -80,64 +89,102 @@ pub(in crate::frontend::app::ui::tabs) fn render_main_page(app: &App, area: Rect
         canvas_block = canvas_block.border_style(Style::default().fg(app.animation_color()));
     }
 
-
-    match app.simulation_controller_data.topology_algorithm_data.status{
+    match app
+        .simulation_controller_data
+        .topology_algorithm_data
+        .status
+    {
         TopologyStatus::Stopped => {
-            canvas_block = canvas_block
-                .title(vec![Span::styled("MAP: ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)),
-                                   Span::styled(" Simulation is stopped, re-run to view the topology ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC).fg(Color::Rgb(222, 50, 76)))]);
-
+            canvas_block = canvas_block.title(vec![
+                Span::styled(
+                    "MAP: ",
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ),
+                Span::styled(
+                    " Simulation is stopped, re-run to view the topology ",
+                    Style::default()
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                        .fg(Color::Rgb(222, 50, 76)),
+                ),
+            ]);
         }
         TopologyStatus::ToInitialize => {
-            canvas_block = canvas_block
-                .title(vec![Span::styled("MAP: ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)),
-                                   Span::styled(" Initialize the topology [ Press P ] ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC).fg(Color::Rgb(244, 137, 95)))]);
+            canvas_block = canvas_block.title(vec![
+                Span::styled(
+                    "MAP: ",
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ),
+                Span::styled(
+                    " Initialize the topology [ Press P ] ",
+                    Style::default()
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                        .fg(Color::Rgb(244, 137, 95)),
+                ),
+            ]);
         }
         TopologyStatus::Computing => {
-/*            canvas_block = canvas_block
-                .title(Span::styled(" MAP: Computing best graph representation  ",
-                                           Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)))*/
-            canvas_block = canvas_block
-                .title(vec![Span::styled("MAP: ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)),
-                                   Span::styled(" Computing best graph representation ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC).fg(Color::Rgb(248, 225, 111)))]);
+            /*            canvas_block = canvas_block
+            .title(Span::styled(" MAP: Computing best graph representation  ",
+                                       Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)))*/
+            canvas_block = canvas_block.title(vec![
+                Span::styled(
+                    "MAP: ",
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ),
+                Span::styled(
+                    " Computing best graph representation ",
+                    Style::default()
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                        .fg(Color::Rgb(248, 225, 111)),
+                ),
+            ]);
         }
         TopologyStatus::Converged => {
-/*            canvas_block = canvas_block
-                .title(Span::styled(" MAP: Converged ",
-                                           Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)))*/
-            canvas_block = canvas_block
-                .title(vec![Span::styled("MAP: ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)),
-                                   Span::styled(" Converged ", Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC).fg(Color::Rgb(149, 207, 146)))]);
-
+            /*            canvas_block = canvas_block
+            .title(Span::styled(" MAP: Converged ",
+                                       Style::default().add_modifier(Modifier::BOLD|Modifier::ITALIC)))*/
+            canvas_block = canvas_block.title(vec![
+                Span::styled(
+                    "MAP: ",
+                    Style::default().add_modifier(Modifier::BOLD | Modifier::ITALIC),
+                ),
+                Span::styled(
+                    " Converged ",
+                    Style::default()
+                        .add_modifier(Modifier::BOLD | Modifier::ITALIC)
+                        .fg(Color::Rgb(149, 207, 146)),
+                ),
+            ]);
         }
     }
     // Get the selected node and its routes for highlighting
-    let selected_node_id = if let Some(selected_idx) = app.cache.tab1_data.net_node_list.state.selected() {
-        if let Some((node, _, _)) = app.cache.tab1_data.net_node_list.items.get(selected_idx) {
-            match node {
-                Node::Client(c) => Some(c.id),
-                Node::Drone(d) => Some(d.id),
-                Node::Server(s) => Some(s.id),
+    let selected_node_id =
+        if let Some(selected_idx) = app.cache.tab1_data.net_node_list.state.selected() {
+            if let Some((node, _, _)) = app.cache.tab1_data.net_node_list.items.get(selected_idx) {
+                match node {
+                    Node::Client(c) => Some(c.id),
+                    Node::Drone(d) => Some(d.id),
+                    Node::Server(s) => Some(s.id),
+                }
+            } else {
+                None
             }
         } else {
             None
-        }
-    } else {
-        None
-    };
+        };
 
     // Get routes for the selected node
     let highlighted_routes = selected_node_id.and_then(|id| get_node_routes(app, id));
 
     // Draw map with optional route highlighting
     draw_map_with_routes(
-        &app.simulation_controller_data.topology_algorithm_data, 
-        map_area, 
-        buf, 
+        &app.simulation_controller_data.topology_algorithm_data,
+        map_area,
+        buf,
         canvas_block,
-        highlighted_routes.as_ref()
+        highlighted_routes.as_ref(),
     );
-/*    let canvas = Canvas::default()
+    /*    let canvas = Canvas::default()
         .block(canvas_block)
         .background_color(BG_COLOR)
         .x_bounds([0.0, 100.0])
@@ -211,15 +258,18 @@ impl From<&Node> for ListItem<'_> {
             Node::Client(c) => Line::styled(
                 format!("Client ID {}", c.id),
                 Style::default().fg(CANVAS_CLIENT_COLOR),
-            ).centered(),
+            )
+            .centered(),
             Node::Drone(d) => Line::styled(
                 format!("Drone ID {}", d.id),
                 Style::default().fg(CANVAS_DRONE_COLOR),
-            ).centered(),
+            )
+            .centered(),
             Node::Server(s) => Line::styled(
                 format!("Server ID {}", s.id),
                 Style::default().fg(CANVAS_SERVER_COLOR),
-            ).centered(),
+            )
+            .centered(),
         };
         ListItem::new(line)
     }

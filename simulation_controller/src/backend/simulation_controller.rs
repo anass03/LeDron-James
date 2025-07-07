@@ -1,21 +1,23 @@
-use crossbeam_channel::{unbounded, Receiver, Sender};
-use std::collections::HashMap;
-use std::fmt::Display;
+use crate::backend::sc_models::{
+    ChatCache, DroneType, NetCache, NetNode, RendererCommand, RendererResponse, Statistics,
+};
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use client::ClientCommand;
+use crossbeam_channel::{unbounded, Receiver, Sender};
+use host::{FileId, HostCommand, HostEvent};
+use log::LevelFilter;
+use std::collections::HashMap;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::path::PathBuf;
+use tui_logger::TuiWidgetState;
+use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Config;
 use wg_2024::config::Drone as DroneConfig;
-use wg_2024::config::Client as ClientConfig;
 use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{FileId, HostCommand, HostEvent, MediaId};
-use log::LevelFilter;
-use tui_logger::TuiWidgetState;
-use crate::backend::sc_models::{ChatCache, DroneType, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
-use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 /// Simulation Controller struct contains:
 /// - the drones
@@ -26,19 +28,18 @@ use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 
 pub struct SimulationControllerData {
     // Each of the next data is going to get re-initialized each time the simulation stops!
-
     pub drones: Vec<DroneConfig>,   //vector of drones
     pub clients: Vec<ClientConfig>, //vector of clients
     pub servers: Vec<ServerConfig>, //vector of servers
     pub drone_types: HashMap<NodeId, DroneType>,
     pub running_network: HashMap<NetNode, Vec<NodeId>>, // Value is all the links the given NodeID has! Has to be updated by Initializer / SC Backend
     pub drone_packet_count: HashMap<NodeId, (u64, u64)>, // (total Packet Sent, total Dropped sent)
-    pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>,  //command sender channel to drone  //event receiver channel from drone
+    pub drone_command_sender: HashMap<NodeId, Sender<DroneCommand>>, //command sender channel to drone  //event receiver channel from drone
     pub client_command_sender: HashMap<NodeId, Sender<ClientCommand>>,
     pub server_command_sender: HashMap<NodeId, Sender<HostCommand>>,
     pub drone_event_receiver: Receiver<DroneEvent>,
     pub host_event_receiver: Receiver<HostEvent>,
-    pub packet_sender: HashMap<NodeId, Sender<Packet>>,         //packet sender of each node
+    pub packet_sender: HashMap<NodeId, Sender<Packet>>, //packet sender of each node
     pub topology_algorithm_data: TopologyAlgorithm,
     pub stats: Statistics,
     pub download_folder: PathBuf,
@@ -64,9 +65,8 @@ impl SimulationControllerData {
         drone_event_receiver: Receiver<DroneEvent>,
         host_event_receiver: Receiver<HostEvent>,
         packet_sender: HashMap<NodeId, Sender<Packet>>,
-    ) -> Self
-    {
-        let mut running_network:HashMap<NetNode, Vec<NodeId>> = HashMap::new();
+    ) -> Self {
+        let mut running_network: HashMap<NetNode, Vec<NodeId>> = HashMap::new();
         let mut host_log_state: HashMap<NodeId, (String, TuiWidgetState)> = HashMap::new();
         let mut total_active_connections = 0;
 
@@ -84,7 +84,18 @@ impl SimulationControllerData {
             let connected_ids = client.connected_drone_ids.clone();
             running_network.insert(NetNode::Client(client_id), connected_ids);
             clients.push(client);
-            host_log_state.insert(client_id, (format!("{client_id}_Client"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{client_id}_Client").as_str(), LevelFilter::max())));
+            host_log_state.insert(
+                client_id,
+                (
+                    format!("{client_id}_Client"),
+                    TuiWidgetState::default()
+                        .set_default_display_level(LevelFilter::Off)
+                        .set_level_for_target(
+                            format!("{client_id}_Client").as_str(),
+                            LevelFilter::max(),
+                        ),
+                ),
+            );
             total_active_connections += 1;
         }
 
@@ -94,7 +105,18 @@ impl SimulationControllerData {
             let connected_ids = server.connected_drone_ids.clone();
             running_network.insert(NetNode::Server(server_id), connected_ids);
             servers.push(server);
-            host_log_state.insert(server_id, (format!("{server_id}_Server"), TuiWidgetState::default().set_default_display_level(LevelFilter::Off).set_level_for_target(format!("{server_id}_Server").as_str(), LevelFilter::max())));
+            host_log_state.insert(
+                server_id,
+                (
+                    format!("{server_id}_Server"),
+                    TuiWidgetState::default()
+                        .set_default_display_level(LevelFilter::Off)
+                        .set_level_for_target(
+                            format!("{server_id}_Server").as_str(),
+                            LevelFilter::max(),
+                        ),
+                ),
+            );
             total_active_connections += 1;
         }
 
@@ -105,13 +127,17 @@ impl SimulationControllerData {
             let id = *net_node.id();
             for &neighbor in neighbors {
                 // Order the pair to avoid duplicates (min, max)
-                let (a, b) = if id <= neighbor { (id, neighbor) } else { (neighbor, id) };
+                let (a, b) = if id <= neighbor {
+                    (id, neighbor)
+                } else {
+                    (neighbor, id)
+                };
                 links.insert((a, b));
             }
         }
         let mut stats = Statistics::default();
         stats.total_active_connections = total_active_connections;
-        
+
         Self {
             drones,
             clients,
@@ -168,4 +194,3 @@ impl Default for SimulationControllerData {
         }
     }
 }
-

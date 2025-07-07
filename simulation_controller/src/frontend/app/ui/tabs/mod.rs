@@ -1,44 +1,50 @@
 mod tab0;
-mod tab3;
-mod tab2;
 pub(super) mod tab1;
 mod tab1_client_popup;
-mod tab1_server_popup;
 mod tab1_drone_popup;
 mod tab1_main_page;
+mod tab1_server_popup;
+mod tab2;
+mod tab3;
 
+use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::models::tab1_types::{
+    ClientNetPopup, ClientPopup, NodePopup, RenderingImage, SelectedFileMedia, ViewedTab1,
+};
+use crate::frontend::app::App;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
-use crate::frontend::app::App;
-use crate::frontend::app::models::main_types::AppMode;
-use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, SelectedFileMedia, ViewedTab1};
 use std::io::Write;
 
 pub const BG_COLOR: Color = Color::Rgb(13, 10, 28);
-pub(super) const POPUP_BG_COLOR: Color = Color::Rgb(24,19,54);
+pub(super) const POPUP_BG_COLOR: Color = Color::Rgb(24, 19, 54);
 pub(super) const MAIN_BLOCK_BORDERS: Color = Color::Rgb(89, 72, 198);
 
 pub(super) const ALTERNATE_LIST_COLOR: Color = Color::Rgb(70, 57, 156);
 pub(super) const SELECTED_LIST_COLOR: Color = Color::Rgb(51, 41, 113);
 
-pub(super) const CANVAS_CLIENT_COLOR: Color  = Color::Rgb(108, 88, 241);
-pub(super) const CANVAS_SERVER_COLOR: Color  = Color::Rgb(221, 102, 112);
+pub(super) const CANVAS_CLIENT_COLOR: Color = Color::Rgb(108, 88, 241);
+pub(super) const CANVAS_SERVER_COLOR: Color = Color::Rgb(221, 102, 112);
 pub(super) const CANVAS_DRONE_COLOR: Color = Color::Rgb(255, 166, 0);
 
-impl App<'_>{
+impl App<'_> {
     pub(super) fn animation_color(&self) -> Color {
-        match self.cache.colors_vec.1.get(self.cache.counter as usize%self.cache.colors_vec.0){
+        match self
+            .cache
+            .colors_vec
+            .1
+            .get(self.cache.counter as usize % self.cache.colors_vec.0)
+        {
             Some(color) => Color::Rgb(color.0, color.1, color.2),
             None => Color::White,
         }
     }
 }
 
-
-#[derive(Default, Clone, Copy,PartialEq,Eq)]
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum SelectedTab {
     #[default]
     Overview,
@@ -84,14 +90,15 @@ impl SelectedTab {
     }
 }
 
-pub(crate) fn render_top(app:&App, area: Rect, buf : &mut Buffer){
-    use ratatui::text::{Span};
+pub(crate) fn render_top(app: &App, area: Rect, buf: &mut Buffer) {
+    use ratatui::text::Span;
 
     let main_block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Plain)
         .border_style(Style::new().fg(MAIN_BLOCK_BORDERS))
-        .title("LeDron CLI").title_style(Style::default().fg(app.animation_color()))
+        .title("LeDron CLI")
+        .title_style(Style::default().fg(app.animation_color()))
         .title_alignment(Alignment::Center);
     let inner_main_block = main_block.inner(area);
     main_block.render(area, buf);
@@ -115,13 +122,12 @@ pub(crate) fn render_top(app:&App, area: Rect, buf : &mut Buffer){
                 }
                 spans
             })
-            .collect::<Vec<Span>>()
+            .collect::<Vec<Span>>(),
     );
     line = line.alignment(Alignment::Center);
-    line.render(inner_main_block,buf)
-
+    line.render(inner_main_block, buf)
 }
-pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
+pub(crate) fn render_inner(app: &mut App, area: Rect, buf: &mut Buffer) {
     let mut main_block = Block::default()
         .border_style(Style::default().fg(Color::Yellow))
         .border_style(Style::default().add_modifier(Modifier::BOLD))
@@ -129,29 +135,33 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
     let inner_block = main_block.inner(area);
     main_block.render(area, buf);
 
-    match app.selected_tab{
-        SelectedTab::Overview => {
-            tab0::render_tab0(app, inner_block, buf)
-        },
+    match app.selected_tab {
+        SelectedTab::Overview => tab0::render_tab0(app, inner_block, buf),
         SelectedTab::Topology => {
-            match tab1::render_tab1(app, inner_block, buf){
+            match tab1::render_tab1(app, inner_block, buf) {
                 None => {}
                 Some(file_vis_area) => {
                     match &mut app.cache.tab1_data.viewing {
-                        ViewedTab1::Popup((node_id,ndpop)) => {
+                        ViewedTab1::Popup((node_id, ndpop)) => {
                             match ndpop {
-                                NodePopup::Client(clpop)=> {
+                                NodePopup::Client(clpop) => {
                                     match clpop {
                                         ClientPopup::InternetPage(netpage) => {
                                             match netpage {
                                                 ClientNetPopup::SecondPage(ndpage) => {
                                                     match &mut ndpage.selected_file {
                                                         SelectedFileMedia::Media(id) => {
-                                                            ndpage.image_rendering_data = RenderingImage::True((file_vis_area,node_id.clone(),ndpage.selected_server,id.clone() ))
+                                                            ndpage.image_rendering_data =
+                                                                RenderingImage::True((
+                                                                    file_vis_area,
+                                                                    node_id.clone(),
+                                                                    ndpage.selected_server,
+                                                                    id.clone(),
+                                                                ))
                                                         }
                                                         _ => (),
                                                     }
-/*                                                    match &mut ndpage.selected_file{
+                                                    /*                                                    match &mut ndpage.selected_file{
                                                         SelectedFileMedia::Media(id) => {
                                                             app.cache.tab1_data.image_rendering_data = RenderingImage::True((file_vis_area,*node_id,ndpage.selected_server,id.clone() ))
                                                         }
@@ -171,15 +181,14 @@ pub(crate) fn render_inner(app:&mut App, area: Rect, buf : &mut Buffer){
                     }
                 }
             }
-        },
+        }
         SelectedTab::TOMLEditor => tab2::render_tab2(app, inner_block, buf),
         SelectedTab::Settings => tab3::render_tab3(app, inner_block, buf),
     }
 }
 
-
 //  ADD MENU FOR SPECIFIC CURSOR CASE, TEXT EDITOR ETC. ETC.
-pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
+pub(crate) fn render_footer(app: &App, area: Rect, buf: &mut Buffer) {
     let mut block = Block::default()
         .borders(Borders::TOP | Borders::BOTTOM)
         .border_type(BorderType::Plain)
@@ -217,15 +226,36 @@ pub(crate) fn render_footer(app:&App, area: Rect, buf : &mut Buffer){
         ])
         .split(inner_area);
 
-    let style = Style::default().fg(Color::White).add_modifier(Modifier::ITALIC);
+    let style = Style::default()
+        .fg(Color::White)
+        .add_modifier(Modifier::ITALIC);
 
-    let packets = Paragraph::new(format!("Total packets exchanged: {}",app.simulation_controller_data.stats.total_packet_exchanged)).style(style).alignment(Alignment::Center);
-    let conns = Paragraph::new(format!("Total active connections: {}", app.simulation_controller_data.stats.total_active_connections)).style(style).alignment(Alignment::Center);
+    let packets = Paragraph::new(format!(
+        "Total packets exchanged: {}",
+        app.simulation_controller_data.stats.total_packet_exchanged
+    ))
+    .style(style)
+    .alignment(Alignment::Center);
+    let conns = Paragraph::new(format!(
+        "Total active connections: {}",
+        app.simulation_controller_data
+            .stats
+            .total_active_connections
+    ))
+    .style(style)
+    .alignment(Alignment::Center);
     let mut net;
     if app.simulation_controller_data.stats.total_packet_exchanged < 1000 {
-        net = Paragraph::new("Network reliability: Calculating ...").style(style).alignment(Alignment::Center)
+        net = Paragraph::new("Network reliability: Calculating ...")
+            .style(style)
+            .alignment(Alignment::Center)
     } else {
-    net = Paragraph::new(format!("Network reliability: {}%", app.simulation_controller_data.stats.network_reliability)).style(style).alignment(Alignment::Center)
+        net = Paragraph::new(format!(
+            "Network reliability: {}%",
+            app.simulation_controller_data.stats.network_reliability
+        ))
+        .style(style)
+        .alignment(Alignment::Center)
     };
 
     packets.render(columns[0], buf);

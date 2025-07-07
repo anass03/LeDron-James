@@ -1,23 +1,28 @@
-use std::collections::{HashMap, HashSet};
-use log::debug;
-use wg_2024::network::NodeId;
-use crate::backend::sc_models::{NetNode, LogType, NetworkState, NodeMap};
+use crate::backend::sc_models::{LogType, NetNode, NetworkState, NodeMap};
 use crate::backend::simulation_controller::SimulationControllerData;
+use log::debug;
+use std::collections::{HashMap, HashSet};
+use wg_2024::network::NodeId;
 
 impl SimulationControllerData {
     fn build_network_state(&self) -> NetworkState {
-        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::with_capacity(
-            self.clients.len() + self.servers.len() + self.drones.len()
-        );
+        let mut network_map: HashMap<NetNode, Vec<NodeId>> =
+            HashMap::with_capacity(self.clients.len() + self.servers.len() + self.drones.len());
         let mut host_ids = HashSet::with_capacity(self.clients.len() + self.servers.len());
 
         // Build network map and collect host IDs
         for client in &self.clients {
-            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
+            network_map.insert(
+                NetNode::Client(client.id),
+                client.connected_drone_ids.clone(),
+            );
             host_ids.insert(client.id);
         }
         for server in &self.servers {
-            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
+            network_map.insert(
+                NetNode::Server(server.id),
+                server.connected_drone_ids.clone(),
+            );
             host_ids.insert(server.id);
         }
         for drone in &self.drones {
@@ -25,9 +30,11 @@ impl SimulationControllerData {
         }
 
         // Build drone-only graph
-        let mut drone_graph: HashMap<NodeId, Vec<NodeId>> = HashMap::with_capacity(self.drones.len());
+        let mut drone_graph: HashMap<NodeId, Vec<NodeId>> =
+            HashMap::with_capacity(self.drones.len());
         for drone in &self.drones {
-            let drone_neighbors: Vec<NodeId> = drone.connected_node_ids
+            let drone_neighbors: Vec<NodeId> = drone
+                .connected_node_ids
                 .iter()
                 .filter(|id| !host_ids.contains(id))
                 .copied()
@@ -43,15 +50,20 @@ impl SimulationControllerData {
     }
 
     fn build_network_map(&mut self) -> NodeMap {
-        let mut network_map: HashMap<NetNode, Vec<NodeId>> = HashMap::with_capacity(
-            self.clients.len() + self.servers.len() + self.drones.len()
-        );
+        let mut network_map: HashMap<NetNode, Vec<NodeId>> =
+            HashMap::with_capacity(self.clients.len() + self.servers.len() + self.drones.len());
 
         for client in &self.clients {
-            network_map.insert(NetNode::Client(client.id), client.connected_drone_ids.clone());
+            network_map.insert(
+                NetNode::Client(client.id),
+                client.connected_drone_ids.clone(),
+            );
         }
         for server in &self.servers {
-            network_map.insert(NetNode::Server(server.id), server.connected_drone_ids.clone());
+            network_map.insert(
+                NetNode::Server(server.id),
+                server.connected_drone_ids.clone(),
+            );
         }
         for drone in &self.drones {
             network_map.insert(NetNode::Drone(drone.id), drone.connected_node_ids.clone());
@@ -66,8 +78,7 @@ impl SimulationControllerData {
         &self,
         graph: &HashMap<NodeId, Vec<NodeId>>,
         exclude_node: Option<NodeId>,
-    ) -> bool
-    {
+    ) -> bool {
         if graph.is_empty() {
             return true;
         }
@@ -78,7 +89,8 @@ impl SimulationControllerData {
             None => return true, // No nodes to check
         };
 
-        let expected_count = if exclude_node.is_some() && graph.contains_key(&exclude_node.unwrap()) {
+        let expected_count = if exclude_node.is_some() && graph.contains_key(&exclude_node.unwrap())
+        {
             graph.len() - 1
         } else {
             graph.len()
@@ -133,9 +145,8 @@ impl SimulationControllerData {
         for (node, neighbors) in &network_state.node_map {
             match node {
                 NetNode::Client(client_id) => {
-                    let remaining_connections = neighbors.iter()
-                        .filter(|id| **id != drone_id)
-                        .count();
+                    let remaining_connections =
+                        neighbors.iter().filter(|id| **id != drone_id).count();
 
                     if remaining_connections == 0 || remaining_connections > 2 {
                         return Err(format!(
@@ -144,9 +155,8 @@ impl SimulationControllerData {
                     }
                 }
                 NetNode::Server(server_id) => {
-                    let remaining_connections = neighbors.iter()
-                        .filter(|id| **id != drone_id)
-                        .count();
+                    let remaining_connections =
+                        neighbors.iter().filter(|id| **id != drone_id).count();
 
                     if remaining_connections <= 1 {
                         return Err(format!(
@@ -159,20 +169,29 @@ impl SimulationControllerData {
         }
 
         // Check if removing drone disconnects the drone network
-        let is_connected = self.is_graph_connected_excluding(&network_state.drone_graph, Some(drone_id));
+        let is_connected =
+            self.is_graph_connected_excluding(&network_state.drone_graph, Some(drone_id));
         Ok(!is_connected)
     }
 
-    pub(crate) fn cannot_remove(&mut self, first: NetNode, second: NetNode) -> Result<bool, String> {
+    pub(crate) fn cannot_remove(
+        &mut self,
+        first: NetNode,
+        second: NetNode,
+    ) -> Result<bool, String> {
         let network_state = self.build_network_state();
 
         // Validate both nodes exist and are connected
-        let first_neighbors = network_state.node_map.get(&first)
+        let first_neighbors = network_state
+            .node_map
+            .get(&first)
             .ok_or_else(|| format!("{} {} is not in the map!", first.node_type(), first.id()))?;
 
         check_connection(first_neighbors, second, first)?;
 
-        let second_neighbors = network_state.node_map.get(&second)
+        let second_neighbors = network_state
+            .node_map
+            .get(&second)
             .ok_or_else(|| format!("{} {} is not in the map!", second.node_type(), second.id()))?;
 
         check_connection(second_neighbors, first, second)?;
@@ -182,8 +201,9 @@ impl SimulationControllerData {
             let mut remaining_connections = neighbors.len();
 
             // Simulate removing the connection
-            if (*node == first && neighbors.contains(second.id())) ||
-                (*node == second && neighbors.contains(first.id())) {
+            if (*node == first && neighbors.contains(second.id()))
+                || (*node == second && neighbors.contains(first.id()))
+            {
                 remaining_connections -= 1;
             }
 
@@ -230,10 +250,18 @@ impl SimulationControllerData {
 
         // Check if nodes exist in the map
         if !network_map.contains_key(&first) {
-            return Err(format!("{} {} is not in the map!", first.node_type(), first.id()));
+            return Err(format!(
+                "{} {} is not in the map!",
+                first.node_type(),
+                first.id()
+            ));
         }
         if !network_map.contains_key(&second) {
-            return Err(format!("{} {} is not in the map!", second.node_type(), second.id()));
+            return Err(format!(
+                "{} {} is not in the map!",
+                second.node_type(),
+                second.id()
+            ));
         }
 
         // Only check client constraints (servers have no upper limit in add operations)
@@ -263,12 +291,20 @@ impl SimulationControllerData {
     }
 }
 
-fn check_connection(neighbors: &Vec<NodeId>, first: NetNode, second: NetNode) -> Result<(), String> {
+fn check_connection(
+    neighbors: &Vec<NodeId>,
+    first: NetNode,
+    second: NetNode,
+) -> Result<(), String> {
     if !neighbors.contains(first.id()) {
         Err(format!(
             "{} {} is not connected to {} {}!",
-            second.node_type(), second.id(),
-            first.node_type(), first.id()
+            second.node_type(),
+            second.id(),
+            first.node_type(),
+            first.id()
         ))
-    } else { Ok(()) }
+    } else {
+        Ok(())
+    }
 }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
-use wg_2024::config::Config;
 use std::collections::HashSet;
+use wg_2024::config::Config;
 
 pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
     // Parse config file
@@ -19,7 +19,11 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
 
     // Check for duplicate IDs across all node types
     let mut id_set = HashSet::new();
-    for &id in drone_map.keys().chain(client_map.keys()).chain(server_map.keys()) {
+    for &id in drone_map
+        .keys()
+        .chain(client_map.keys())
+        .chain(server_map.keys())
+    {
         if !id_set.insert(id) {
             errors.push(format!("Duplicate NodeId found: {}\n", id));
         }
@@ -29,27 +33,48 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
     for drone in &config.drone {
         // Check PDR bounds
         if !(0.0..1.0).contains(&drone.pdr) {
-            let msg = if drone.pdr > 1.0 { "too high" } else { "negative" };
-            errors.push(format!("Drone {} pdr is {}: {} | 0.0 < pdr < 1.0\n", drone.id, msg, drone.pdr));
+            let msg = if drone.pdr > 1.0 {
+                "too high"
+            } else {
+                "negative"
+            };
+            errors.push(format!(
+                "Drone {} pdr is {}: {} | 0.0 < pdr < 1.0\n",
+                drone.id, msg, drone.pdr
+            ));
         }
 
         // Check connections
         for &node_id in &drone.connected_node_ids {
-            let back_link_exists = match (client_map.get(&node_id), server_map.get(&node_id), drone_map.get(&node_id)) {
+            let back_link_exists = match (
+                client_map.get(&node_id),
+                server_map.get(&node_id),
+                drone_map.get(&node_id),
+            ) {
                 (Some(client), _, _) => client.connected_drone_ids.contains(&drone.id),
                 (_, Some(server), _) => server.connected_drone_ids.contains(&drone.id),
                 (_, _, Some(conn_drone)) => conn_drone.connected_node_ids.contains(&drone.id),
                 _ => {
-                    errors.push(format!("Node {} connected to Drone {} does not exist\n", node_id, drone.id));
+                    errors.push(format!(
+                        "Node {} connected to Drone {} does not exist\n",
+                        node_id, drone.id
+                    ));
                     continue;
                 }
             };
 
             if !back_link_exists {
-                let node_type = if client_map.contains_key(&node_id) { "Client" }
-                else if server_map.contains_key(&node_id) { "Server" }
-                else { "Drone" };
-                errors.push(format!("{} {} does not link back to Drone {}\n", node_type, node_id, drone.id));
+                let node_type = if client_map.contains_key(&node_id) {
+                    "Client"
+                } else if server_map.contains_key(&node_id) {
+                    "Server"
+                } else {
+                    "Drone"
+                };
+                errors.push(format!(
+                    "{} {} does not link back to Drone {}\n",
+                    node_type, node_id, drone.id
+                ));
             }
         }
     }
@@ -59,16 +84,25 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
         let neighbors = client.connected_drone_ids.len();
         match neighbors {
             0 => errors.push(format!("Client {} has no neighbors", client.id)),
-            n if n > 2 => errors.push(format!("Client {} has too many neighbors: {:?}", client.id, client.connected_drone_ids)),
+            n if n > 2 => errors.push(format!(
+                "Client {} has too many neighbors: {:?}",
+                client.id, client.connected_drone_ids
+            )),
             _ => {}
         }
 
         for &drone_id in &client.connected_drone_ids {
             match drone_map.get(&drone_id) {
                 Some(drone) if !drone.connected_node_ids.contains(&client.id) => {
-                    errors.push(format!("Drone {} does not link back to Client {}\n", drone_id, client.id));
+                    errors.push(format!(
+                        "Drone {} does not link back to Client {}\n",
+                        drone_id, client.id
+                    ));
                 }
-                None => errors.push(format!("Client {} refers to unknown Drone {}\n", client.id, drone_id)),
+                None => errors.push(format!(
+                    "Client {} refers to unknown Drone {}\n",
+                    client.id, drone_id
+                )),
                 _ => {}
             }
         }
@@ -77,22 +111,33 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
     // Validate servers
     for server in &config.server {
         if server.connected_drone_ids.len() < 2 {
-            errors.push(format!("Server {} must be connected to at least 2 drones, found {}\n",
-                                server.id, server.connected_drone_ids.len()));
+            errors.push(format!(
+                "Server {} must be connected to at least 2 drones, found {}\n",
+                server.id,
+                server.connected_drone_ids.len()
+            ));
         }
 
         for &drone_id in &server.connected_drone_ids {
             if client_map.contains_key(&drone_id) || server_map.contains_key(&drone_id) {
-                errors.push(format!("Server {} must only connect to drones, found link to non-drone node {}\n",
-                                    server.id, drone_id));
+                errors.push(format!(
+                    "Server {} must only connect to drones, found link to non-drone node {}\n",
+                    server.id, drone_id
+                ));
                 continue;
             }
 
             match drone_map.get(&drone_id) {
                 Some(drone) if !drone.connected_node_ids.contains(&server.id) => {
-                    errors.push(format!("Drone {} does not link back to Server {}\n", drone_id, server.id));
+                    errors.push(format!(
+                        "Drone {} does not link back to Server {}\n",
+                        drone_id, server.id
+                    ));
                 }
-                None => errors.push(format!("Server {} refers to unknown Drone {}\n", server.id, drone_id)),
+                None => errors.push(format!(
+                    "Server {} refers to unknown Drone {}\n",
+                    server.id, drone_id
+                )),
                 _ => {}
             }
         }
@@ -100,11 +145,19 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
 
     // Check drone network connectivity
     if let Some(first_drone) = config.drone.first() {
-        let drone_graph: HashMap<_, _> = config.drone.iter()
-            .map(|d| (d.id, d.connected_node_ids.iter()
-                .filter(|&&id| drone_map.contains_key(&id))
-                .copied()
-                .collect::<Vec<_>>()))
+        let drone_graph: HashMap<_, _> = config
+            .drone
+            .iter()
+            .map(|d| {
+                (
+                    d.id,
+                    d.connected_node_ids
+                        .iter()
+                        .filter(|&&id| drone_map.contains_key(&id))
+                        .copied()
+                        .collect::<Vec<_>>(),
+                )
+            })
             .collect();
 
         let mut visited = HashSet::new();
@@ -119,9 +172,15 @@ pub fn parse_and_check_config(path: &str) -> Result<Config, String> {
         }
 
         if visited.len() != config.drone.len() {
-            errors.push("The drone network is not fully connected (check for subnet gaps)\n".to_string());
+            errors.push(
+                "The drone network is not fully connected (check for subnet gaps)\n".to_string(),
+            );
         }
     }
 
-    if errors.is_empty() { Ok(config) } else { Err(errors.join(" | ")) }
+    if errors.is_empty() {
+        Ok(config)
+    } else {
+        Err(errors.join(" | "))
+    }
 }

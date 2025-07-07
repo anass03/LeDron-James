@@ -1,6 +1,11 @@
-use std::{collections::HashMap, fs, io::Cursor, path::{Path, PathBuf}};
-use image::{save_buffer, ColorType, ImageReader};
 use host::Image;
+use image::{save_buffer, ColorType, ImageReader};
+use std::{
+    collections::HashMap,
+    fs,
+    io::Cursor,
+    path::{Path, PathBuf},
+};
 
 /// Error types specific to MediaServer operations.
 #[derive(Debug, thiserror::Error)]
@@ -32,7 +37,12 @@ pub trait MediaServer {
 
     /// Saves the given image to disk at the specified path.
     fn save_image_to<P: AsRef<Path>>(path: P, image: &Image) -> Result<(), MediaServerError> {
-        let ext = path.as_ref().extension().and_then(|s| s.to_str()).unwrap_or("").to_lowercase();
+        let ext = path
+            .as_ref()
+            .extension()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase();
 
         match ext.as_str() {
             "jpg" | "jpeg" => {
@@ -44,15 +54,20 @@ pub trait MediaServer {
                     .collect();
 
                 save_buffer(path, &rgb_data, image.width, image.height, ColorType::Rgb8)?;
-            },
+            }
             _ => {
                 // Default: save as RGBA
-                save_buffer(path, &image.data, image.width, image.height, ColorType::Rgba8)?;
+                save_buffer(
+                    path,
+                    &image.data,
+                    image.width,
+                    image.height,
+                    ColorType::Rgba8,
+                )?;
             }
         }
         Ok(())
     }
-
 
     /// Scans public and private directories for image files.
     fn scan_media_files(&self, private_images_dir: &Path) -> HashMap<String, PathBuf> {

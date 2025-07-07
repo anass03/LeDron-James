@@ -1,20 +1,24 @@
-use std::default::Default;
-use ratatui::layout::{Alignment, Rect};
-use ratatui::buffer::Buffer;
-use crate::frontend::app::App;
 use crate::frontend::app::models::tab1_types::{NodePopup, PopupSelection, ViewedTab1};
-use crate::frontend::app::ui::tabs::{tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR, CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
+use crate::frontend::app::ui::tabs::{
+    tab1_client_popup, tab1_drone_popup, tab1_main_page, tab1_server_popup, BG_COLOR,
+    CANVAS_CLIENT_COLOR, CANVAS_DRONE_COLOR, CANVAS_SERVER_COLOR, MAIN_BLOCK_BORDERS,
+    POPUP_BG_COLOR,
+};
+use crate::frontend::app::App;
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Alignment, Rect};
+use std::default::Default;
 // popup code
-use ratatui::widgets::canvas::Line as CanvasLine;
+use crate::backend::sc_models::NetNode;
+use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
+use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
 use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets;
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::canvas::Line as CanvasLine;
 use ratatui::widgets::canvas::{Canvas, Circle, Context};
-use crate::backend::sc_models::{NetNode, NodeType};
-use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
-use crate::frontend::app::topology_algorithm::alg_models::TopologyAlgorithm;
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use textwrap;
 use tui_logger::TuiLoggerWidget;
 use wg_2024::network::NodeId;
@@ -43,10 +47,13 @@ pub(crate) fn centered_popup_area(area: Rect) -> Rect {
     horizontal[1]
 }
 
-
 /// Renders Settings tab-page
-pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, buf : &mut Buffer)->Option<Rect>{
-    match &app.cache.tab1_data.viewing{
+pub(in crate::frontend::app::ui::tabs) fn render_tab1(
+    app: &mut App,
+    area: Rect,
+    buf: &mut Buffer,
+) -> Option<Rect> {
+    match &app.cache.tab1_data.viewing {
         ViewedTab1::Main => {
             // Viewing Topology and shi
             tab1_main_page::render_main_page(app, area, buf);
@@ -56,15 +63,20 @@ pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, 
             let popup_area = centered_popup_area(area);
             widgets::Clear.render(popup_area, buf);
             let colored_bg_block = Block::default().style(Style::default().bg(POPUP_BG_COLOR));
-            let colored_popup_area = colored_bg_block
-                .inner(popup_area);
+            let colored_popup_area = colored_bg_block.inner(popup_area);
             colored_bg_block.render(popup_area, buf);
 
             //let popup = Popup::new(Block::default());
             //popup.render(popup_area, buf);
-            match ndpop{
+            match ndpop {
                 NodePopup::Client(cl) => {
-                    return tab1_client_popup::render_client_popup(app, colored_popup_area, buf, cl, *id);
+                    return tab1_client_popup::render_client_popup(
+                        app,
+                        colored_popup_area,
+                        buf,
+                        cl,
+                        *id,
+                    );
                 }
                 NodePopup::Server(sr) => {
                     tab1_server_popup::render_server_popup(app, colored_popup_area, buf, sr, *id);
@@ -80,16 +92,21 @@ pub(in crate::frontend::app::ui::tabs) fn render_tab1(app:&mut App, area: Rect, 
 
 // Utils needed by the single tabs
 
-pub(super) fn draw_map(topology_algorithm_data:&TopologyAlgorithm, area: Rect, buf: &mut Buffer, canvas_block:Block){
+pub(super) fn draw_map(
+    topology_algorithm_data: &TopologyAlgorithm,
+    area: Rect,
+    buf: &mut Buffer,
+    canvas_block: Block,
+) {
     draw_map_with_routes(topology_algorithm_data, area, buf, canvas_block, None)
 }
 
 pub(super) fn draw_map_with_routes(
-    topology_algorithm_data: &TopologyAlgorithm, 
-    area: Rect, 
-    buf: &mut Buffer, 
+    topology_algorithm_data: &TopologyAlgorithm,
+    area: Rect,
+    buf: &mut Buffer,
     canvas_block: Block,
-    highlighted_routes: Option<&Vec<(NodeId, NodeId)>>
+    highlighted_routes: Option<&Vec<(NodeId, NodeId)>>,
 ) {
     let canvas = Canvas::default()
         .block(canvas_block)
@@ -106,9 +123,9 @@ pub(super) fn draw_map_with_routes(
                     // Check if this link is part of a highlighted route
                     let is_highlighted = highlighted_routes
                         .map(|routes| {
-                            routes.iter().any(|&(r1, r2)| {
-                                (r1 == a && r2 == b) || (r1 == b && r2 == a)
-                            })
+                            routes
+                                .iter()
+                                .any(|&(r1, r2)| (r1 == a && r2 == b) || (r1 == b && r2 == a))
                         })
                         .unwrap_or(false);
 
@@ -146,7 +163,7 @@ pub(super) fn draw_map_with_routes(
                 let cy = pos.position.y as f64;
                 let size = 3.0;
                 // Draw shape based on node type
-                match pos.node{
+                match pos.node {
                     NetNode::Drone(_) => {
                         // Drone: circle
                         let circle = Circle {
@@ -160,10 +177,38 @@ pub(super) fn draw_map_with_routes(
                     }
                     NetNode::Client(_) => {
                         // Client: square
-                        let top = CanvasLine { x1: cx - size, y1: cy - size, x2: cx + size, y2: cy - size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
-                        let bottom = CanvasLine { x1: cx - size, y1: cy + size, x2: cx + size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
-                        let left = CanvasLine { x1: cx - size, y1: cy - size, x2: cx - size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
-                        let right = CanvasLine { x1: cx + size, y1: cy - size, x2: cx + size, y2: cy + size, color: CANVAS_CLIENT_COLOR, ..Default::default() };
+                        let top = CanvasLine {
+                            x1: cx - size,
+                            y1: cy - size,
+                            x2: cx + size,
+                            y2: cy - size,
+                            color: CANVAS_CLIENT_COLOR,
+                            ..Default::default()
+                        };
+                        let bottom = CanvasLine {
+                            x1: cx - size,
+                            y1: cy + size,
+                            x2: cx + size,
+                            y2: cy + size,
+                            color: CANVAS_CLIENT_COLOR,
+                            ..Default::default()
+                        };
+                        let left = CanvasLine {
+                            x1: cx - size,
+                            y1: cy - size,
+                            x2: cx - size,
+                            y2: cy + size,
+                            color: CANVAS_CLIENT_COLOR,
+                            ..Default::default()
+                        };
+                        let right = CanvasLine {
+                            x1: cx + size,
+                            y1: cy - size,
+                            x2: cx + size,
+                            y2: cy + size,
+                            color: CANVAS_CLIENT_COLOR,
+                            ..Default::default()
+                        };
                         ctx.draw(&top);
                         ctx.draw(&bottom);
                         ctx.draw(&left);
@@ -172,10 +217,38 @@ pub(super) fn draw_map_with_routes(
                     NetNode::Server(_) => {
                         // Server: diamond
                         let d = size;
-                        let d1 = CanvasLine { x1: cx, y1: cy - d, x2: cx + d, y2: cy, color: CANVAS_SERVER_COLOR, ..Default::default() };
-                        let d2 = CanvasLine { x1: cx + d, y1: cy, x2: cx, y2: cy + d, color: CANVAS_SERVER_COLOR, ..Default::default() };
-                        let d3 = CanvasLine { x1: cx, y1: cy + d, x2: cx - d, y2: cy, color: CANVAS_SERVER_COLOR, ..Default::default() };
-                        let d4 = CanvasLine { x1: cx - d, y1: cy, x2: cx, y2: cy - d, color: CANVAS_SERVER_COLOR, ..Default::default() };
+                        let d1 = CanvasLine {
+                            x1: cx,
+                            y1: cy - d,
+                            x2: cx + d,
+                            y2: cy,
+                            color: CANVAS_SERVER_COLOR,
+                            ..Default::default()
+                        };
+                        let d2 = CanvasLine {
+                            x1: cx + d,
+                            y1: cy,
+                            x2: cx,
+                            y2: cy + d,
+                            color: CANVAS_SERVER_COLOR,
+                            ..Default::default()
+                        };
+                        let d3 = CanvasLine {
+                            x1: cx,
+                            y1: cy + d,
+                            x2: cx - d,
+                            y2: cy,
+                            color: CANVAS_SERVER_COLOR,
+                            ..Default::default()
+                        };
+                        let d4 = CanvasLine {
+                            x1: cx - d,
+                            y1: cy,
+                            x2: cx,
+                            y2: cy - d,
+                            color: CANVAS_SERVER_COLOR,
+                            ..Default::default()
+                        };
                         ctx.draw(&d1);
                         ctx.draw(&d2);
                         ctx.draw(&d3);
@@ -201,7 +274,9 @@ pub(super) fn extract_route_links(route: &[NodeId]) -> Vec<(NodeId, NodeId)> {
 
 /// Get routes from simulation controller data for a specific node
 pub(super) fn get_node_routes(app: &App, node_id: NodeId) -> Option<Vec<(NodeId, NodeId)>> {
-    app.simulation_controller_data.stats.node_statistic
+    app.simulation_controller_data
+        .stats
+        .node_statistic
         .get(&node_id)
         .and_then(|stats| {
             if stats.route.len() > 1 {
@@ -212,32 +287,39 @@ pub(super) fn get_node_routes(app: &App, node_id: NodeId) -> Option<Vec<(NodeId,
         })
 }
 
-pub(super) fn get_settings_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&mut Context)>{
+pub(super) fn get_settings_canvas<'a>(
+    app: &App,
+    loc_node: NetNode,
+) -> Canvas<'a, fn(&mut Context)> {
     // Draw settings icon
     Canvas::default()
         .background_color(POPUP_BG_COLOR)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(
-                match loc_node{
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(match loc_node {
                     NetNode::Drone(_) | NetNode::Server(_) => {
-                        if app.cache.tab1_data.popup_cursor == 1 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
+                        if app.cache.tab1_data.popup_cursor == 1
+                            && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea
+                        {
                             Style::default().fg(app.animation_color())
-                        }else{
+                        } else {
                             Style::default()
                         }
                     }
                     NetNode::Client(_) => {
-                        if app.cache.tab1_data.popup_cursor == 3 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
+                        if app.cache.tab1_data.popup_cursor == 3
+                            && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea
+                        {
                             Style::default().fg(app.animation_color())
-                        }else{
+                        } else {
                             Style::default()
                         }
                     }
-                }
-                )
-            .title("Settings"))
+                })
+                .title("Settings"),
+        )
         .x_bounds([0.0, 20.0])
         .y_bounds([0.0, 20.0])
         .paint(|ctx| {
@@ -245,75 +327,97 @@ pub(super) fn get_settings_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, 
             let cy = 10.0;
             let r = 6.0;
             // gear outer circle
-            ctx.draw(&Circle { x: cx, y: cy, radius: r, color: Color::White, ..Default::default() });
+            ctx.draw(&Circle {
+                x: cx,
+                y: cy,
+                radius: r,
+                color: Color::White,
+                ..Default::default()
+            });
             // gear spokes
             let spoke = 4.0;
             for &(dx, dy) in &[(0.0, spoke), (spoke, 0.0), (0.0, -spoke), (-spoke, 0.0)] {
                 ctx.draw(&CanvasLine {
-                    x1: cx, y1: cy,
-                    x2: cx + dx, y2: cy + dy,
+                    x1: cx,
+                    y1: cy,
+                    x2: cx + dx,
+                    y2: cy + dy,
                     color: Color::White,
                     ..Default::default()
                 });
             }
         })
 }
-pub(super) fn get_data_canvas<'a>(app:&App, loc_node:NetNode) -> Canvas<'a, fn(&mut Context)>{
+pub(super) fn get_data_canvas<'a>(app: &App, loc_node: NetNode) -> Canvas<'a, fn(&mut Context)> {
     Canvas::default()
         .background_color(POPUP_BG_COLOR)
-        .block(Block::default()
-            .borders(Borders::ALL)
-            .border_type(BorderType::Rounded)
-            .border_style(
-                match loc_node{
-                NetNode::Drone(_) | NetNode::Server(_) => {
-                    if app.cache.tab1_data.popup_cursor == 0 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
-                        Style::default().fg(app.animation_color())
-                    }else{
-                        Style::default()
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .border_style(match loc_node {
+                    NetNode::Drone(_) | NetNode::Server(_) => {
+                        if app.cache.tab1_data.popup_cursor == 0
+                            && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea
+                        {
+                            Style::default().fg(app.animation_color())
+                        } else {
+                            Style::default()
+                        }
                     }
-                }
-                NetNode::Client(_) => {
-                    if app.cache.tab1_data.popup_cursor == 2 && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea {
-                        Style::default().fg(app.animation_color())
-                    }else{
-                        Style::default()
+                    NetNode::Client(_) => {
+                        if app.cache.tab1_data.popup_cursor == 2
+                            && app.cache.tab1_data.popup_selection == PopupSelection::MenuArea
+                        {
+                            Style::default().fg(app.animation_color())
+                        } else {
+                            Style::default()
+                        }
                     }
-                }
-            })
-            .title("Data"))
+                })
+                .title("Data"),
+        )
         .x_bounds([0.0, 20.0])
         .y_bounds([0.0, 20.0])
         .paint(|ctx| {
             let steps = 40;
             for i in 0..steps {
-                let x1 = i         as f64 * 20.0 / (steps - 1) as f64;
-                let y1 = 10.0 + 8.0 * ((std::f64::consts::PI * i as f64 / (steps - 1) as f64)).sin();
-                let x2 = (i + 1)   as f64 * 20.0 / (steps - 1) as f64;
-                let y2 = 10.0 + 8.0 * ((std::f64::consts::PI * (i + 1) as f64 / (steps - 1) as f64)).sin();
-                ctx.draw(&CanvasLine { x1, y1, x2, y2, color: Color::White, ..Default::default() });
+                let x1 = i as f64 * 20.0 / (steps - 1) as f64;
+                let y1 = 10.0 + 8.0 * (std::f64::consts::PI * i as f64 / (steps - 1) as f64).sin();
+                let x2 = (i + 1) as f64 * 20.0 / (steps - 1) as f64;
+                let y2 =
+                    10.0 + 8.0 * (std::f64::consts::PI * (i + 1) as f64 / (steps - 1) as f64).sin();
+                ctx.draw(&CanvasLine {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    color: Color::White,
+                    ..Default::default()
+                });
             }
         })
 }
 
-pub(super) mod data_rendering{
+pub(super) mod data_rendering {
+    use crate::backend::sc_models::NodeStatistics;
+    use crate::frontend::app::ui::tabs::tab1::Canvas;
     use crate::frontend::app::ui::tabs::tab1::CanvasLine;
-use crate::frontend::app::ui::tabs::tab1::Canvas;
-use ratatui::buffer::Buffer;
+    use crate::frontend::app::ui::tabs::tab1::{extract_route_links, render_data_logging_section};
+    use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
+    use crate::frontend::app::App;
+    use ratatui::buffer::Buffer;
     use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
     use ratatui::prelude::Color;
     use ratatui::style::{Modifier, Style, Stylize};
-    use ratatui::symbols;
     use ratatui::symbols::Marker;
-    use ratatui::widgets::{Block, BorderType, Borders, Widget, Paragraph, Bar, BarChart, BarGroup, Axis, Dataset, Chart, GraphType};
-    use ratatui::text::{Line, Span};
+    use ratatui::text::Line;
     use ratatui::widgets::canvas::Circle;
-    use tui_logger::TuiLoggerWidget;
+    use ratatui::widgets::{
+        Axis, Bar, BarChart, BarGroup, Block, BorderType, Borders, Chart, Dataset, GraphType,
+        Paragraph, Widget,
+    };
     use wg_2024::network::NodeId;
-    use crate::backend::sc_models::NodeStatistics;
-    use crate::frontend::app::App;
-    use crate::frontend::app::ui::tabs::{MAIN_BLOCK_BORDERS, POPUP_BG_COLOR};
-    use crate::frontend::app::ui::tabs::tab1::{render_data_logging_section, extract_route_links};
 
     // Function to render PDR bar chart
     fn render_pdr_bar_chart(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
@@ -326,7 +430,9 @@ use ratatui::buffer::Buffer;
         }
 
         // Convert and sort PDR data
-        let mut pdr_data: Vec<(NodeId, f64)> = stats.pdr_expected.iter()
+        let mut pdr_data: Vec<(NodeId, f64)> = stats
+            .pdr_expected
+            .iter()
             .map(|(node_id, pdr)| (*node_id, *pdr))
             .collect();
         pdr_data.sort_by(|a, b| a.0.cmp(&b.0));
@@ -336,12 +442,19 @@ use ratatui::buffer::Buffer;
         let max_gap = 1u16;
         let total_gaps = if bars_count > 1 {
             max_gap * (bars_count - 1)
-        } else { 0 };
+        } else {
+            0
+        };
         // Determine bar width to fill available area (subtracting padding)
-        let content_width = area.width.saturating_sub(8) as u16;
+        let content_width = area.width.saturating_sub(8);
         let mut bar_width = if bars_count > 0 {
-            content_width.saturating_sub(total_gaps).checked_div(bars_count).unwrap_or(1)
-        } else { 1 };
+            content_width
+                .saturating_sub(total_gaps)
+                .checked_div(bars_count)
+                .unwrap_or(1)
+        } else {
+            1
+        };
         if bar_width == 0 {
             bar_width = 1;
         }
@@ -354,7 +467,11 @@ use ratatui::buffer::Buffer;
         } else {
             let start_index = (app.cache.counter as usize / 50) % pdr_data.len();
             let end_index = (start_index + max_visible).min(pdr_data.len());
-            (pdr_data[start_index..end_index].to_vec(), start_index, pdr_data.len())
+            (
+                pdr_data[start_index..end_index].to_vec(),
+                start_index,
+                pdr_data.len(),
+            )
         };
 
         // Title
@@ -377,16 +494,17 @@ use ratatui::buffer::Buffer;
 
         // Render title
         Paragraph::new(title)
-            .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(Modifier::BOLD))
+            .style(
+                Style::default()
+                    .fg(MAIN_BLOCK_BORDERS)
+                    .add_modifier(Modifier::BOLD),
+            )
             .alignment(Alignment::Center)
             .render(title_area, buf);
 
         // Center the chart horizontally
         let total_bars_width = bars_count * bar_width + total_gaps;
-        let horizontal_padding = chart_area
-            .width
-            .saturating_sub(total_bars_width)
-            / 2;
+        let horizontal_padding = chart_area.width.saturating_sub(total_bars_width) / 2;
         let padded = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -397,15 +515,18 @@ use ratatui::buffer::Buffer;
             .split(chart_area);
 
         // Prepare bars
-        let bars: Vec<Bar> = display_data.iter().map(|(node_id, pdr)| {
-            let style = pdr_color_style(*pdr);
-            Bar::default()
-                .value((*pdr * 100.0) as u64)
-                .label(Line::from(format!("N{}", node_id)))
-                .text_value(format!("{:.0}%", *pdr * 100.0))
-                .style(style)
-                .value_style(style.reversed())
-        }).collect();
+        let bars: Vec<Bar> = display_data
+            .iter()
+            .map(|(node_id, pdr)| {
+                let style = pdr_color_style(*pdr);
+                Bar::default()
+                    .value((*pdr * 100.0) as u64)
+                    .label(Line::from(format!("N{}", node_id)))
+                    .text_value(format!("{:.0}%", *pdr * 100.0))
+                    .style(style)
+                    .value_style(style.reversed())
+            })
+            .collect();
 
         // Render bar chart
         BarChart::default()
@@ -426,7 +547,7 @@ use ratatui::buffer::Buffer;
     }
 
     // Function to render download speed chart
-    pub fn render_download_speed_chart(app: &App, stats: &Vec<f32>, area: Rect, buf: &mut Buffer) {
+    pub fn render_download_speed_chart(_app: &App, stats: &Vec<f32>, area: Rect, buf: &mut Buffer) {
         // Fit to available width
         let max_points = area.width as usize;
         let total = stats.len();
@@ -465,7 +586,7 @@ use ratatui::buffer::Buffer;
             .style(Style::default().bg(POPUP_BG_COLOR))
             .x_axis(
                 Axis::default()
-                    .bounds([0.0, (data.len().max(1)) as f64])
+                    .bounds([0.0, data.len().max(1) as f64])
                     .labels::<Vec<Line>>(vec![]),
             )
             .y_axis(
@@ -483,7 +604,8 @@ use ratatui::buffer::Buffer;
 
     pub fn render_most_active_nodes_chart(app: &App, area: Rect, buf: &mut Buffer) {
         // Get utilization data from simulation controller - returns Vec<(NodeId, u64)>
-        let mut node_activity: Vec<(NodeId, u64)> = app.simulation_controller_data.get_utilization();
+        let mut node_activity: Vec<(NodeId, u64)> =
+            app.simulation_controller_data.get_utilization();
 
         // Filter out nodes with zero activity (already sorted by get_utilization - highest first)
         node_activity.retain(|(_, packet_count)| *packet_count > 0);
@@ -504,13 +626,20 @@ use ratatui::buffer::Buffer;
         let max_gap = 1u16;
         let total_gaps = if bars_count > 1 {
             max_gap * (bars_count - 1)
-        } else { 0 };
+        } else {
+            0
+        };
 
         // Determine bar width to fill available area (subtracting padding)
         let content_width = area.width.saturating_sub(8) as u16;
         let mut bar_width = if bars_count > 0 {
-            content_width.saturating_sub(total_gaps).checked_div(bars_count).unwrap_or(1)
-        } else { 1 };
+            content_width
+                .saturating_sub(total_gaps)
+                .checked_div(bars_count)
+                .unwrap_or(1)
+        } else {
+            1
+        };
         if bar_width == 0 {
             bar_width = 1;
         }
@@ -523,7 +652,11 @@ use ratatui::buffer::Buffer;
         } else {
             let start_index = (app.cache.counter as usize / 50) % node_activity.len();
             let end_index = (start_index + max_visible).min(node_activity.len());
-            (node_activity[start_index..end_index].to_vec(), start_index, node_activity.len())
+            (
+                node_activity[start_index..end_index].to_vec(),
+                start_index,
+                node_activity.len(),
+            )
         };
 
         // Title with rotation info if needed
@@ -547,17 +680,18 @@ use ratatui::buffer::Buffer;
         // Render title
         if !title.is_empty() {
             Paragraph::new(title)
-                .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(MAIN_BLOCK_BORDERS)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center)
                 .render(title_area, buf);
         }
 
         // Center the chart horizontally
         let total_bars_width = bars_count * bar_width + total_gaps;
-        let horizontal_padding = chart_area
-            .width
-            .saturating_sub(total_bars_width)
-            / 2;
+        let horizontal_padding = chart_area.width.saturating_sub(total_bars_width) / 2;
         let padded = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
@@ -568,15 +702,18 @@ use ratatui::buffer::Buffer;
             .split(chart_area);
 
         // Prepare bars with packet count-based coloring
-        let bars: Vec<Bar> = display_data.iter().map(|(node_id, packet_count)| {
-            let style = packet_count_color_style(*packet_count);
-            Bar::default()
-                .value(*packet_count)
-                .label(Line::from(format!("N{}", node_id)))
-                .text_value(format!("{}", packet_count))
-                .style(style)
-                .value_style(style.reversed())
-        }).collect();
+        let bars: Vec<Bar> = display_data
+            .iter()
+            .map(|(node_id, packet_count)| {
+                let style = packet_count_color_style(*packet_count);
+                Bar::default()
+                    .value(*packet_count)
+                    .label(Line::from(format!("N{}", node_id)))
+                    .text_value(format!("{}", packet_count))
+                    .style(style)
+                    .value_style(style.reversed())
+            })
+            .collect();
 
         // Render bar chart
         BarChart::default()
@@ -645,7 +782,12 @@ use ratatui::buffer::Buffer;
     }
 
     // Function to render route visualization
-    pub fn render_route_visualization(app: &App, stats: &NodeStatistics, area: Rect, buf: &mut Buffer) {
+    pub fn render_route_visualization(
+        _app: &App,
+        stats: &NodeStatistics,
+        area: Rect,
+        buf: &mut Buffer,
+    ) {
         if stats.route.is_empty() {
             let no_route_text = Paragraph::new("No route data available")
                 .style(Style::default().fg(Color::Gray))
@@ -661,18 +803,18 @@ use ratatui::buffer::Buffer;
             .y_bounds([0.0, 80.0])
             .paint(|ctx| {
                 let route_links = extract_route_links(&stats.route);
-                
+
                 // Draw route links with highlighted style
                 for &(a, b) in &route_links {
                     // Calculate positions for the mini map
                     let a_idx = stats.route.iter().position(|&x| x == a).unwrap_or(0);
                     let b_idx = stats.route.iter().position(|&x| x == b).unwrap_or(0);
-                    
+
                     let x1 = (a_idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
                     let x2 = (b_idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
                     let y1 = 40.0;
                     let y2 = 40.0;
-                    
+
                     // Draw highlighted route line (thicker by drawing multiple lines)
                     for offset in -1..=1 {
                         for offset2 in -1..=1 {
@@ -688,26 +830,27 @@ use ratatui::buffer::Buffer;
                         }
                     }
                 }
-                
+
                 // Draw nodes in the route
                 for (idx, &node_id) in stats.route.iter().enumerate() {
                     let x = (idx as f64 * 100.0) / (stats.route.len() - 1) as f64;
                     let y = 40.0;
                     let size = 2.0;
-                    
+
                     // Draw node as a circle
                     let circle = Circle {
-                        x, y,
+                        x,
+                        y,
                         radius: size,
                         color: Color::Cyan,
                         ..Default::default()
                     };
                     ctx.draw(&circle);
-                    
+
                     // Draw node ID
                     ctx.print(x, y + 8.0, format!("{}", node_id));
                 }
-                
+
                 // Draw start and end indicators
                 if let Some(&start_node) = stats.route.first() {
                     let x = 0.0;
@@ -715,7 +858,7 @@ use ratatui::buffer::Buffer;
                     ctx.print(x, y - 15.0, "START");
                     ctx.print(x, y - 8.0, format!("{}", start_node));
                 }
-                
+
                 if let Some(&end_node) = stats.route.last() {
                     let x = 100.0;
                     let y = 40.0;
@@ -723,20 +866,30 @@ use ratatui::buffer::Buffer;
                     ctx.print(x - 10.0, y - 8.0, format!("{}", end_node));
                 }
             });
-        
+
         canvas.render(area, buf);
     }
 
     // For Client & Server
     // If mode is 0 is Client, if is 1 is Server
-    pub(crate) fn render_cl_sr_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId, mode:u8){
+    pub(crate) fn render_cl_sr_data_options(
+        app: &App,
+        area: Rect,
+        buf: &mut Buffer,
+        id: NodeId,
+        _mode: u8,
+    ) {
         let [stats_area, filtered_logging_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
             .areas(area);
         let [data_1, data_2, data_3] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(40), Constraint::Percentage(30), Constraint::Percentage(30)])
+            .constraints([
+                Constraint::Percentage(40),
+                Constraint::Percentage(30),
+                Constraint::Percentage(30),
+            ])
             .areas(stats_area);
 
         // Expected PDR
@@ -745,13 +898,13 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default() .fg(
-                if app.cache.tab1_data.popup_cursor == 0 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 0 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
         let inner_data_1_block = data_1_block.inner(data_1);
         data_1_block.render(data_1, buf);
 
@@ -761,13 +914,13 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 1 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 1 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
         let inner_data_2_block = data_2_block.inner(data_2);
         data_2_block.render(data_2, buf);
 
@@ -777,31 +930,31 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 2 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 2 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
 
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
 
-        match app.simulation_controller_data.stats.node_statistic.get(&id){
+        match app.simulation_controller_data.stats.node_statistic.get(&id) {
             None => {
                 // Render inside the graph blocks the text a canvas drawing something that says NOT VALID .
                 let no_data_text = Paragraph::new("No data available for this node")
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text.render(inner_data_1_block, buf);
-                
+
                 // Also render no data for data_2_block
                 let no_data_text_2 = Paragraph::new("No download data available")
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text_2.render(inner_data_2_block, buf);
-                
+
                 // Also render no data for data_3_block
                 let no_data_text_3 = Paragraph::new("No route data available")
                     .style(Style::default().fg(Color::Gray))
@@ -813,32 +966,29 @@ use ratatui::buffer::Buffer;
                 render_pdr_bar_chart(app, stats, inner_data_1_block, buf);
                 // Render download speed chart in data_2_block
                 render_download_speed_chart(app, &stats.download_at_sec, inner_data_2_block, buf);
-                
+
                 // Render route visualization in data_3_block
                 render_route_visualization(app, stats, inner_data_3_block, buf);
             }
         }
 
-
-
-
         let logging_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 3 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 3 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
 
         let inner_log_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
 
         render_data_logging_section(app, id, inner_log_block, buf);
     }
-    pub(crate) fn render_drone_data_options(app:&App, area:Rect, buf: &mut Buffer, id:NodeId){
+    pub(crate) fn render_drone_data_options(app: &App, area: Rect, buf: &mut Buffer, id: NodeId) {
         let [stats_area, filtered_logging_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
@@ -846,7 +996,11 @@ use ratatui::buffer::Buffer;
             .areas(area);
         let [data_1, data_2, data_3] = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(33), Constraint::Percentage(34), Constraint::Percentage(33)])
+            .constraints([
+                Constraint::Percentage(33),
+                Constraint::Percentage(34),
+                Constraint::Percentage(33),
+            ])
             .spacing(1)
             .areas(stats_area);
 
@@ -855,13 +1009,13 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default() .fg(
-                if app.cache.tab1_data.popup_cursor == 0 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 0 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
         let inner_data_1_block = data_1_block.inner(data_1);
         data_1_block.render(data_1, buf);
 
@@ -870,13 +1024,13 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 1 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 1 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
         let inner_data_2_block = data_2_block.inner(data_2);
         data_2_block.render(data_2, buf);
 
@@ -885,13 +1039,13 @@ use ratatui::buffer::Buffer;
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 2 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 2 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
 
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
@@ -902,32 +1056,37 @@ use ratatui::buffer::Buffer;
         match app.simulation_controller_data.drone_packet_count.get(&id) {
             None => {
                 // No packet data available
-                let no_data_text = Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
-                    .style(Style::default().fg(Color::Gray))
-                    .alignment(ratatui::layout::Alignment::Center);
+                let no_data_text =
+                    Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
+                        .style(Style::default().fg(Color::Gray))
+                        .alignment(ratatui::layout::Alignment::Center);
                 no_data_text.render(inner_data_1_block, buf);
-                
-                let no_data_text_2 = Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
-                    .style(Style::default().fg(Color::Gray))
-                    .alignment(ratatui::layout::Alignment::Center);
-                no_data_text_2.render(inner_data_2_block, buf);
 
+                let no_data_text_2 =
+                    Paragraph::new(format!("No packet data\navailable for\ndrone {}", id))
+                        .style(Style::default().fg(Color::Gray))
+                        .alignment(ratatui::layout::Alignment::Center);
+                no_data_text_2.render(inner_data_2_block, buf);
             }
             Some((packets_sent, packets_dropped)) => {
                 // Render packets sent count in data_1_block
                 let sent_text = format!("Total Packets\nSent:\n\n{}", packets_sent);
                 let sent_para = Paragraph::new(sent_text)
-                    .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                    .style(
+                        Style::default()
+                            .fg(Color::Green)
+                            .add_modifier(Modifier::BOLD),
+                    )
                     .alignment(ratatui::layout::Alignment::Center);
                 sent_para.render(inner_data_1_block, buf);
-                
+
                 // Render packets dropped count in data_2_block
                 let dropped_text = format!("Total Packets\nDropped:\n\n{}", packets_dropped);
                 let dropped_para = Paragraph::new(dropped_text)
                     .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
                     .alignment(ratatui::layout::Alignment::Center);
                 dropped_para.render(inner_data_2_block, buf);
-                
+
                 // Render route visualization in data_3_block (keep existing logic)
                 match app.simulation_controller_data.stats.node_statistic.get(&id) {
                     Some(stats) => {
@@ -946,25 +1105,25 @@ use ratatui::buffer::Buffer;
         let logging_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
-            .border_style(Style::default().fg(
-                if app.cache.tab1_data.popup_cursor == 3 {
+            .border_style(
+                Style::default().fg(if app.cache.tab1_data.popup_cursor == 3 {
                     app.animation_color()
-                }else{
+                } else {
                     MAIN_BLOCK_BORDERS
-                }
-            ));
+                }),
+            );
 
         let inner_log_block = logging_block.inner(filtered_logging_area);
         logging_block.render(filtered_logging_area, buf);
 
         render_data_logging_section(app, id, inner_log_block, buf);
     }
-
 }
 
-
 // Popup border color based on status
-pub fn popup_border_color(status: &crate::frontend::app::models::tab1_types::SettingsPopupStatus) -> Color {
+pub fn popup_border_color(
+    status: &crate::frontend::app::models::tab1_types::SettingsPopupStatus,
+) -> Color {
     use crate::frontend::app::models::tab1_types::SettingsPopupStatus::*;
     match status {
         CorrectlySent => Color::Green,
@@ -995,7 +1154,12 @@ pub fn small_centered_popup_area(area: Rect) -> Rect {
     horizontal[1]
 }
 
-pub(super) fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
+pub(super) fn render_add_sender_popup(
+    app: &App,
+    area: Rect,
+    buf: &mut Buffer,
+    cmd: &crate::frontend::app::models::tab1_types::CommandPopup,
+) {
     let popup_area = small_centered_popup_area(area);
     widgets::Clear.render(popup_area, buf);
     let block = Block::default()
@@ -1016,50 +1180,66 @@ pub(super) fn render_add_sender_popup(app: &App, area: Rect, buf: &mut Buffer, c
     let mut nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(
-            if cmd.cursor == 0{
-                app.animation_color()
-            }else{
-                MAIN_BLOCK_BORDERS
-            }));
+        .border_style(Style::default().fg(if cmd.cursor == 0 {
+            app.animation_color()
+        } else {
+            MAIN_BLOCK_BORDERS
+        }));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
-    app.cache.text_buffer.input_first_text_area.render(inner_nodeid, buf);
+    app.cache
+        .text_buffer
+        .input_first_text_area
+        .render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
-        .style(Style::default().fg(
-            if cmd.cursor == 1{
-                app.animation_color()
-            }else{
-                MAIN_BLOCK_BORDERS
-            }
-        ).add_modifier(Modifier::BOLD));
+        .style(
+            Style::default()
+                .fg(if cmd.cursor == 1 {
+                    app.animation_color()
+                } else {
+                    MAIN_BLOCK_BORDERS
+                })
+                .add_modifier(Modifier::BOLD),
+        );
     send_button.render(button_area, buf);
     match &cmd.status {
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
             let msg = Paragraph::new("Correctly sent!")
-                .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center);
             msg.render(status_area, buf);
-        },
+        }
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
             // Wrap long error messages to fit in multiple rows
             let error_text = format!("Error: {}", e);
             let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
-            let lines: Vec<Line> = wrapped_lines.iter()
-                .map(|line| Line::from(line.to_string())
-                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+            let lines: Vec<Line> = wrapped_lines
+                .iter()
+                .map(|line| {
+                    Line::from(line.to_string())
+                        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                })
                 .collect();
             let msg = Paragraph::new(lines)
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
             msg.render(status_area, buf);
-        },
-        _ => {},
+        }
+        _ => {}
     }
 }
 
-pub(super) fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &crate::frontend::app::models::tab1_types::CommandPopup) {
+pub(super) fn render_remove_sender_popup(
+    app: &App,
+    area: Rect,
+    buf: &mut Buffer,
+    cmd: &crate::frontend::app::models::tab1_types::CommandPopup,
+) {
     let popup_area = small_centered_popup_area(area);
     widgets::Clear.render(popup_area, buf);
     let block = Block::default()
@@ -1080,57 +1260,87 @@ pub(super) fn render_remove_sender_popup(app: &App, area: Rect, buf: &mut Buffer
     let mut nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(
-            if cmd.cursor == 0{
-                app.animation_color()
-            }else{
-                MAIN_BLOCK_BORDERS
-            }
-        ));
+        .border_style(Style::default().fg(if cmd.cursor == 0 {
+            app.animation_color()
+        } else {
+            MAIN_BLOCK_BORDERS
+        }));
     let inner_nodeid = nodeid_block.inner(input_area);
     nodeid_block.render(input_area, buf);
-    app.cache.text_buffer.input_first_text_area.render(inner_nodeid, buf);
+    app.cache
+        .text_buffer
+        .input_first_text_area
+        .render(inner_nodeid, buf);
     let send_button = Paragraph::new("[ Send ]")
         .alignment(Alignment::Center)
-        .style(Style::default().fg(
-            if cmd.cursor == 1{
-                app.animation_color()
-            }else{
-                MAIN_BLOCK_BORDERS
-            }
-        ).add_modifier(Modifier::BOLD));
+        .style(
+            Style::default()
+                .fg(if cmd.cursor == 1 {
+                    app.animation_color()
+                } else {
+                    MAIN_BLOCK_BORDERS
+                })
+                .add_modifier(Modifier::BOLD),
+        );
     send_button.render(button_area, buf);
     match &cmd.status {
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::CorrectlySent => {
             let msg = Paragraph::new("Correctly sent!")
-                .style(Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))
+                .style(
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )
                 .alignment(Alignment::Center);
             msg.render(status_area, buf);
-        },
+        }
         crate::frontend::app::models::tab1_types::SettingsPopupStatus::Error(e) => {
             // Wrap long error messages to fit in multiple rows
             let error_text = format!("Error: {}", e);
             let wrapped_lines = textwrap::wrap(&error_text, status_area.width as usize);
-            let lines: Vec<Line> = wrapped_lines.iter()
-                .map(|line| Line::from(line.to_string())
-                    .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)))
+            let lines: Vec<Line> = wrapped_lines
+                .iter()
+                .map(|line| {
+                    Line::from(line.to_string())
+                        .style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
+                })
                 .collect();
             let msg = Paragraph::new(lines)
                 .alignment(Alignment::Center)
                 .wrap(Wrap { trim: true });
             msg.render(status_area, buf);
-        },
-        _ => {},
+        }
+        _ => {}
     }
 }
 
-pub(crate) fn render_data_logging_section(app: &App, id: NodeId, inner_log_block: Rect, buf: &mut Buffer) {
-    // Determina se è un drone, client o server controllando i vettori
-    let node_type = if app.simulation_controller_data.drones.iter().any(|d| d.id == id) {
+pub(crate) fn render_data_logging_section(
+    app: &App,
+    id: NodeId,
+    inner_log_block: Rect,
+    buf: &mut Buffer,
+) {
+
+    let node_type = if app
+        .simulation_controller_data
+        .drones
+        .iter()
+        .any(|d| d.id == id)
+    {
         "drone"
-    } else if app.simulation_controller_data.clients.iter().any(|c| c.id == id) {
+    } else if app
+        .simulation_controller_data
+        .clients
+        .iter()
+        .any(|c| c.id == id)
+    {
         "client"
-    } else if app.simulation_controller_data.servers.iter().any(|s| s.id == id) {
+    } else if app
+        .simulation_controller_data
+        .servers
+        .iter()
+        .any(|s| s.id == id)
+    {
         "server"
     } else {
         "unknown"
@@ -1138,7 +1348,7 @@ pub(crate) fn render_data_logging_section(app: &App, id: NodeId, inner_log_block
 
     match node_type {
         "drone" => {
-            // Per i DRONI: mostra i log generali + log specifici del drone
+
             TuiLoggerWidget::default()
                 .style_error(Style::default().fg(Color::Red))
                 .style_warn(Style::default().fg(Color::Yellow))
@@ -1165,7 +1375,7 @@ pub(crate) fn render_data_logging_section(app: &App, id: NodeId, inner_log_block
                         .style_trace(Style::default().fg(Color::Magenta))
                         .output_separator(' ')
                         .output_timestamp(Some("%H:%M:%S%.3f".to_string()))
-                        .output_target(true)  // Mostra target per debug
+                        .output_target(true) // Mostra target per debug
                         .output_file(false)
                         .output_line(false)
                         .state(log_filter)
@@ -1188,13 +1398,12 @@ pub(crate) fn render_data_logging_section(app: &App, id: NodeId, inner_log_block
                         .render(inner_log_block, buf);
                 }
             }
-        }
-        /*_ => {
-            // Nodo sconosciuto - mostra messaggio di errore
-            let error_text = Paragraph::new("Unknown node type - no logs available")
-                .style(Style::default().fg(Color::Red))
-                .alignment(Alignment::Center);
-            error_text.render(inner_log_block, buf);
-        }*/
+        } /*_ => {
+              // Nodo sconosciuto - mostra messaggio di errore
+              let error_text = Paragraph::new("Unknown node type - no logs available")
+                  .style(Style::default().fg(Color::Red))
+                  .alignment(Alignment::Center);
+              error_text.render(inner_log_block, buf);
+          }*/
     }
 }

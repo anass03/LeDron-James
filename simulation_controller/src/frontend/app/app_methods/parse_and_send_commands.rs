@@ -1,51 +1,55 @@
-use std::f32;
-use std::str::FromStr;
-use host::{ClientId, FileId, MediaId, ServerId};
-use wg_2024::network::NodeId;
 use crate::backend::sc_models::LogType;
 use crate::frontend::app::App;
+use host::{ClientId, FileId, MediaId, ServerId};
 use log::*;
+use std::f32;
+use std::str::FromStr;
+use wg_2024::network::NodeId;
 
 /*
 Each method here is just temporary:
 if any error happens while sending commands,
 it'll just print it on logs.
  */
-impl App<'_>{
-    pub(super) fn parse_and_send_message(&mut self, client_sender:ClientId, client_receiver:ClientId, server_receiver:ServerId ) -> Result<(),String>{
-        let chat_lines = self
-            .cache
-            .text_buffer
-            .chat_text_area
-            .clone()
-            .into_lines();
-        if chat_lines.is_empty(){
+impl App<'_> {
+    pub(super) fn parse_and_send_message(
+        &mut self,
+        client_sender: ClientId,
+        client_receiver: ClientId,
+        server_receiver: ServerId,
+    ) -> Result<(), String> {
+        let chat_lines = self.cache.text_buffer.chat_text_area.clone().into_lines();
+        if chat_lines.is_empty() {
             // I can set an error here, like red highlighting the box
             Err("Empty buffer, can't send message!".to_string())
-        }else{
+        } else {
             // join them into a single String separated by '\n'
             let second_string = chat_lines.join("\n");
             // clear the text areas after successful parsing
-            if !second_string.trim().is_empty(){
+            if !second_string.trim().is_empty() {
                 self.cache.text_buffer.clean_topology_inputs_buffer();
-                match self.simulation_controller_data.message_for(client_sender, client_receiver, server_receiver, second_string){
+                match self.simulation_controller_data.message_for(
+                    client_sender,
+                    client_receiver,
+                    server_receiver,
+                    second_string,
+                ) {
                     Ok(_) => {
                         info!(target: "main", "Successfully sent message");
                         Ok(())
-                    },
+                    }
                     Err(str) => {
                         error!(target: "main", "{}", str);
                         Err(str)
                     }
                 }
-            }else{
+            } else {
                 Err("Empty buffer, can't send message!".to_string())
             }
         }
     }
 
-
-   /* pub(super) fn request_media(&mut self, id: NodeId){ // 1 Input
+    /* pub(super) fn request_media(&mut self, id: NodeId){ // 1 Input
         // We parse the 1 input insered
         match self.parse_2input(true){
             Ok(n) => {
@@ -79,127 +83,126 @@ impl App<'_>{
             Err(str) => {error!(target: "main", "{}", str)}
         }
     }*/
-/*    pub(super) fn request_media_list(&mut self, id:NodeId){
-        match self.parse_first_field_f32(true){
-            Ok(n) => {
-                match self.simulation_controller_data.request_media_list(id, n as ServerId){
-                    Ok(_) => {},
-                    Err(str) => {error!(target: "main", "{}", str)}
-                }
-            },
-            Err(str) => {error!(target: "main", "{}", str)}
-        }
-    }
-    pub(super) fn request_reg_to_chat(&mut self, id:NodeId){
-        match self.parse_first_field_f32(true){
-            Ok(n) => {
-                match self.simulation_controller_data.request_registration_to_chat(id, n as ServerId){
-                    Ok(_) => {},
-                    Err(str) => {error!(target: "main", "{}", str)}
-                }
-            },
-            Err(str) => {error!(target: "main", "{}", str)}
-        }
-    }
-    pub(super) fn request_client_list(&mut self, id:NodeId){
-        match self.parse_first_field_f32(true){
-            Ok(n) => {
-                match self.simulation_controller_data.request_client_list(id, n as ServerId){
-                    Ok(_) => {},
-                    Err(str) => {error!(target: "main", "{}", str)}
-                }
-            },
-            Err(str) => {error!(target: "main", "{}", str)}
-        }
-    }
-*/
-
-
-
-/*    fn parse_first_field_f32(&mut self, clean_after:bool) ->Result<f32, String>{
-        let lines = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
-        match lines.get(0){
-            None => {
-                Err("Couldn't parse nothing!".to_string())
-            }
-            Some(str) => {
-                match f32::from_str(str){
-                    Ok(n) => {
-                        if clean_after{
-                            self.clean_topology_inputs_buffer();
-                        }
-                        Ok(n)
+    /*    pub(super) fn request_media_list(&mut self, id:NodeId){
+            match self.parse_first_field_f32(true){
+                Ok(n) => {
+                    match self.simulation_controller_data.request_media_list(id, n as ServerId){
+                        Ok(_) => {},
+                        Err(str) => {error!(target: "main", "{}", str)}
                     }
-                    Err(err) => {
-                        Err(err.to_string())
-                    }
-                }
+                },
+                Err(str) => {error!(target: "main", "{}", str)}
             }
         }
-    }
-*/ /*   fn parse_2input(&mut self, clean_after:bool)->Result<(f32, f32), String>{
-        match self.parse_first_field_f32(false){
-            Ok(n1) => {
-                let lines = self.cache.text_buffer.inputsecond_text_area.clone().into_lines();
-                match lines.get(0){
-                    None => {
-                        Err("Couldn't parse any number".to_string())
+        pub(super) fn request_reg_to_chat(&mut self, id:NodeId){
+            match self.parse_first_field_f32(true){
+                Ok(n) => {
+                    match self.simulation_controller_data.request_registration_to_chat(id, n as ServerId){
+                        Ok(_) => {},
+                        Err(str) => {error!(target: "main", "{}", str)}
                     }
-                    Some(str) => {
-                        match f32::from_str(str){
-                            Ok(n2) => {
-                                if clean_after {
-                                    self.clean_topology_inputs_buffer();
-                                }
-                                Ok((n1, n2))
-                            }
-                            Err(err) => {
-                                Err(err.to_string())
-                            }
-                        }
-                    }
-                }
-            },
-            Err(str) => { Err(str) }
-        }
-*/
-
-/*        let lines_first = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
-        match lines_first.get(0){
-            None => {
-                Err("Simulation Controller - Couldn't parse any number".to_string())
+                },
+                Err(str) => {error!(target: "main", "{}", str)}
             }
-            Some(str) => {
-                match f32::from_str(str){
-                    Ok(n) => {
-                        // we do the same from the second input text area
-                        let lines_second = self
-                            .cache
-                            .text_buffer
-                            .inputsecond_text_area
-                            .clone()
-                            .into_lines();
+        }
+        pub(super) fn request_client_list(&mut self, id:NodeId){
+            match self.parse_first_field_f32(true){
+                Ok(n) => {
+                    match self.simulation_controller_data.request_client_list(id, n as ServerId){
+                        Ok(_) => {},
+                        Err(str) => {error!(target: "main", "{}", str)}
+                    }
+                },
+                Err(str) => {error!(target: "main", "{}", str)}
+            }
+        }
+    */
 
-                        if lines_second.is_empty(){
-                            Err("Simulation Controller - Couldn't parse any text".to_string())
-                        }else{
-                            // join them into a single String separated by '\n'
-                            let second_string = lines_second.join("\n");
-                            // clear the text areas after successful parsing
+    /*    fn parse_first_field_f32(&mut self, clean_after:bool) ->Result<f32, String>{
+            let lines = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
+            match lines.get(0){
+                None => {
+                    Err("Couldn't parse nothing!".to_string())
+                }
+                Some(str) => {
+                    match f32::from_str(str){
+                        Ok(n) => {
                             if clean_after{
                                 self.clean_topology_inputs_buffer();
                             }
-                            Ok((n, second_string))
+                            Ok(n)
                         }
-                    }
-                    Err(err) => {
-                        Err(err.to_string())
+                        Err(err) => {
+                            Err(err.to_string())
+                        }
                     }
                 }
             }
-        }*/
+        }
+    */
+ /*   fn parse_2input(&mut self, clean_after:bool)->Result<(f32, f32), String>{
+         match self.parse_first_field_f32(false){
+             Ok(n1) => {
+                 let lines = self.cache.text_buffer.inputsecond_text_area.clone().into_lines();
+                 match lines.get(0){
+                     None => {
+                         Err("Couldn't parse any number".to_string())
+                     }
+                     Some(str) => {
+                         match f32::from_str(str){
+                             Ok(n2) => {
+                                 if clean_after {
+                                     self.clean_topology_inputs_buffer();
+                                 }
+                                 Ok((n1, n2))
+                             }
+                             Err(err) => {
+                                 Err(err.to_string())
+                             }
+                         }
+                     }
+                 }
+             },
+             Err(str) => { Err(str) }
+         }
+ */
 
-/*    fn parse_3input(&mut self)->Result<(f32, f32, String), String>{
+    /*        let lines_first = self.cache.text_buffer.inputfirst_text_area.clone().into_lines();
+    match lines_first.get(0){
+        None => {
+            Err("Simulation Controller - Couldn't parse any number".to_string())
+        }
+        Some(str) => {
+            match f32::from_str(str){
+                Ok(n) => {
+                    // we do the same from the second input text area
+                    let lines_second = self
+                        .cache
+                        .text_buffer
+                        .inputsecond_text_area
+                        .clone()
+                        .into_lines();
+
+                    if lines_second.is_empty(){
+                        Err("Simulation Controller - Couldn't parse any text".to_string())
+                    }else{
+                        // join them into a single String separated by '\n'
+                        let second_string = lines_second.join("\n");
+                        // clear the text areas after successful parsing
+                        if clean_after{
+                            self.clean_topology_inputs_buffer();
+                        }
+                        Ok((n, second_string))
+                    }
+                }
+                Err(err) => {
+                    Err(err.to_string())
+                }
+            }
+        }
+    }*/
+
+    /*    fn parse_3input(&mut self)->Result<(f32, f32, String), String>{
         match self.parse_2input(false){
             Ok((i1,i2)) => {
                 let lines_third = self

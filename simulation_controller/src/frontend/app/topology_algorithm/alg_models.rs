@@ -1,47 +1,46 @@
-use std::collections::HashMap;
-use wg_2024::network::NodeId;
 use crate::backend::sc_models::NetNode;
 use crate::frontend::app::topology_algorithm::vectors::Vector;
+use std::collections::HashMap;
+use wg_2024::network::NodeId;
 
 #[derive(Hash, Eq, PartialEq, Copy, Clone, Debug)]
-pub enum DisplayedNodeStatus{
+pub enum DisplayedNodeStatus {
     Idle,
     Selected,
-    Inactive
+    Inactive,
 }
 #[derive(Copy, Clone, Debug)]
-pub struct DisplayedNode{
+pub struct DisplayedNode {
     pub node: NetNode,
     pub position: Vector,
     pub selected: DisplayedNodeStatus,
     pub inactive: bool,
 }
-impl DisplayedNode{
+impl DisplayedNode {
     pub fn new(node: NetNode) -> DisplayedNode {
-        DisplayedNode{
+        DisplayedNode {
             node,
-            position: Vector::new(0.0,0.0),
-            selected: DisplayedNodeStatus::Idle, inactive: false
+            position: Vector::new(0.0, 0.0),
+            selected: DisplayedNodeStatus::Idle,
+            inactive: false,
         }
     }
     pub fn new_with_position(node: NetNode, position: Vector) -> DisplayedNode {
         let mut ret = DisplayedNode::new(node);
         ret.position = position;
         ret
-
     }
-    pub fn get_id(&self) -> NodeId{
+    pub fn get_id(&self) -> NodeId {
         self.node.id().clone()
     }
 }
 #[derive(Clone, Debug)]
-pub struct TopologyAlgorithm{
+pub struct TopologyAlgorithm {
     pub status: TopologyStatus,
     // Node and its coordinates on the map
     pub map: HashMap<NodeId, DisplayedNode>,
     // Hashmap of all the links ( from <-> to (links are bidirectional))
-    pub map_links: Vec<(NodeId,NodeId)>,
-
+    pub map_links: Vec<(NodeId, NodeId)>,
 
     // How many Dijkstra steps from NodeID to reach any other node
     pub nodes_dijkstra: Vec<(NodeId, HashMap<NodeId, u8>)>,
@@ -58,13 +57,16 @@ pub struct TopologyAlgorithm{
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub(crate) enum TopologyStatus{
-    Stopped, ToInitialize, Computing, Converged
+pub(crate) enum TopologyStatus {
+    Stopped,
+    ToInitialize,
+    Computing,
+    Converged,
 }
 
-impl TopologyAlgorithm{
-    pub fn default()->Self{
-        Self{
+impl TopologyAlgorithm {
+    pub fn default() -> Self {
+        Self {
             status: TopologyStatus::ToInitialize,
             map: Default::default(),
             map_links: vec![],
@@ -74,8 +76,8 @@ impl TopologyAlgorithm{
             counter_errors: 0,
         }
     }
-    pub fn new(map_links:Vec<(NodeId,NodeId)>) -> Self{
-        Self{
+    pub fn new(map_links: Vec<(NodeId, NodeId)>) -> Self {
+        Self {
             status: TopologyStatus::ToInitialize,
             nodes_dijkstra: vec![],
             nodes_resultant_vec: Default::default(),
@@ -85,17 +87,17 @@ impl TopologyAlgorithm{
             map_links,
         }
     }
-    pub fn initialize(&mut self, links:Vec<(NodeId,NodeId)>){
+    pub fn initialize(&mut self, links: Vec<(NodeId, NodeId)>) {
         *self = Self::new(links);
     }
     /// Function called when finally the algorithms converges, so when the avg positioning score
-    pub fn computed(&mut self){
+    pub fn computed(&mut self) {
         self.status = TopologyStatus::Converged;
 
         self.counter_errors = 0;
         self.nodes_dijkstra = vec![];
     }
-    pub fn increase_counter(&mut self, num:u8){
+    pub fn increase_counter(&mut self, num: u8) {
         self.counter_errors += num;
     }
 
@@ -105,10 +107,13 @@ impl TopologyAlgorithm{
             if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan() {
                 return false;
             }
-            
+
             // Check if node is outside map boundaries (0-100 x 0-80)
-            if data_on_node.position.x < 0.0 || data_on_node.position.x > 100.0 ||
-               data_on_node.position.y < 0.0 || data_on_node.position.y > 80.0 {
+            if data_on_node.position.x < 0.0
+                || data_on_node.position.x > 100.0
+                || data_on_node.position.y < 0.0
+                || data_on_node.position.y > 80.0
+            {
                 return false;
             }
         }
@@ -117,31 +122,32 @@ impl TopologyAlgorithm{
 
     pub fn check_if_nan(&mut self) {
         let mut needs_reinitialization = false;
-        
+
         for (_, data_on_node) in self.map.iter_mut() {
             // Check for NaN values
             if data_on_node.position.x.is_nan() || data_on_node.position.y.is_nan() {
                 needs_reinitialization = true;
                 break;
             }
-            
+
             // Check if node is outside map boundaries (0-100 x 0-80)
-            if data_on_node.position.x < 0.0 || data_on_node.position.x > 100.0 ||
-               data_on_node.position.y < 0.0 || data_on_node.position.y > 80.0 {
+            if data_on_node.position.x < 0.0
+                || data_on_node.position.x > 100.0
+                || data_on_node.position.y < 0.0
+                || data_on_node.position.y > 80.0
+            {
                 needs_reinitialization = true;
                 break;
             }
         }
-        
+
         if needs_reinitialization {
             let current_links = self.map_links.clone();
             self.initialize(current_links);
         }
     }
 
-    pub fn get_all_links(&mut self){
-
-    }
+    pub fn get_all_links(&mut self) {}
     /// General methods for single map nodes
     pub fn check_general_node_topology_status(&mut self) {
         match self.status {
@@ -171,7 +177,10 @@ impl TopologyAlgorithm{
         }
         for node_id in unique_nodes {
             // Use NetNode::Drone as a placeholder; in a real case, node type should be known
-            self.map.insert(node_id, DisplayedNode::new_with_position(NetNode::Drone(node_id), Vector::random(100, 80)));
+            self.map.insert(
+                node_id,
+                DisplayedNode::new_with_position(NetNode::Drone(node_id), Vector::random(100, 80)),
+            );
         }
     }
 
@@ -196,23 +205,22 @@ impl TopologyAlgorithm{
         }
         self.general_compute_and_set_avg_magnitude();
         let len_map = self.map.len();
-        if len_map<3{
-            if self.avg_positioning_score < 7.5{
+        if len_map < 3 {
+            if self.avg_positioning_score < 7.5 {
                 self.status = TopologyStatus::Converged;
                 self.computed();
             }
-        }else if len_map < 5{
+        } else if len_map < 5 {
             if self.avg_positioning_score < 4f32 {
                 self.status = TopologyStatus::Converged;
                 self.computed();
             }
-        }else{
+        } else {
             if self.avg_positioning_score < 2f32 {
                 self.status = TopologyStatus::Converged;
                 self.computed();
             }
         }
-
     }
 
     fn general_generate_all_forces(&self) -> Result<HashMap<NodeId, Vector>, String> {
@@ -253,7 +261,11 @@ impl TopologyAlgorithm{
         };
     }
 
-    fn general_generate_fundamental_force(&self, id: NodeId, vector: Vector) -> Result<Vector, String> {
+    fn general_generate_fundamental_force(
+        &self,
+        id: NodeId,
+        vector: Vector,
+    ) -> Result<Vector, String> {
         // will generate
         // Get Vector Positioning
         let mut forces = vec![];
@@ -280,7 +292,11 @@ impl TopologyAlgorithm{
         // Weak spring pull toward the center (50,40) in 100×80 world
         let center = Vector::new(50.0, 40.0);
         let k_center: f32 = 0.4;
-        Ok(crate::frontend::app::topology_algorithm::vectors::generate_force_vec(&vector, &center, k_center, true))
+        Ok(
+            crate::frontend::app::topology_algorithm::vectors::generate_force_vec(
+                &vector, &center, k_center, true,
+            ),
+        )
     }
 
     fn general_generate_repulsion_force(&self, id: NodeId) -> Result<Vector, String> {
@@ -306,7 +322,7 @@ impl TopologyAlgorithm{
     fn general_generate_spring_force(&self, id: NodeId) -> Result<Vector, String> {
         // Hooke's law spring attraction along edges
         let k_spring = 3.75;
-        
+
         // Find neighbors from map_links
         let mut neighbors = Vec::new();
         for (a, b) in &self.map_links {
@@ -316,13 +332,21 @@ impl TopologyAlgorithm{
                 neighbors.push(*a);
             }
         }
-        
+
         let pos_a = self.map.get(&id).ok_or("Node position not found")?;
         let mut total_force = Vector::new(0.0, 0.0);
         for neighbor_id in neighbors {
-            let pos_b = self.map.get(&neighbor_id).ok_or("Neighbor position not found")?;
+            let pos_b = self
+                .map
+                .get(&neighbor_id)
+                .ok_or("Neighbor position not found")?;
             // generate_force_vec(pos_a, pos_b, k, attract=true)
-            let force = crate::frontend::app::topology_algorithm::vectors::generate_force_vec(&pos_a.position, &pos_b.position, k_spring, true);
+            let force = crate::frontend::app::topology_algorithm::vectors::generate_force_vec(
+                &pos_a.position,
+                &pos_b.position,
+                k_spring,
+                true,
+            );
             total_force = total_force.add(&force);
         }
         Ok(total_force)
@@ -340,14 +364,14 @@ impl TopologyAlgorithm{
         let dy_bottom = map_height - vector.y;
 
         // Exponential repulsion from each border to keep nodes inside the map
-        let k_border: f32 = 400.0;   // overall strength of the border repulsion
-        let r: f32 = 1.5;         // characteristic decay distance
+        let k_border: f32 = 400.0; // overall strength of the border repulsion
+        let r: f32 = 1.5; // characteristic decay distance
 
         // Exponential repulsive forces from borders
-        let force_left = k_border * (-dx_left / r).exp();     // pushes right
-        let force_right = -k_border * (-dx_right / r).exp();  // pushes left
-        let force_top = k_border * (-dy_top / r).exp();       // pushes down
-        let force_bottom = -k_border * (-dy_bottom / r).exp();// pushes up
+        let force_left = k_border * (-dx_left / r).exp(); // pushes right
+        let force_right = -k_border * (-dx_right / r).exp(); // pushes left
+        let force_top = k_border * (-dy_top / r).exp(); // pushes down
+        let force_bottom = -k_border * (-dy_bottom / r).exp(); // pushes up
 
         let fx = force_left + force_right;
         let fy = force_top + force_bottom;
@@ -357,8 +381,8 @@ impl TopologyAlgorithm{
 
     fn general_generate_link_repulsion_force(&self, id: NodeId) -> Result<Vector, String> {
         // Keep nodes off other links by perpendicular repulsion
-        let threshold: f32 = 30.0;     // influence distance from a link
-        let k_link: f32 = 80.0;       // strength at zero distance
+        let threshold: f32 = 30.0; // influence distance from a link
+        let k_link: f32 = 80.0; // strength at zero distance
 
         // Position of this node
         let node = self.map.get(&id).ok_or("Node position not found")?;
@@ -402,7 +426,10 @@ impl TopologyAlgorithm{
     fn general_generate_intersection_force(&self, id: NodeId) -> Result<Vector, String> {
         let intersections = self.general_generate_intersection_forces()?;
         // Return the force for this id or zero if none
-        Ok(intersections.get(&id).cloned().unwrap_or(Vector::new(0.0, 0.0)))
+        Ok(intersections
+            .get(&id)
+            .cloned()
+            .unwrap_or(Vector::new(0.0, 0.0)))
     }
 
     /// Compute repulsion forces for all nodes due to intersecting links.

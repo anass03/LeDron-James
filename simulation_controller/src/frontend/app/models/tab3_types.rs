@@ -4,37 +4,37 @@ pub(crate) struct Tab3 {
     // Menu area cursor and selection (similar to tab1 popup logic)
     pub menu_cursor: usize,
     pub menu_selection: Tab3MenuSelection,
-    
+
     // Current viewing state
     pub viewing: ViewedTab3,
-    
+
     // File exploring state
     pub browsing_for_download_folder: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum Tab3MenuSelection {
-    MenuArea,  // Selecting in the menu area (left side)
-    OptArea,   // Selecting in the options area (right side)
+    MenuArea, // Selecting in the menu area (left side)
+    OptArea,  // Selecting in the options area (right side)
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum ViewedTab3 {
-    Main,  // Main settings page
-    SettingsPage(Tab3SettingsPage),  // Specific settings page
+    Main,                           // Main settings page
+    SettingsPage(Tab3SettingsPage), // Specific settings page
 }
 
 #[derive(Debug, Clone)]
 pub(crate) enum Tab3SettingsPage {
     // Download Settings
     DownloadPage(DownloadSettingsPage),
-    
-    // Logging Settings  
+
+    // Logging Settings
     LoggingPage(LoggingSettingsPage),
-    
+
     // Network Settings
     NetworkPage(NetworkSettingsPage),
-    
+
     // Application Settings
     AppPage(AppSettingsPage),
     About(),
@@ -69,7 +69,7 @@ pub(crate) struct LoggingSettingsPage {
     pub selected_item: LoggingSettingsItems,
     pub scroll_offset: u8,
     pub command_popup: LoggingSettingsCommandsPopup,
-    
+
     // Multi-select target system
     pub selected_targets: Vec<String>,
     pub target_cursor: usize,
@@ -156,8 +156,8 @@ pub enum LogLevel {
 
 #[derive(Debug, Clone)]
 pub enum RefreshTimeLevel {
-    Medium,    // 50ms
-    Fast,      // 40ms
+    Medium,     // 50ms
+    Fast,       // 40ms
     ReallyFast, // 25ms
 }
 
@@ -188,9 +188,9 @@ pub(crate) struct CommandPopup {
 
 #[derive(Clone, Debug)]
 pub(crate) enum SettingsPopupStatus {
-    Idle, 
-    CorrectlySent, 
-    Error(String)
+    Idle,
+    CorrectlySent,
+    Error(String),
 }
 
 impl Default for Tab3 {
@@ -210,13 +210,14 @@ impl Tab3 {
             self.menu_cursor -= 1;
         }
     }
-    
+
     pub fn menu_down(&mut self) {
-        if self.menu_cursor < 3 { // 4 menu items: Download, Logging, Network, App
+        if self.menu_cursor < 3 {
+            // 4 menu items: Download, Logging, Network, App
             self.menu_cursor += 1;
         }
     }
-    
+
     pub fn opt_up(&mut self) {
         if let ViewedTab3::SettingsPage(page) = &mut self.viewing {
             match page {
@@ -244,27 +245,31 @@ impl Tab3 {
             }
         }
     }
-    
+
     pub fn opt_down(&mut self) {
         if let ViewedTab3::SettingsPage(page) = &mut self.viewing {
             match page {
                 Tab3SettingsPage::DownloadPage(p) => {
-                    if p.opt_cursor < 0 { // 1 item
+                    if p.opt_cursor < 0 {
+                        // 1 item
                         p.opt_cursor += 1;
                     }
                 }
                 Tab3SettingsPage::LoggingPage(p) => {
-                    if p.opt_cursor < 3 { // 4 items
+                    if p.opt_cursor < 3 {
+                        // 4 items
                         p.opt_cursor += 1;
                     }
                 }
                 Tab3SettingsPage::NetworkPage(p) => {
-                    if p.opt_cursor < 0 { // 1 item
+                    if p.opt_cursor < 0 {
+                        // 1 item
                         p.opt_cursor += 1;
                     }
                 }
                 Tab3SettingsPage::AppPage(p) => {
-                    if p.opt_cursor < 1 { // 2 items
+                    if p.opt_cursor < 1 {
+                        // 2 items
                         p.opt_cursor += 1;
                     }
                 }

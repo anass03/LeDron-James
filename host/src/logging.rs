@@ -1,16 +1,28 @@
-use log::{debug, error, info, warn};
 use crate::Host;
+use log::{debug, error, info, warn};
 
 /// Log levels corresponding to tracing macros
 #[derive(Debug, Copy, Clone)]
 pub enum LogType {
-    WARN, ERROR, INFO, DEBUG
+    WARN,
+    ERROR,
+    INFO,
+    DEBUG,
 }
 
 /// Application modules
 #[derive(Debug, Copy, Clone)]
 pub enum LogModule {
-    FLOOD, NETWORK, SESSION, PACKET, FRAGMENT, ACK, NACK, CHAT, MEDIA, FILE,
+    FLOOD,
+    NETWORK,
+    SESSION,
+    PACKET,
+    FRAGMENT,
+    ACK,
+    NACK,
+    CHAT,
+    MEDIA,
+    FILE,
 }
 
 impl std::fmt::Display for LogModule {
@@ -36,8 +48,8 @@ impl LogControl for Host {
 
         match level {
             LogType::ERROR => error!(target:format!("{}",target).as_str(),"{}", formatted),
-            LogType::WARN  => warn!(target:format!("{}",target).as_str(),"{}", formatted),
-            LogType::INFO  => info!(target:format!("{}",target).as_str(),"{}", formatted),
+            LogType::WARN => warn!(target:format!("{}",target).as_str(),"{}", formatted),
+            LogType::INFO => info!(target:format!("{}",target).as_str(),"{}", formatted),
             LogType::DEBUG => debug!(target:format!("{}",target).as_str(),"{}", formatted),
         }
     }

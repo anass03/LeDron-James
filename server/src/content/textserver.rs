@@ -1,4 +1,8 @@
-use std::{collections::HashMap, fs, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 /// Error types specific to the `TextServer` operations.
 #[derive(Debug, thiserror::Error)]

@@ -1,9 +1,10 @@
-use host::{ClientId, FileId, MediaId, ServerId};
-use ratatui::layout::Rect;use wg_2024::network::NodeId;
 use crate::frontend::app::models::general_types::{FnList, NetNodeList};
+use host::{ClientId, FileId, MediaId, ServerId};
+use ratatui::layout::Rect;
+use wg_2024::network::NodeId;
 
 /// Tab n.01 data
-pub(in crate::frontend::app) struct Tab1{
+pub(in crate::frontend::app) struct Tab1 {
     pub net_node_list: NetNodeList,
 
     pub media_list_render_utils: MediaListRenderUtils,
@@ -17,7 +18,6 @@ pub(in crate::frontend::app) struct Tab1{
     pub image_rendering_data: RenderingImage,
     pub file_exploring_data: FileExploring,
 
-
     pub viewing: ViewedTab1,
 
     pub selected_fn: FnList, // Deprecated
@@ -26,45 +26,46 @@ pub(in crate::frontend::app) struct Tab1{
 }
 
 #[derive(Clone, Debug, Default)]
-pub(crate) enum RenderingImage{
+pub(crate) enum RenderingImage {
     #[default]
-    False, True((Rect, ClientId, ServerId, MediaId)),
+    False,
+    True((Rect, ClientId, ServerId, MediaId)),
 }
-pub(crate) struct MediaListRenderUtils{
+pub(crate) struct MediaListRenderUtils {
     pub list_len: usize,
     pub selected: u8,
 }
-impl MediaListRenderUtils{
-    fn default()->Self{
-        Self{
+impl MediaListRenderUtils {
+    fn default() -> Self {
+        Self {
             list_len: 0,
             selected: 0,
         }
     }
-    pub(crate) fn increase(&mut self){
+    pub(crate) fn increase(&mut self) {
         self.selected += 1;
     }
-    pub(crate) fn decrease(&mut self){
+    pub(crate) fn decrease(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
         }
     }
 }
-pub(crate) struct FileListRenderUtils{
+pub(crate) struct FileListRenderUtils {
     pub list_len: usize,
     pub selected: u8,
 }
-impl FileListRenderUtils{
-    fn default()->Self{
-        Self{
+impl FileListRenderUtils {
+    fn default() -> Self {
+        Self {
             list_len: 0,
             selected: 0,
         }
     }
-    pub(crate) fn increase(&mut self){
+    pub(crate) fn increase(&mut self) {
         self.selected += 1;
     }
-    pub(crate) fn decrease(&mut self){
+    pub(crate) fn decrease(&mut self) {
         if self.selected > 0 {
             self.selected -= 1;
         }
@@ -79,15 +80,21 @@ pub(crate) struct FileExploring {
     pub last_selected_sr: ServerId,
 }
 impl FileExploring {
-    fn default()->Self{
-        Self{
+    fn default() -> Self {
+        Self {
             file_request_source: 0,
             last_selected_cl_sender: 0,
             last_selected_cl_receiver: 0,
             last_selected_sr: 0,
         }
     }
-    pub(crate) fn set_fields(&mut self, cl_sender:ClientId, cl_receiver:ClientId, server_id:ServerId, req_source: u8) {
+    pub(crate) fn set_fields(
+        &mut self,
+        cl_sender: ClientId,
+        cl_receiver: ClientId,
+        server_id: ServerId,
+        req_source: u8,
+    ) {
         self.last_selected_cl_receiver = cl_receiver;
         self.last_selected_cl_sender = cl_sender;
         self.last_selected_sr = server_id;
@@ -95,75 +102,80 @@ impl FileExploring {
     }
 
     /// ( Client Sender, Client Receiver, Server )
-    pub(crate) fn get_fields(&self)->(ClientId, ClientId, ServerId) {
-        (self.last_selected_cl_sender, self.last_selected_cl_receiver, self.last_selected_sr)
+    pub(crate) fn get_fields(&self) -> (ClientId, ClientId, ServerId) {
+        (
+            self.last_selected_cl_sender,
+            self.last_selected_cl_receiver,
+            self.last_selected_sr,
+        )
     }
 }
 
 #[derive(PartialEq, Eq, Debug)]
-pub(crate) enum PopupSelection{
-    MenuArea, OptArea
+pub(crate) enum PopupSelection {
+    MenuArea,
+    OptArea,
 }
 
 // This section is needed to keep always the current viewed in memory ready for the renderer.
 // Improves design logic, better user-event handling and easier rendering.
 
 #[derive(Debug, Clone)]
-pub(crate) enum ViewedTab1{
-    Main, Popup((NodeId,NodePopup)) // NodeId of the selected item
+pub(crate) enum ViewedTab1 {
+    Main,
+    Popup((NodeId, NodePopup)), // NodeId of the selected item
 }
 #[derive(Debug, Clone)]
-pub(crate) enum NodePopup{
+pub(crate) enum NodePopup {
     Client(ClientPopup),
     Server(ServerPopup),
     Drone(DronePopup),
 }
 #[derive(Debug, Clone)]
 pub(crate) enum ClientPopup {
-    ChatPage(ClientChatPopup), // Choose the server to communicate with
+    ChatPage(ClientChatPopup),    // Choose the server to communicate with
     InternetPage(ClientNetPopup), // Choose the contact you want to chat with
-    DataPage(ClientDataPopup), // Message with the selected contact
-    SettingsPage(ClientSettingsPopup)
+    DataPage(ClientDataPopup),    // Message with the selected contact
+    SettingsPage(ClientSettingsPopup),
 }
 #[derive(Debug, Clone)]
-pub(crate) enum ClientChatPopup{
-    FirstPage(ChFirstPage), // Choose the server to communicate with
+pub(crate) enum ClientChatPopup {
+    FirstPage(ChFirstPage),   // Choose the server to communicate with
     SecondPage(ChSecondPage), // Choose the contact you want to chat with
-    ThirdPage(ChThirdPage) // Message with the selected contact
+    ThirdPage(ChThirdPage),   // Message with the selected contact
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ChFirstPage {
     // Depending on the selected client, we got to view the available servers the client knows.
-    pub scroll_offset:u8
+    pub scroll_offset: u8,
 }
 #[derive(Debug, Clone)]
 pub(crate) struct ChSecondPage {
-    pub selected_server: NodeId
+    pub selected_server: NodeId,
 }
-#[derive(Debug, Clone, PartialEq,Default)]
-pub(crate) enum ChatThirdPageSelection{
+#[derive(Debug, Clone, PartialEq, Default)]
+pub(crate) enum ChatThirdPageSelection {
     #[default]
     BottomTab,
     ScrollingMessages,
 }
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct ChThirdPage {
-    pub scroll_offset:u8,
+    pub scroll_offset: u8,
     pub selected_item: ChatThirdPageSelection,
 
     pub selected_server: NodeId,
     pub selected_contact: NodeId,
-
 }
 #[derive(Debug, Clone)]
-pub(crate) enum ClientNetPopup{
-    FirstPage(NetFirstPage), // Choose the server to communicate with
+pub(crate) enum ClientNetPopup {
+    FirstPage(NetFirstPage),   // Choose the server to communicate with
     SecondPage(NetSecondPage), // Choose the media you want to receive and view it
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetFirstPage {
     // Depending on the selected client, we got to view the available servers the client knows.
-    pub scroll_offset:u8
+    pub scroll_offset: u8,
 }
 #[derive(Debug, Clone, Default)]
 pub(crate) struct NetSecondPage {
@@ -172,38 +184,41 @@ pub(crate) struct NetSecondPage {
     pub image_rendering_data: RenderingImage,
     pub selected_item: NetSecondPageItems,
     // Depending on the selected client, we got to view the available servers the client knows.
-    pub scroll_offset:u8
-
+    pub scroll_offset: u8,
 }
 
 #[derive(Debug, Clone, Default)]
-pub(crate) enum NetSecondPageItems{
+pub(crate) enum NetSecondPageItems {
     #[default]
-    Blocks, FileList, MediaList
+    Blocks,
+    FileList,
+    MediaList,
 }
 #[derive(Debug, Clone, Default, PartialEq)]
-pub(crate) enum SelectedFileMedia{
+pub(crate) enum SelectedFileMedia {
     #[default]
-    None, File(FileId), Media(MediaId)
+    None,
+    File(FileId),
+    Media(MediaId),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ClientDataPopup{
+pub(crate) enum ClientDataPopup {
     FirstPage(), // View some statistics
 }
 #[derive(Debug, Clone)]
-pub(crate) struct ClientSettingsPopup{
-    pub command_offset:u8, // Which command I've selected
+pub(crate) struct ClientSettingsPopup {
+    pub command_offset: u8, // Which command I've selected
 
-    pub command_popup: ClientSettingsCommandsPopup
+    pub command_popup: ClientSettingsCommandsPopup,
 }
-impl ClientSettingsPopup{
-    pub fn command_up(&mut self){
+impl ClientSettingsPopup {
+    pub fn command_up(&mut self) {
         if self.command_offset > 0 {
             self.command_offset -= 1;
         }
     }
-    pub fn command_down(&mut self){
+    pub fn command_down(&mut self) {
         if self.command_offset < 2 {
             self.command_offset += 1;
         }
@@ -211,7 +226,7 @@ impl ClientSettingsPopup{
 }
 
 #[derive(Default, Clone, Debug)]
-pub(crate) enum ClientSettingsCommandsPopup{
+pub(crate) enum ClientSettingsCommandsPopup {
     #[default]
     None,
     AddSender(CommandPopup),
@@ -219,30 +234,30 @@ pub(crate) enum ClientSettingsCommandsPopup{
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ServerPopup{
+pub(crate) enum ServerPopup {
     DataPage(ServerDataPopup),
-    SettingsPage(ServerSettingsPopup)
+    SettingsPage(ServerSettingsPopup),
 }
 #[derive(Clone, Debug)]
-pub(crate) struct ServerSettingsPopup{
-    pub command_offset:u8, // Which command I've selected
+pub(crate) struct ServerSettingsPopup {
+    pub command_offset: u8, // Which command I've selected
 
-    pub command_popup: ServerSettingsCommandsPopup
+    pub command_popup: ServerSettingsCommandsPopup,
 }
-impl ServerSettingsPopup{
-    pub fn command_up(&mut self){
+impl ServerSettingsPopup {
+    pub fn command_up(&mut self) {
         if self.command_offset > 0 {
             self.command_offset -= 1;
         }
     }
-    pub fn command_down(&mut self){
+    pub fn command_down(&mut self) {
         if self.command_offset < 2 {
             self.command_offset += 1;
         }
     }
 }
 #[derive(Default, Clone, Debug)]
-pub(crate) enum ServerSettingsCommandsPopup{
+pub(crate) enum ServerSettingsCommandsPopup {
     #[default]
     None,
     AddSender(CommandPopup),
@@ -250,17 +265,17 @@ pub(crate) enum ServerSettingsCommandsPopup{
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum ServerDataPopup{
+pub(crate) enum ServerDataPopup {
     FirstPage(), // View some statistics
 }
 #[derive(Debug, Clone)]
-pub(crate) enum DronePopup{
+pub(crate) enum DronePopup {
     DataPage(DroneDataPopup),
-    SettingsPage(DroneSettingsPopup)
+    SettingsPage(DroneSettingsPopup),
 }
 
 #[derive(Debug, Clone)]
-pub(crate) enum DroneDataPopup{
+pub(crate) enum DroneDataPopup {
     FirstPage(), // View some statistics
 }
 /*#[derive(Debug, Clone)]
@@ -268,59 +283,57 @@ pub(crate) enum DroneSettingsPopup{
     FirstPage(DroneSettingsFirstPage), // View the drone popup settings
 }*/
 #[derive(Clone, Debug)]
-pub(crate) struct DroneSettingsPopup{
-    pub command_offset:u8, // Which command I've selected
+pub(crate) struct DroneSettingsPopup {
+    pub command_offset: u8, // Which command I've selected
 
     pub drone_pdr: f32,
-    pub command_popup: DroneSettingsCommandsPopup
+    pub command_popup: DroneSettingsCommandsPopup,
 }
 
-impl DroneSettingsPopup{
-    pub fn command_up(&mut self){
+impl DroneSettingsPopup {
+    pub fn command_up(&mut self) {
         if self.command_offset > 0 {
             self.command_offset -= 1;
         }
     }
-    pub fn command_down(&mut self){
+    pub fn command_down(&mut self) {
         if self.command_offset < 4 {
             self.command_offset += 1;
         }
     }
 }
 #[derive(Default, Clone, Debug)]
-pub(crate) enum DroneSettingsCommandsPopup{
+pub(crate) enum DroneSettingsCommandsPopup {
     #[default]
     None,
     SetPDR(CommandPopup),
     AddSender(CommandPopup),
     RemoveSender(CommandPopup),
-    Crash(CommandPopup)
+    Crash(CommandPopup),
 }
 
 // Common between all the nodes
 
 #[derive(Clone, Debug)]
-pub(crate) struct CommandPopup{
+pub(crate) struct CommandPopup {
     pub status: SettingsPopupStatus,
     pub cursor: u8,
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum SettingsPopupStatus{
-    Idle, CorrectlySent, Error(String)
+pub(crate) enum SettingsPopupStatus {
+    Idle,
+    CorrectlySent,
+    Error(String),
 }
-
-
-
 
 // END LOGIC SECTION
 // - - - - - - - - - - - - - - -
 
-
 /// Tab1 Impl fns
-impl Tab1{
-    pub(crate) fn default() ->Self{
-        Self{
+impl Tab1 {
+    pub(crate) fn default() -> Self {
+        Self {
             net_node_list: NetNodeList::default(),
             media_list_render_utils: MediaListRenderUtils::default(),
             file_list_render_utils: FileListRenderUtils::default(),
@@ -334,7 +347,7 @@ impl Tab1{
             navigation_history: Vec::new(), // Track navigation history for backspace
         }
     }
-    pub(crate) fn return_to_main(&mut self){
+    pub(crate) fn return_to_main(&mut self) {
         self.popup_selection = PopupSelection::MenuArea;
         self.popup_cursor = 0;
         self.viewing = ViewedTab1::Main;

@@ -1,9 +1,9 @@
+use crate::logging::{LogControl, LogModule, LogType};
+use ordered_float::OrderedFloat;
 use std::cmp::Reverse;
 use std::collections::{BinaryHeap, HashMap, HashSet};
-use ordered_float::OrderedFloat;
 use wg_2024::network::NodeId;
 use wg_2024::packet::NodeType;
-use crate::logging::{LogControl, LogType, LogModule};
 
 const ALPHA: f64 = 0.01; // smoothing factor for EWMA
 
@@ -92,11 +92,7 @@ impl Network {
     /// # Logging
     /// - INFO when a valid route is found.
     /// - WARN if no route exists.
-    pub fn find_best_route(
-        &self,
-        start: NodeId,
-        destination: NodeId,
-    ) -> Option<Vec<NodeId>> {
+    pub fn find_best_route(&self, start: NodeId, destination: NodeId) -> Option<Vec<NodeId>> {
         let mut dist: HashMap<NodeId, f64> = HashMap::new();
         let mut prev: HashMap<NodeId, NodeId> = HashMap::new();
         let mut pq: BinaryHeap<Reverse<(OrderedFloat<f64>, NodeId)>> = BinaryHeap::new();
@@ -117,14 +113,11 @@ impl Network {
                     // If not start or destination, v must be a drone node
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
-                            Some((NodeType::Drone, _pdr)) => {  }
-                            _ => continue,  // jumps host or other intermediates nodes
+                            Some((NodeType::Drone, _pdr)) => {}
+                            _ => continue, // jumps host or other intermediates nodes
                         }
                     }
-                    let pdr_v = self.drone_pdr
-                        .get(&v)
-                        .copied()
-                        .unwrap_or(0.0);
+                    let pdr_v = self.drone_pdr.get(&v).copied().unwrap_or(0.0);
                     let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
@@ -190,21 +183,18 @@ impl Network {
                     }
                     if v != start && v != destination {
                         match self.nodes.get(&v) {
-                            Some((NodeType::Drone, _pdr)) => {  }
-                            _ => continue,  // jumps host or other intermediates nodes
+                            Some((NodeType::Drone, _pdr)) => {}
+                            _ => continue, // jumps host or other intermediates nodes
                         }
                     }
-                    let pdr_v = self.drone_pdr
-                        .get(&v)
-                        .copied()
-                        .unwrap_or(0.0);
+                    let pdr_v = self.drone_pdr.get(&v).copied().unwrap_or(0.0);
                     let reliability = 1.0 - pdr_v;
                     if reliability <= 0.0 {
                         continue;
                     }
                     let cost = -reliability.ln();
                     let next_cost = cost_u + cost;
-                    if dist.get(&v).map_or(true, |&old| next_cost < old){
+                    if dist.get(&v).map_or(true, |&old| next_cost < old) {
                         dist.insert(v, next_cost);
                         prev.insert(v, u);
                         pq.push(Reverse((OrderedFloat(next_cost), v)));

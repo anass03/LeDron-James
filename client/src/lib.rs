@@ -1,6 +1,6 @@
 mod client;
-mod transfer_tracker;
-mod network_metrics;
 mod compression;
+mod network_metrics;
+mod transfer_tracker;
 
 pub use client::*;

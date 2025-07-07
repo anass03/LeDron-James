@@ -1,27 +1,22 @@
-use wg_2024::network::NodeId;
 use crate::backend::sc_models::NetNode;
-use crate::frontend::app::App;
 use crate::frontend::app::topology_algorithm::vectors::{
-    generate_force_vec,
-    generate_force_exponential_repulsion_vec,
-    Vector,
+    generate_force_exponential_repulsion_vec, generate_force_vec, Vector,
 };
+use crate::frontend::app::App;
+use wg_2024::network::NodeId;
 
-impl App<'_>{
-
-    fn compute_best_positions()->Result<(),String>{
+impl App<'_> {
+    fn compute_best_positions() -> Result<(), String> {
         todo!()
     }
 
-    fn generate_client_force(&self, _id:NodeId)->Result<(),String>{
+    fn generate_client_force(&self, _id: NodeId) -> Result<(), String> {
         todo!()
-
     }
-    fn generate_server_force(&self, _id:NodeId)->Result<(),String>{
+    fn generate_server_force(&self, _id: NodeId) -> Result<(), String> {
         todo!()
-
     }
-    pub fn generate_fundamental_force(&self, id:NodeId, vector: Vector) ->Result<Vector,String>{
+    pub fn generate_fundamental_force(&self, id: NodeId, vector: Vector) -> Result<Vector, String> {
         // will generate
         // Get Vector Positioning
         let mut forces = vec![];
@@ -35,9 +30,9 @@ impl App<'_>{
         // Intersection repulsion per node
         //forces.push(self.generate_intersection_force(id)?);
 
-        let mut resultant = Vector::new(0.0,0.0);
+        let mut resultant = Vector::new(0.0, 0.0);
 
-        for f in  forces {
+        for f in forces {
             resultant = resultant.add(&f);
         }
 
@@ -69,7 +64,12 @@ impl App<'_>{
                 continue;
             }
             // repulse this node away from neighbor
-            let force = generate_force_exponential_repulsion_vec(pos_a.position, pos_b.position, k_repulsion, r);
+            let force = generate_force_exponential_repulsion_vec(
+                pos_a.position,
+                pos_b.position,
+                k_repulsion,
+                r,
+            );
             total_force = total_force.add(&force);
         }
 
@@ -81,9 +81,17 @@ impl App<'_>{
         let k_spring = 3.75;
         // Determine this node as a NetNode variant
 
-        let net_node = if self.simulation_controller_data.running_network.contains_key(&NetNode::Drone(id)) {
+        let net_node = if self
+            .simulation_controller_data
+            .running_network
+            .contains_key(&NetNode::Drone(id))
+        {
             NetNode::Drone(id)
-        } else if self.simulation_controller_data.running_network.contains_key(&NetNode::Client(id)) {
+        } else if self
+            .simulation_controller_data
+            .running_network
+            .contains_key(&NetNode::Client(id))
+        {
             NetNode::Client(id)
         } else {
             NetNode::Server(id)
@@ -126,14 +134,14 @@ impl App<'_>{
         let dy_bottom = map_height - vector.y;
 
         // Exponential repulsion from each border to keep nodes inside the map
-        let k_border: f32 = 240.0;   // overall strength of the border repulsion
-        let r: f32 = 2.5;         // characteristic decay distance
+        let k_border: f32 = 240.0; // overall strength of the border repulsion
+        let r: f32 = 2.5; // characteristic decay distance
 
         // Exponential repulsive forces from borders
-        let force_left = k_border * (-dx_left / r).exp();     // pushes right
-        let force_right = -k_border * (-dx_right / r).exp();  // pushes left
-        let force_top = k_border * (-dy_top / r).exp();       // pushes down
-        let force_bottom = -k_border * (-dy_bottom / r).exp();// pushes up
+        let force_left = k_border * (-dx_left / r).exp(); // pushes right
+        let force_right = -k_border * (-dx_right / r).exp(); // pushes left
+        let force_top = k_border * (-dy_top / r).exp(); // pushes down
+        let force_bottom = -k_border * (-dy_bottom / r).exp(); // pushes up
 
         let fx = force_left + force_right;
         let fy = force_top + force_bottom;
@@ -143,8 +151,8 @@ impl App<'_>{
 
     fn generate_link_repulsion_force(&self, id: NodeId) -> Result<Vector, String> {
         // Keep nodes off other links by perpendicular repulsion
-        let threshold: f32 = 30.0;     // influence distance from a link
-        let k_link: f32 = 80.0;       // strength at zero distance
+        let threshold: f32 = 30.0; // influence distance from a link
+        let k_link: f32 = 80.0; // strength at zero distance
 
         // Position of this node
         let node = self
@@ -157,7 +165,11 @@ impl App<'_>{
         let mut total_force = Vector::new(0.0, 0.0);
 
         // Iterate all links
-        for &(a, b) in &self.simulation_controller_data.topology_algorithm_data.map_links {
+        for &(a, b) in &self
+            .simulation_controller_data
+            .topology_algorithm_data
+            .map_links
+        {
             // Skip links incident to this node
             if a == id || b == id {
                 continue;
@@ -203,13 +215,21 @@ impl App<'_>{
     fn generate_intersection_force(&self, id: NodeId) -> Result<Vector, String> {
         let intersections = self.generate_intersection_forces()?;
         // Return the force for this id or zero if none
-        Ok(intersections.get(&id).cloned().unwrap_or(Vector::new(0.0, 0.0)))
+        Ok(intersections
+            .get(&id)
+            .cloned()
+            .unwrap_or(Vector::new(0.0, 0.0)))
     }
 
     /// Compute repulsion forces for all nodes due to intersecting links.
-    fn generate_intersection_forces(&self) -> Result<std::collections::HashMap<NodeId, Vector>, String> {
+    fn generate_intersection_forces(
+        &self,
+    ) -> Result<std::collections::HashMap<NodeId, Vector>, String> {
         let mut result = std::collections::HashMap::new();
-        let links = &self.simulation_controller_data.topology_algorithm_data.map_links;
+        let links = &self
+            .simulation_controller_data
+            .topology_algorithm_data
+            .map_links;
         let map = &self.simulation_controller_data.topology_algorithm_data.map;
 
         // Examine each unique pair of links

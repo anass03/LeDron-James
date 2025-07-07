@@ -1,12 +1,12 @@
+use crate::functionality::Functionality;
+use crate::logging::{LogControl, LogModule, LogType};
+use crate::network::Edge;
+use crate::session::generate_unique_session_id;
+use crate::Host;
 use rand::prelude::ThreadRng;
 use rand::Rng;
 use wg_2024::network::SourceRoutingHeader;
 use wg_2024::packet::{FloodRequest, NodeType, Packet, PacketType};
-use crate::functionality::{Functionality};
-use crate::Host;
-use crate::network::Edge;
-use crate::session::generate_unique_session_id;
-use crate::logging::{LogControl, LogType, LogModule};
 
 /// Flood control operations for topology discovery.
 pub trait FloodControl {
@@ -134,7 +134,7 @@ impl FloodControl for Host {
                 format!("Responding to duplicate: next_hop={}", next),
             );
             let _ = self.send_packet(resp, None);
-            return
+            return;
         }
 
         // first time seeing this flood
@@ -145,7 +145,8 @@ impl FloodControl for Host {
             nid
         } else {
             self.send_logging(
-                LogType::ERROR, LogModule::FLOOD,
+                LogType::ERROR,
+                LogModule::FLOOD,
                 "Empty path_trace in FloodRequest, dropping".into(),
             );
             return;
@@ -197,11 +198,8 @@ impl FloodControl for Host {
                     LogModule::FLOOD,
                     format!("Forwarding to neighbor {}", nbr),
                 );
-                let fwd = Packet::new_flood_request(
-                    pkt.routing_header.clone(),
-                    session,
-                    fr.clone(),
-                );
+                let fwd =
+                    Packet::new_flood_request(pkt.routing_header.clone(), session, fr.clone());
                 let _ = self.send_packet(fwd, self.packet_send.get(&nbr));
             }
         }
@@ -265,7 +263,11 @@ impl FloodControl for Host {
 
         // register nodes and PDR entries
         for &(node_id, node_type) in &resp.path_trace {
-            let entry = self.network.nodes.entry(node_id).or_insert_with(|| (node_type, Vec::new()));
+            let entry = self
+                .network
+                .nodes
+                .entry(node_id)
+                .or_insert_with(|| (node_type, Vec::new()));
             if entry.0 == NodeType::Drone {
                 self.network.drone_pdr.entry(node_id).or_insert(0.0);
             }
@@ -280,7 +282,10 @@ impl FloodControl for Host {
             let (next_id, _) = window[1];
             if let Some((_, edges)) = self.network.nodes.get_mut(&curr_id) {
                 if !edges.iter().any(|e| e.to == next_id) {
-                    edges.push(Edge { to: next_id, weight: 0.0 });
+                    edges.push(Edge {
+                        to: next_id,
+                        weight: 0.0,
+                    });
                     self.send_logging(
                         LogType::DEBUG,
                         LogModule::FLOOD,
@@ -290,7 +295,10 @@ impl FloodControl for Host {
             }
             if let Some((_, edges)) = self.network.nodes.get_mut(&next_id) {
                 if !edges.iter().any(|e| e.to == curr_id) {
-                    edges.push(Edge { to: curr_id, weight: 0.0 });
+                    edges.push(Edge {
+                        to: curr_id,
+                        weight: 0.0,
+                    });
                     self.send_logging(
                         LogType::DEBUG,
                         LogModule::FLOOD,

@@ -1,13 +1,13 @@
+use crate::network::Network;
+use crate::session::{RecSessionData, SentSessionData};
 use crossbeam_channel::{Receiver, Sender};
-use wg_2024::network::{NodeId};
-use wg_2024::packet::{Packet,NodeType};
-use std::collections::{HashMap};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::{Debug, Display, Formatter};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use serde::{Deserialize, Serialize};
-use crate::network::{Network};
-use crate::session::{RecSessionData, SentSessionData};
+use wg_2024::network::NodeId;
+use wg_2024::packet::{NodeType, Packet};
 
 pub type FileId = String;
 pub type MediaId = String;
@@ -18,13 +18,13 @@ pub type Download = f32;
 pub type Usage = f32;
 
 #[derive(Clone)]
-pub struct Host{
-    pub id:NodeId,
-    pub type_host:NodeType,
-    pub controller_send:Sender<HostEvent>,
-    pub packet_recv:Receiver<Packet>,
+pub struct Host {
+    pub id: NodeId,
+    pub type_host: NodeType,
+    pub controller_send: Sender<HostEvent>,
+    pub packet_recv: Receiver<Packet>,
     pub packet_send: HashMap<NodeId, Sender<Packet>>,
-    pub flood_cache:HashMap<NodeId, Vec<u64>>,
+    pub flood_cache: HashMap<NodeId, Vec<u64>>,
     pub network: Network,
     pub received_fragments: Arc<Mutex<HashMap<u64, RecSessionData>>>,
     pub sent_fragments: Arc<Mutex<HashMap<u64, SentSessionData>>>,
@@ -32,14 +32,15 @@ pub struct Host{
     pub(crate) nack_flood_backoff: Duration,
     /// timestamp dell’ultimo flood scatenato da un NACK
     pub(crate) last_nack_flood: Instant,
-
 }
-impl Host{
-    pub fn new(id:NodeId,
-               type_host:NodeType,
-               controller_send:Sender<HostEvent>,
-               packet_recv:Receiver<Packet>,
-               packet_send:HashMap<NodeId, Sender<Packet>>) -> Host {
+impl Host {
+    pub fn new(
+        id: NodeId,
+        type_host: NodeType,
+        controller_send: Sender<HostEvent>,
+        packet_recv: Receiver<Packet>,
+        packet_send: HashMap<NodeId, Sender<Packet>>,
+    ) -> Host {
         let host = Self {
             id,
             type_host,
@@ -66,22 +67,22 @@ pub enum ClientNetCommand {
     NewFile(ServerId, FileId, Vec<u8>),
 
     MediaList(ServerId),
-    Media(ServerId,MediaId),
+    Media(ServerId, MediaId),
     NewMedia(ServerId, MediaId, Image),
 
     //chat-server
     RegistrationToChat(ServerId),
     ClientList(ServerId),
-    MessageFor(ClientId,ServerId, String),
-    FileFor(ClientId,ServerId, FileId, Vec<u8>),
-    MediaFor(ClientId,ServerId, MediaId, Image),
+    MessageFor(ClientId, ServerId, String),
+    FileFor(ClientId, ServerId, FileId, Vec<u8>),
+    MediaFor(ClientId, ServerId, MediaId, Image),
 }
 pub enum HostCommand {
     AddSender(NodeId, Sender<Packet>),
     RemoveSender(NodeId),
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum ServerToClient{
+pub enum ServerToClient {
     ServerType(ServerTypes),
     Sending(ContentID, usize),
 
@@ -95,12 +96,24 @@ pub enum ServerToClient{
     //chat server
     ClientList(ClientId, ServerId, Vec<ClientId>),
     MessageFrom(ServerId, ClientId, String),
-    FileFrom(ServerId, ClientId /*from*/,ClientId /*to*/, FileId, Vec<u8>),
-    MediaFrom(ServerId, ClientId /*from*/,ClientId /*to*/, MediaId, Image),
+    FileFrom(
+        ServerId,
+        ClientId, /*from*/
+        ClientId, /*to*/
+        FileId,
+        Vec<u8>,
+    ),
+    MediaFrom(
+        ServerId,
+        ClientId, /*from*/
+        ClientId, /*to*/
+        MediaId,
+        Image,
+    ),
 
     ErrNotFound(ServerId),
     ErrClientId(ServerId),
-    WrongServer(ServerId)
+    WrongServer(ServerId),
 }
 /// Application events that comes to the SimulationController
 pub enum HostEvent {
@@ -114,7 +127,7 @@ pub enum HostEvent {
     /// Rebuilt entire high level message(es. from server to client)
     PacketReconstructed(ServerToClient),
     ///Servers discovered, response at ServerType
-    ServersDiscovered(ClientId, HashMap<ServerTypes,Vec<ServerId>>),
+    ServersDiscovered(ClientId, HashMap<ServerTypes, Vec<ServerId>>),
     ///Expected pdr from client
     ExpectedPDR(ClientId, HashMap<NodeId, f64>),
     ///Network speed
@@ -124,17 +137,17 @@ pub enum HostEvent {
     UploadingInfo(ServerId, ContentID, f32),
     //server
     ///for real time chat
-    ChatUpdate(ServerId, String)
+    ChatUpdate(ServerId, String),
 }
 #[derive(Clone, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
-pub enum ContentID{
+pub enum ContentID {
     Media(MediaId),
     File(FileId),
 }
-#[derive(Hash, Eq,Clone, PartialEq, Debug,Deserialize, Serialize)]
-pub enum ServerTypes{
+#[derive(Hash, Eq, Clone, PartialEq, Debug, Deserialize, Serialize)]
+pub enum ServerTypes {
     Chat,
-    Content
+    Content,
 }
 ///MESSAGES WG_2024
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -143,23 +156,24 @@ pub struct Message {
     pub content: Vec<u8>,
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Image{
+pub struct Image {
     pub width: u32,
     pub height: u32,
     pub data: Vec<u8>,
 }
 
-pub enum SendingCodes { // For performance and logic enhancements
+pub enum SendingCodes {
+    // For performance and logic enhancements
     SuccessfullySent(u64),
     ErrorSending(String),
-    NoNextHop(String)
+    NoNextHop(String),
 }
 impl Debug for SendingCodes {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
             SendingCodes::SuccessfullySent(n) => write!(f, "Successfully sent [Packet {}]", n),
             SendingCodes::ErrorSending(s) => write!(f, "Error sending the packet [{}]", s),
-            SendingCodes::NoNextHop(s) => write!(f, "No next hop available [{}]", s)
+            SendingCodes::NoNextHop(s) => write!(f, "No next hop available [{}]", s),
         }
     }
 }

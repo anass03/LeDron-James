@@ -1,12 +1,14 @@
+use crate::flood::FloodControl;
+use crate::logging::{LogControl, LogModule, LogType};
+use crate::session::SentSessionData;
+use crate::{Host, HostEvent, Message, SendingCodes};
+use crossbeam_channel::{after, select, Sender};
 use std::collections::HashSet;
 use std::time::{Duration, Instant};
-use crossbeam_channel::{after, select, Sender};
 use wg_2024::network::{NodeId, SourceRoutingHeader};
-use wg_2024::packet::{Ack, Fragment, Nack, NackType, NodeType, Packet, PacketType, FRAGMENT_DSIZE};
-use crate::{Host, HostEvent, Message, SendingCodes};
-use crate::flood::FloodControl;
-use crate::logging::{LogControl, LogType, LogModule};
-use crate::session::SentSessionData;
+use wg_2024::packet::{
+    Ack, Fragment, Nack, NackType, NodeType, Packet, PacketType, FRAGMENT_DSIZE,
+};
 
 /// Core functionality for sending, fragmenting, and retransmitting packets.
 pub trait Functionality {
@@ -92,7 +94,10 @@ impl Functionality for Host {
         self.send_logging(
             LogType::DEBUG,
             LogModule::PACKET,
-            format!("Notifying controller of packet session={}", packet.session_id),
+            format!(
+                "Notifying controller of packet session={}",
+                packet.session_id
+            ),
         );
         match self.controller_send.send(HostEvent::PacketSent(packet)) {
             Ok(_) => {
@@ -272,20 +277,26 @@ impl Functionality for Host {
                 banned_nodes.insert(bad);
 
                 if let Some(new_route) =
-                    self.network.find_best_route_excluding(host, destination, &banned_nodes)
+                    self.network
+                        .find_best_route_excluding(host, destination, &banned_nodes)
                 {
                     self.send_logging(
                         LogType::INFO,
                         LogModule::NACK,
                         format!("Alternative route found: {:?}", new_route),
                     );
-                    match self.controller_send.send(HostEvent::Route(self.id, new_route.clone())){
-                        Ok(_) => {},
-                        Err(err) => { self.send_logging(
-                            LogType::WARN,
-                            LogModule::SESSION,
-                            format!("error sending route to controller {}", err),
-                        );}
+                    match self
+                        .controller_send
+                        .send(HostEvent::Route(self.id, new_route.clone()))
+                    {
+                        Ok(_) => {}
+                        Err(err) => {
+                            self.send_logging(
+                                LogType::WARN,
+                                LogModule::SESSION,
+                                format!("error sending route to controller {}", err),
+                            );
+                        }
                     }
                     {
                         let mut sent = self.sent_fragments.lock().unwrap();
@@ -350,13 +361,18 @@ impl Functionality for Host {
                                 LogModule::NACK,
                                 format!("Route found after flood: {:?}", new_route_after_flood),
                             );
-                            match self.controller_send.send(HostEvent::Route(self.id, new_route_after_flood.clone())){
-                                Ok(_) => {},
-                                Err(err) => { self.send_logging(
-                                    LogType::WARN,
-                                    LogModule::SESSION,
-                                    format!("error sending route to controller {}", err),
-                                );}
+                            match self
+                                .controller_send
+                                .send(HostEvent::Route(self.id, new_route_after_flood.clone()))
+                            {
+                                Ok(_) => {}
+                                Err(err) => {
+                                    self.send_logging(
+                                        LogType::WARN,
+                                        LogModule::SESSION,
+                                        format!("error sending route to controller {}", err),
+                                    );
+                                }
                             }
                             {
                                 let mut sent = self.sent_fragments.lock().unwrap();
@@ -367,8 +383,10 @@ impl Functionality for Host {
 
                                     for (idx, opt_frag) in session.buffer.iter().enumerate() {
                                         if let Some(frag) = opt_frag {
-                                            let header =
-                                                SourceRoutingHeader::new(new_route_after_flood.clone(), 1);
+                                            let header = SourceRoutingHeader::new(
+                                                new_route_after_flood.clone(),
+                                                1,
+                                            );
                                             let pkt = Packet::new_fragment(
                                                 header,
                                                 session_id,

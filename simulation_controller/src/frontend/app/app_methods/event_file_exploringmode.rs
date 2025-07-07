@@ -1,12 +1,12 @@
+use crate::backend::sc_models::LogType;
+use crate::frontend::app::models::main_types::AppMode;
+use crate::frontend::app::App;
+use log::{error, info};
+use ratatui::crossterm::event::{Event, KeyCode, KeyEventKind};
+use ratatui_explorer::{File, Input};
 use std::fmt::Pointer;
 use std::fs::FileType;
 use std::path::PathBuf;
-use log::{error, info};
-use ratatui::crossterm::event::{Event, KeyEventKind, KeyCode};
-use ratatui_explorer::{File, Input};
-use crate::backend::sc_models::LogType;
-use crate::frontend::app::App;
-use crate::frontend::app::models::main_types::AppMode;
 
 impl App<'_> {
     pub(crate) fn handle_event_file_exploringmode(&mut self, event: Event) {
@@ -21,7 +21,7 @@ impl App<'_> {
                             self.cache.tab1_data.file_exploring_data.file_request_source = 0;
                             // Reset tab3 browsing flag
                             self.cache.tab3_data.browsing_for_download_folder = false;
-                        },
+                        }
                         KeyCode::Enter => {
                             // Check if we're browsing for tab3 download folder
                             if self.cache.tab3_data.browsing_for_download_folder {
@@ -40,20 +40,22 @@ impl App<'_> {
                                 let selected_file = self.cache.file_explorer.current();
                                 if selected_file.is_file() {
                                     // Handle file selection for tab1
-                                    self.handle_file_selection_for_tab1(selected_file.path().to_path_buf());
+                                    self.handle_file_selection_for_tab1(
+                                        selected_file.path().to_path_buf(),
+                                    );
                                 } else if selected_file.is_dir() {
                                     // Navigate into directory
                                     _ = self.cache.file_explorer.handle(input);
                                 }
                             }
-                        },
+                        }
                         _ => {
                             // Handle other navigation keys
                             _ = self.cache.file_explorer.handle(input);
                         }
                     }
                 }
-            },
+            }
             _ => {
                 // Handle other events (mouse, etc.)
                 _ = self.cache.file_explorer.handle(input);
@@ -67,14 +69,17 @@ impl App<'_> {
         match self.cache.tab1_data.file_exploring_data.file_request_source {
             0 => {
                 // No specific source, just navigate
-                _ = self.cache.file_explorer.handle(Input::from(&Event::Key(ratatui::crossterm::event::KeyEvent::new(
-                    KeyCode::Enter,
-                    ratatui::crossterm::event::KeyModifiers::empty(),
-                ))));
+                _ = self.cache.file_explorer.handle(Input::from(&Event::Key(
+                    ratatui::crossterm::event::KeyEvent::new(
+                        KeyCode::Enter,
+                        ratatui::crossterm::event::KeyModifiers::empty(),
+                    ),
+                )));
             }
             1 => {
                 // File attachment for chat
-                let file_name = path.file_name()
+                let file_name = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown_file")
                     .to_string();
@@ -92,8 +97,8 @@ impl App<'_> {
                                 sending_data.last_selected_cl_sender,
                                 sending_data.last_selected_cl_receiver,
                                 sending_data.last_selected_sr,
-                                path)
-                            {
+                                path,
+                            ) {
                                 Ok(_) => {
                                     info!(target:"main", "[LEDRON-CLI] Sent media-for request")
                                 }
@@ -110,8 +115,8 @@ impl App<'_> {
                                 sending_data.last_selected_cl_sender,
                                 sending_data.last_selected_cl_receiver,
                                 sending_data.last_selected_sr,
-                                path)
-                            {
+                                path,
+                            ) {
                                 Ok(_) => {
                                     info!(target:"main", "[LEDRON-CLI] Sent file-for request")
                                 }
@@ -125,16 +130,14 @@ impl App<'_> {
                     }
                 }
 
-
-
-                
                 // TODO: Implement file attachment logic for chat
                 self.app_mode = AppMode::Normal;
                 self.cache.tab1_data.file_exploring_data.file_request_source = 0;
             }
             2 => {
                 // NetPage Media upload
-                let selected_file = path.file_name()
+                let selected_file = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown_file")
                     .to_string();
@@ -152,12 +155,15 @@ impl App<'_> {
                                 sending_data.last_selected_sr,
                                 path,
                             ) {
-                                Ok(_) => info!(target:"main", "[LEDRON-CLI] Sent new-media request"),
-                                Err(str) => error!(target: "main", "{}", str)
+                                Ok(_) => {
+                                    info!(target:"main", "[LEDRON-CLI] Sent new-media request")
+                                }
+                                Err(str) => error!(target: "main", "{}", str),
                             }
                             self.cache.tab1_data.file_exploring_data.file_request_source = 0;
                             self.app_mode = AppMode::Normal;
-                        } else {}
+                        } else {
+                        }
                     }
                 }
 
@@ -166,7 +172,8 @@ impl App<'_> {
             }
             3 => {
                 // NetPage Media upload
-                let selected_file = path.file_name()
+                let selected_file = path
+                    .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or("unknown_file")
                     .to_string();
@@ -185,20 +192,23 @@ impl App<'_> {
                                 path,
                             ) {
                                 Ok(_) => info!(target:"main", "[LEDRON-CLI] Sent new-file request"),
-                                Err(str) => error!(target: "main", "{}", str)
+                                Err(str) => error!(target: "main", "{}", str),
                             }
                             self.cache.tab1_data.file_exploring_data.file_request_source = 0;
                             self.app_mode = AppMode::Normal;
-                        } else {}
+                        } else {
+                        }
                     }
                 }
             }
             _ => {
                 // Unknown source, just navigate
-                _ = self.cache.file_explorer.handle(Input::from(&Event::Key(ratatui::crossterm::event::KeyEvent::new(
-                    KeyCode::Enter,
-                    ratatui::crossterm::event::KeyModifiers::empty(),
-                ))));
+                _ = self.cache.file_explorer.handle(Input::from(&Event::Key(
+                    ratatui::crossterm::event::KeyEvent::new(
+                        KeyCode::Enter,
+                        ratatui::crossterm::event::KeyModifiers::empty(),
+                    ),
+                )));
             }
         }
     }
