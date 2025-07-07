@@ -12,9 +12,9 @@ use ratatui::{buffer::Buffer, layout::{
 
 use std::{fs, io, io::Write, thread, time};
 use std::cmp::PartialEq;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::mpsc;
+use std::sync::{mpsc, LockResult};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
@@ -33,6 +33,7 @@ use wg_2024::network::NodeId;
 use initializer_utils::utils::parse_and_check_config;
 use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLMessages;
+use server::{MediaSC, MessageMetaData, MessageSC};
 use crate::backend::sc_models::{FileRendererUpdate, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
 use crate::backend::sc_models::RendererCommand::ComputeSetOfTopologies;
 use crate::backend::sc_models::RendererResponse::Computed;
@@ -282,6 +283,8 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
         let mut picker = Picker::from_query_stdio();
         let mut total_requested_picker = 0;
 
+        let mut already_downloaded_files:HashSet<MediaId> = HashSet::new();
+
         loop {
             // Ascolto il canale main
             if let Ok(request) = rx_cmd.try_recv() {
@@ -452,7 +455,7 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                         }
                         match fs::write(&path, &file_buf) {
                             Ok(_) => info!(target: "main", "[LEDRON-CLI] File {file_id} downloaded in : {path:?}"),
-                            Err(e) => error!(target: "main", "[RENDERER] Couldn't download {file_id} in {path:?}"),
+                            Err(_) => error!(target: "main", "[RENDERER] Couldn't download {file_id} in {path:?}"),
                         }
                         match tx_rsp.send(RendererResponse::EncodedFile((file_id.clone(), NetCacheFile::Downloaded(path.clone())))){
                             Ok(_) => (),
@@ -470,7 +473,7 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                                     Err(_) => {}
                                 }
                             }
-                            Err(err) => {
+                            Err(_) => {
                                 warn!(target: "main", "[RENDERER] File is not formatted as UTF-8, use an external renderer");
                                 match tx_rsp.send(RendererResponse::EncodedFile((file_id, NetCacheFile::Rendered(FileType::Other(path))))){
                                     Ok(_) => (),
@@ -484,7 +487,94 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                     RendererCommand::ChangeDownloadFolder(path) => {
                         download_folder = path;
                     },
-                    RendererCommand::SaveMediaFromChatList(_) => (),
+                    RendererCommand::SaveMediaFromChatList(ch_ptr) => {
+                        let mut retvec:Vec<(MediaId,PathBuf)> = Vec::new();
+                        match ch_ptr.read(){
+                            Ok(ch) => {
+                                for (msg,_) in &ch.chat{
+                                    match msg{
+                                        MessageSC::Media(media) => {
+                                            match media{
+                                                MediaSC::Image(media_id, image) => {
+                                                    if !already_downloaded_files.contains(media_id.as_str()) {
+                                                    let extension = media_id.rsplitn(2, '.').next().filter(|&ext| ext != media_id);
+                                                    // Construct path safely
+                                                    let path = download_folder.join(media_id.clone());
+                                                    // Ensure download directory exists
+                                                    if let Some(parent) = path.parent() {
+                                                        _ = fs::create_dir_all(parent);
+                                                    }
+                                                    // Create image buffer without cloning if possible
+                                                    let opt_rgba_buffer = ImageBuffer::<Rgba<u8>, _>::from_raw(image.width, image.height, image.data.clone());
+                                                    match extension {
+                                                        None => {}
+                                                        Some(ext) => {
+                                                            match opt_rgba_buffer {
+                                                                None => {}
+                                                                Some(rgba_buffer) => {
+                                                                    let dynamic_image = DynamicImage::ImageRgba8(rgba_buffer);
+                                                                    // Save based on extension
+                                                                    match ext.to_lowercase().as_str() {
+                                                                        "jpg" | "jpeg" => {
+                                                                            // Convert to RGB to drop alpha channel for JPEG
+                                                                            let rgb_image: RgbImage = dynamic_image.to_rgb8();
+                                                                            match rgb_image.save(&path) {
+                                                                                Ok(_) => {
+                                                                                    retvec.push((media_id.clone(), path));
+                                                                                }
+                                                                                _ => (),
+                                                                            }
+                                                                        },
+                                                                        _ => {
+                                                                            // For PNG and other formats that support alpha
+                                                                            match dynamic_image.save(&path) {
+                                                                                Ok(_) => {
+                                                                                    retvec.push((media_id.clone(), path));
+                                                                                }
+                                                                                _ => (),
+                                                                            }
+                                                                        }
+                                                                    };
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            MediaSC::File(file_id, file_buf) => {
+                                                if !already_downloaded_files.contains(file_id.as_str()) {
+                                                let path = download_folder.join(file_id.clone());
+                                                // Ensure download directory exists
+                                                if let Some(parent) = path.parent() {
+                                                    _ = fs::create_dir_all(parent);
+                                                }
+                                                match fs::write(&path, &file_buf) {
+                                                    Ok(_) => {
+                                                        info!(target: "main", "[RENDERER] File {file_id} downloaded in : {path:?}");
+                                                        retvec.push((file_id.clone(), path));
+                                                    },
+                                                    Err(_) => error!(target: "main", "[RENDERER] Couldn't download {file_id} in {path:?}"),
+                                                }
+                                            }
+                                            }
+                                        }
+                                        }
+                                        _ => (),
+                                    }
+                                }
+                            }
+                            Err(_) => (),
+                        }
+                        let is_or_no = retvec.is_empty();
+                        if !retvec.is_empty(){
+                            match tx_rsp.send(RendererResponse::EncodedMediaChats(retvec)){
+                                Ok(_) => (),
+                                Err(str) => {
+                                    error!(target: "main", "[RENDERER] - Error sending encoded media chats:\n{:?}", str);
+                                }
+                            }
+                        }
+                    }
                 }
             }
             // Time to check for redraw-requests

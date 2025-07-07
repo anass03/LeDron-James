@@ -6,7 +6,7 @@ use std::{io, vec};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::Path;
-use std::process::id;
+use std::process::{id, Command};
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use dashmap::mapref::one::Ref;
@@ -86,7 +86,11 @@ impl App<'_> {
                                 }
                             }
                         },
-                        RendererResponse::EncodedMediaChats(_) => (),
+                        RendererResponse::EncodedMediaChats(retvec) => {
+                            for (id,top) in retvec{
+                                self.simulation_controller_data.downloaded_chat_files.insert(id, top);
+                            }
+                        },
                     }
                 }
             }
@@ -221,4 +225,32 @@ impl App<'_> {
         self.selected_tab = self.selected_tab.prev()
     }
 
+}
+pub(crate) fn open_file(path: &str) {
+    // Open with system default application
+    #[cfg(target_os = "windows")]
+    {
+        let path_str = path.to_string();
+        //let quoted_path = format!("\"{}\"", path_str);
+        Command::new("cmd")
+            .args(&["/C", "start", "", &path_str])
+            .spawn()
+            .expect("Unable to open file on Windows");
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+            .expect("Unable to open file on macOS");
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+            .expect("Unable to open file on Linux");
+    }
 }

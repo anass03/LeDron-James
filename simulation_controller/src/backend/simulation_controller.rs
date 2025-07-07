@@ -11,7 +11,7 @@ use wg_2024::config::Server as ServerConfig;
 use wg_2024::controller::*;
 use wg_2024::network::NodeId;
 use wg_2024::packet::Packet;
-use host::{HostCommand, HostEvent};
+use host::{FileId, HostCommand, HostEvent, MediaId};
 use log::LevelFilter;
 use tui_logger::TuiWidgetState;
 use crate::backend::sc_models::{ChatCache, DroneType, NetCache, NetNode, RendererCommand, RendererResponse, Statistics};
@@ -46,6 +46,7 @@ pub struct SimulationControllerData {
     pub host_log_state: HashMap<NodeId, (String, TuiWidgetState)>,
 
     pub chat_cache: ChatCache,
+    pub downloaded_chat_files: HashMap<FileId, PathBuf>,
     pub net_cache: NetCache,
 
     pub tx_to_renderer: Option<std::sync::mpsc::Sender<RendererCommand>>,
@@ -110,6 +111,7 @@ impl SimulationControllerData {
         }
         let mut stats = Statistics::default();
         stats.total_active_connections = total_active_connections;
+        
         Self {
             drones,
             clients,
@@ -129,6 +131,7 @@ impl SimulationControllerData {
             host_log_state,
 
             chat_cache: ChatCache::default(),
+            downloaded_chat_files: Default::default(),
             net_cache: NetCache::default(),
 
             tx_to_renderer: None,
@@ -156,6 +159,7 @@ impl Default for SimulationControllerData {
             stats: Statistics::default(),
             topology_algorithm_data: TopologyAlgorithm::default(),
             chat_cache: ChatCache::default(),
+            downloaded_chat_files: Default::default(),
             net_cache: NetCache::default(),
             download_folder: PathBuf::from("assets"),
             tx_to_renderer: None,

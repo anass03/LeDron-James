@@ -70,7 +70,7 @@ pub enum RendererCommand{
 pub enum RendererResponse{
     EncodedMedia((MediaId, NetCacheMedia, Option<Receiver<FileRendererUpdate>>)),
     EncodedFile((FileId, NetCacheFile)),
-    EncodedMediaChats(Vec<PathBuf>),
+    EncodedMediaChats(Vec<(MediaId,PathBuf)>),
     Computed(Vec<(NodeId,TopologyAlgorithm)>)
 }
 

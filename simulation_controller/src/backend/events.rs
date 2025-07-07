@@ -373,31 +373,3 @@ fn open_image(path: &str) {
     }
 }
 
-fn open_file(path: &str) {
-    // Open with system default application
-    #[cfg(target_os = "windows")]
-    {
-        let path_str = path.to_string();
-        //let quoted_path = format!("\"{}\"", path_str);
-        Command::new("cmd")
-            .args(&["/C", "start", "", &path_str])
-            .spawn()
-            .expect("Unable to open file on Windows");
-    }
-
-    #[cfg(target_os = "macos")]
-    {
-        Command::new("open")
-            .arg(&path)
-            .spawn()
-            .expect("Unable to open file on macOS");
-    }
-
-    #[cfg(target_os = "linux")]
-    {
-        Command::new("xdg-open")
-            .arg(&path)
-            .spawn()
-            .expect("Unable to open file on Linux");
-    }
-}
