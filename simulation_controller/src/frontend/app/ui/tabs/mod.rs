@@ -1,7 +1,6 @@
 mod tab0;
 mod tab3;
 mod tab2;
-mod tab1_old;
 pub(super) mod tab1;
 mod tab1_client_popup;
 mod tab1_server_popup;

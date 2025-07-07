@@ -299,7 +299,7 @@ pub(super) mod data_rendering{
         let title = if pdr_data_len > max_visible {
             format!("PDR ({}/{})", display_data.len(), pdr_data_len)
         } else {
-            "PDR by Node".to_string()
+            String::new()
         };
         let rotation_needed = pdr_data_len > max_visible;
 
@@ -465,6 +465,8 @@ pub(super) mod data_rendering{
 
         // Expected PDR
         let data_1_block = Block::default()
+            .title("Expected PDR")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default() .fg(
@@ -479,6 +481,8 @@ pub(super) mod data_rendering{
 
         // DOWNLOAD AT SEC IF CURSOR
         let data_2_block = Block::default()
+            .title("Download (MB/s)")
+            .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(Style::default().fg(
@@ -505,6 +509,8 @@ pub(super) mod data_rendering{
 
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
+
+
 
 
         match app.simulation_controller_data.stats.node_statistic.get(&id){
