@@ -10,7 +10,7 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use ratatui::style::{Color, Modifier, Style, Stylize};
 use ratatui::text::Line;
 use ratatui::widgets;
-use ratatui::widgets::{Block, BorderType, Borders, Paragraph, Widget, Wrap};
+use ratatui::widgets::{Bar, BarChart, BarGroup, Block, BorderType, Borders, Paragraph, Widget, Wrap};
 use ratatui::widgets::canvas::{Canvas, Circle, Context};
 use crate::backend::sc_models::{NetNode, NodeType};
 use crate::frontend::app::models::tab1_types::SettingsPopupStatus::{CorrectlySent, Idle};
@@ -479,6 +479,137 @@ use ratatui::buffer::Buffer;
             );
 
         chart.render(area, buf);
+    }
+
+    pub fn render_most_active_nodes_chart(app: &App, area: Rect, buf: &mut Buffer) {
+        // Get utilization data from simulation controller - returns Vec<(NodeId, u64)>
+        let mut node_activity: Vec<(NodeId, u64)> = app.simulation_controller_data.get_utilization();
+
+        // Filter out nodes with zero activity (already sorted by get_utilization - highest first)
+        node_activity.retain(|(_, packet_count)| *packet_count > 0);
+
+        // Take only top 10 most active nodes
+        node_activity.truncate(10);
+
+        if node_activity.is_empty() {
+            let no_data_text = Paragraph::new("No active nodes detected")
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center);
+            no_data_text.render(area, buf);
+            return;
+        }
+
+        // Calculate number of bars and dynamic sizing (same logic as PDR chart)
+        let bars_count = node_activity.len() as u16;
+        let max_gap = 1u16;
+        let total_gaps = if bars_count > 1 {
+            max_gap * (bars_count - 1)
+        } else { 0 };
+
+        // Determine bar width to fill available area (subtracting padding)
+        let content_width = area.width.saturating_sub(8) as u16;
+        let mut bar_width = if bars_count > 0 {
+            content_width.saturating_sub(total_gaps).checked_div(bars_count).unwrap_or(1)
+        } else { 1 };
+        if bar_width == 0 {
+            bar_width = 1;
+        }
+        let bar_gap = max_gap;
+
+        // Handle rotation if too many bars (same logic as PDR chart)
+        let max_visible = ((content_width + bar_gap) as usize) / ((bar_width + bar_gap) as usize);
+        let (display_data, start_index, total_nodes) = if node_activity.len() <= max_visible {
+            (node_activity.clone(), 0, node_activity.len())
+        } else {
+            let start_index = (app.cache.counter as usize / 50) % node_activity.len();
+            let end_index = (start_index + max_visible).min(node_activity.len());
+            (node_activity[start_index..end_index].to_vec(), start_index, node_activity.len())
+        };
+
+        // Title with rotation info if needed
+        let title = if total_nodes > max_visible {
+            format!("Active Nodes ({}/{})", display_data.len(), total_nodes)
+        } else {
+            String::new()
+        };
+        let rotation_needed = total_nodes > max_visible;
+
+        // Layout: title, chart, optional rotation
+        let [title_area, chart_area, rotation_area] = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1),
+                Constraint::Min(1),
+                Constraint::Length(if rotation_needed { 1 } else { 0 }),
+            ])
+            .areas(area);
+
+        // Render title
+        if !title.is_empty() {
+            Paragraph::new(title)
+                .style(Style::default().fg(MAIN_BLOCK_BORDERS).add_modifier(Modifier::BOLD))
+                .alignment(Alignment::Center)
+                .render(title_area, buf);
+        }
+
+        // Center the chart horizontally
+        let total_bars_width = bars_count * bar_width + total_gaps;
+        let horizontal_padding = chart_area
+            .width
+            .saturating_sub(total_bars_width)
+            / 2;
+        let padded = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([
+                Constraint::Length(horizontal_padding),
+                Constraint::Length(total_bars_width),
+                Constraint::Min(0),
+            ])
+            .split(chart_area);
+
+        // Prepare bars with packet count-based coloring
+        let bars: Vec<Bar> = display_data.iter().map(|(node_id, packet_count)| {
+            let style = packet_count_color_style(*packet_count);
+            Bar::default()
+                .value(*packet_count)
+                .label(Line::from(format!("N{}", node_id)))
+                .text_value(format!("{}", packet_count))
+                .style(style)
+                .value_style(style.reversed())
+        }).collect();
+
+        // Render bar chart
+        BarChart::default()
+            .data(BarGroup::default().bars(&bars))
+            .bar_width(bar_width)
+            .bar_gap(bar_gap)
+            .bar_set(ratatui::symbols::bar::Set::default())
+            .render(padded[1], buf);
+
+        // Rotation indicator
+        if rotation_needed {
+            let progress = ((start_index * 100) / total_nodes).min(100);
+            Paragraph::new(format!("Rotating... ({}%)", progress))
+                .style(Style::default().fg(Color::Gray))
+                .alignment(Alignment::Center)
+                .render(rotation_area, buf);
+        }
+    }
+
+    // Helper function to create color style based on packet count
+    fn packet_count_color_style(packet_count: u64) -> Style {
+        let color = if packet_count >= 1000 {
+            Color::Rgb(255, 0, 0) // Red for very high packet count
+        } else if packet_count >= 500 {
+            Color::Rgb(255, 165, 0) // Orange for high packet count
+        } else if packet_count >= 200 {
+            Color::Rgb(255, 255, 0) // Yellow for medium packet count
+        } else if packet_count >= 50 {
+            Color::Rgb(0, 255, 0) // Green for low packet count
+        } else {
+            Color::Rgb(0, 255, 255) // Cyan for very low packet count
+        };
+        Style::new().fg(color)
     }
 
     // Helper function to create temperature-like color style based on PDR value

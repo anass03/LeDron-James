@@ -12,6 +12,7 @@ use ratatui::text::{Line, Span, Text};
 use log::Level;
 use ratatui::widgets::canvas::{Context, Circle, Line as CanvasLine, Canvas};
 use textwrap;
+use crate::frontend::app::ui::tabs::tab1::data_rendering::render_most_active_nodes_chart;
 
 
 /// Renders Overview tab-page
@@ -78,8 +79,10 @@ pub(super) fn render_tab0(app: &mut App, area: Rect, buf : &mut Buffer){
                 MAIN_BLOCK_BORDERS
             }
         ));
-    chart3_block.render(graph3,buf);
-
+    let inner_chart3 = chart3_block.inner(graph3);
+    chart3_block.render(graph3, buf);
+    // Render the most active nodes bar chart
+    render_most_active_nodes_chart(app, inner_chart3, buf);
 
 
     // Shitty performance, gotta improve it with a Tick Rate/*
