@@ -621,7 +621,7 @@ impl App<'_> {
                                                     None => {
                                                         // Bug, shouldn't arrive here.
                                                         // Means I can select not existing items
-                                                        error!(targer:"main", "[LEDRON-CLI] Selected contact not found");
+                                                        error!(target: "main", "[LEDRON-CLI] Selected contact not found");
                                                     }
                                                     Some(contact) => {
                                                         self.cache.tab1_data.popup_cursor = 0;
@@ -1080,7 +1080,7 @@ impl App<'_> {
                                                     None => (), // Do nothing
                                                     Some(vecfiles) => {
                                                         match vecfiles.get(self.cache.tab1_data.file_list_render_utils.selected as usize){
-                                                            None => error!(target"main", "[LEDRON-CLI] Error selecting the file, file-index out of bounds!"),
+                                                            None => error!(target: "main", "[LEDRON-CLI] Error selecting the file, file-index out of bounds!"),
                                                             Some(file_id) => {
                                                                 // Request the file
                                                                 if !self.simulation_controller_data.net_cache.downloaded_files.contains_key(file_id){

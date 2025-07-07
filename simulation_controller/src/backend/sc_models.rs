@@ -220,6 +220,7 @@ impl ChatCache{
 }
 
 
+#[derive(Debug)]
 pub(crate) struct ChatList {
     pub chats_stored: HashMap<(ClientId, ClientId), Arc<RwLock<Chat>>>
 }
