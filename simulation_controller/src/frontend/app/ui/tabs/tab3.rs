@@ -145,7 +145,7 @@ fn render_menu_area(app: &App, area: Rect, buf: &mut Buffer) {
     menu_list.render(area, buf);
 }
 
-fn render_main_options_area(app: &App, area: Rect, buf: &mut Buffer) {
+fn render_main_options_area(_app: &App, area: Rect, buf: &mut Buffer) {
     let opt_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -420,9 +420,9 @@ fn render_app_options_area(app: &App, area: Rect, buf: &mut Buffer, page: &AppSe
 
 // Command popup rendering functions
 fn render_download_command_popup(
-    app: &App,
-    area: Rect,
-    buf: &mut Buffer,
+    _app: &App,
+    _area: Rect,
+    _buf: &mut Buffer,
     page: &DownloadSettingsPage,
 ) {
     // No command popups for download settings currently
@@ -642,7 +642,7 @@ fn render_set_all_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &Comma
         .areas(inner);
 
     // PDR input
-    let mut pdr_block = Block::default()
+    let pdr_block = Block::default()
         .title("PDR Value (0.0 - 1.0)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(if cmd.cursor == 0 {
@@ -675,7 +675,7 @@ fn render_set_all_pdr_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &Comma
     render_popup_status(status_area, buf, &cmd.status);
 }
 
-fn render_set_refresh_time_popup(app: &App, area: Rect, buf: &mut Buffer, cmd: &CommandPopup) {
+fn render_set_refresh_time_popup(_app: &App, area: Rect, buf: &mut Buffer, cmd: &CommandPopup) {
     let popup_area = small_centered_popup_area(area);
     Clear.render(popup_area, buf);
 

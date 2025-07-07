@@ -87,7 +87,7 @@ impl App<'_> {
                                     .insert(file_id, file_status);
                             }
                         }
-                        RendererResponse::Computed((ret_vec)) => {
+                        RendererResponse::Computed(ret_vec) => {
                             for (id, top) in ret_vec {
                                 'inner: for (node, act, ref mut current_alg) in
                                     &mut self.cache.tab1_data.net_node_list.items

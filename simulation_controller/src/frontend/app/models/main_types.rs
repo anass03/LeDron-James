@@ -35,7 +35,8 @@ pub(in crate::frontend::app) enum AppMode{
     Input(InputMode),  // u8 represents which input mode I selected:
                 // 0 Chat/TOML, 1 Text Buffer first field
     Scrolling,
-    FileExploring
+    FileExploring,
+    Quitting
 }
 #[derive(PartialEq)]
 pub(crate) enum InputMode{

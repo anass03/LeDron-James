@@ -2,6 +2,7 @@ use ratatui::crossterm::event::{KeyEvent, KeyEventKind};
 use crate::backend::sc_models::LogType;
 use super::super::App;
 use super::super::ui;
+use super::super::models::main_types::AppMode;
 use std::io::Write;
 use log::*;
 fn wrap_text(text: &str, _min: usize, max: usize) -> String {
@@ -44,13 +45,16 @@ impl App<'_>{
                 "o" => {
                     error!(target:"main", "{:?}", wrap_text(format!("{:?}", self.simulation_controller_data.chat_cache.local_chats).as_str(),30,40 ))
                 }
-                "q" => self.stay = false,
+                "q" => {
+                    self.app_mode = AppMode::Quitting;
+                    self.quit_confirmation = false; // Default to "No"
+                },
                 "i" => {
                     debug!(target:"main", "{}", format!("{:?} - \n - \n{:?}", self.simulation_controller_data.net_cache.downloaded_medias, self.simulation_controller_data.net_cache.known_media_list ));
                 }
                 _ => {
                     match self.selected_tab {
-                        ui::tabs::SelectedTab::Overview => (self.handle_event_tab0(key.code)),
+                        ui::tabs::SelectedTab::Overview => self.handle_event_tab0(key.code),
                         ui::tabs::SelectedTab::Topology => self.handle_event_tab1(key),
                         ui::tabs::SelectedTab::TOMLEditor => self.handle_event_tab2(key.code),
                         ui::tabs::SelectedTab::Settings => self.handle_event_tab3(key.code),

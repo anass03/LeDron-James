@@ -15,7 +15,7 @@ use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::{mpsc, LockResult};
-use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::thread::{JoinHandle, Thread};
 use std::time::Duration;
 use time::Instant;
@@ -24,7 +24,7 @@ use image::{DynamicImage, ImageBuffer, Rgb, RgbImage, Rgba};
 use log::{debug, error, info, warn};
 use rand::Rng;
 use ratatui::style::Stylize;
-use ratatui::widgets::{Block, Borders};
+use ratatui::widgets::{Block, Borders, Clear};
 use ratatui_image::errors::Errors;
 use ratatui_image::picker::Picker;
 use ratatui_image::StatefulImage;
@@ -35,9 +35,6 @@ use crate::backend::simulation_controller::SimulationControllerData;
 use models::general_types::TOMLMessages;
 use server::{MediaSC, MessageMetaData, MessageSC};
 use crate::backend::sc_models::{FileRendererUpdate, FileType, LogType, NetCacheFile, NetCacheMedia, RendererCommand, RendererResponse};
-use crate::backend::sc_models::RendererCommand::ComputeSetOfTopologies;
-use crate::backend::sc_models::RendererResponse::Computed;
-use crate::frontend::app::models::main_types::AppMode::FileExploring;
 use crate::frontend::app::models::tab1_types::{ClientNetPopup, ClientPopup, NodePopup, RenderingImage, ViewedTab1};
 use crate::frontend::app::topology_algorithm::alg_models::{TopologyAlgorithm, TopologyStatus};
 use crate::frontend::app::ui::tabs::{SelectedTab, BG_COLOR};
@@ -50,6 +47,7 @@ pub struct App<'a> {
     stay: bool,
     app_mode: AppMode,
     tick_rate: Duration, // Moving inside settings?
+    quit_confirmation: bool, // true for "Yes", false for "No"
 
     pub cache: Cache<'a>, // Contains data required by the app to work
     pub settings: Settings, // Setting page containing various config stuff
@@ -69,6 +67,7 @@ impl App<'_>{
             stay:true,
             app_mode:AppMode::Normal,
             tick_rate:Duration::from_millis(200),
+            quit_confirmation: false, // Default to "No"
 
             settings: Settings::load(),
             selected_tab: SelectedTab::default(),
@@ -139,19 +138,6 @@ impl App<'_>{
 
             // Handle media resize requests
             self.handle_media_resize_requests();
-
-
-            if self.stay == false{
-                // QUITTING MODE: We should ask again to be sure if the user wants to quit
-                // To do: Design a Quitting page with loading bar
-
-                // 1 - ReCALLING terminal.draw(|f| f.render_widget(&*self, f.area()))?;
-                // GOTTA MODIFY RENDER_WIDGET to DRAW frame accordly to what was being shown before and adding a tab over it
-
-                // 2 - ReCALLING self.handle_events() that will process only 2 inputs (arrow up / down) to choose YES or NO
-                // on the "Are you sure to quit the app" tab
-                // GOTTA MODIFY HANDLE_EVENTS to HANDLE QUITTING MODE
-             }
         }
         Ok(())
     }
@@ -196,6 +182,9 @@ impl App<'_>{
                         AppMode::FileExploring => {
                             self.handle_event_file_exploringmode(event)
                         },
+                        AppMode::Quitting => {
+                            self.handle_event_quittingmode(key);
+                        },
                     }
                 },
                 _ => {}
@@ -212,6 +201,102 @@ impl App<'_>{
              */
         }
         Ok(())
+    }
+
+    fn handle_event_quittingmode(&mut self, key: ratatui::crossterm::event::KeyEvent) {
+        use ratatui::crossterm::event::{KeyCode, KeyEventKind};
+        
+        if key.kind == KeyEventKind::Press {
+            match key.code {
+                KeyCode::Up | KeyCode::Left => {
+                    self.quit_confirmation = true; // Select "Yes"
+                },
+                KeyCode::Down | KeyCode::Right => {
+                    self.quit_confirmation = false; // Select "No"
+                },
+                KeyCode::Enter => {
+                    if self.quit_confirmation {
+                        self.stay = false; // Actually quit
+                    } else {
+                        self.app_mode = AppMode::Normal; // Return to normal mode
+                    }
+                },
+                KeyCode::Esc => {
+                    self.app_mode = AppMode::Normal; // Cancel and return to normal mode
+                },
+                _ => {}
+            }
+        }
+    }
+
+    fn render_quit_popup(&self, area: Rect, buf: &mut Buffer) {
+        use ratatui::style::{Color, Style};
+        use ratatui::widgets::{Block, Borders, Paragraph};
+
+        // Create a semi-transparent overlay
+        let overlay = Block::default()
+            .style(Style::default().bg(Color::Black).fg(Color::White));
+        overlay.render(area, buf);
+
+        // Calculate popup dimensions
+        let popup_width = 40;
+        let popup_height = 7;
+        let popup_x = (area.width.saturating_sub(popup_width)) / 2;
+        let popup_y = (area.height.saturating_sub(popup_height)) / 2;
+
+        let popup_area = Rect::new(
+            area.x + popup_x,
+            area.y + popup_y,
+            popup_width,
+            popup_height,
+        );
+        Clear::render(Clear::default(), popup_area, buf);
+
+        // Create popup background
+        let popup_block = Block::default()
+            .title("Quit Confirmation")
+            .borders(Borders::ALL)
+            .style(Style::default()
+                .bg(Color::DarkGray)
+                .fg(Color::White));
+
+        let inner_area = popup_block.inner(popup_area);
+        popup_block.render(popup_area, buf);
+
+        // Create the question text
+        let question = Paragraph::new("Are you sure you want to quit?")
+            .style(Style::default().fg(Color::White))
+            .alignment(ratatui::layout::Alignment::Center);
+        question.render(Rect::new(inner_area.x, inner_area.y, inner_area.width, 1), buf);
+
+        // Create the options
+        let yes_style = if self.quit_confirmation {
+            Style::default().fg(Color::Yellow).bg(Color::Blue)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let no_style = if !self.quit_confirmation {
+            Style::default().fg(Color::Yellow).bg(Color::Blue)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        let yes_text = Paragraph::new("  Yes  ")
+            .style(yes_style)
+            .alignment(ratatui::layout::Alignment::Center);
+        let no_text = Paragraph::new("  No   ")
+            .style(no_style)
+            .alignment(ratatui::layout::Alignment::Center);
+
+        yes_text.render(Rect::new(inner_area.x, inner_area.y + 2, inner_area.width / 2, 1), buf);
+        no_text.render(Rect::new(inner_area.x + inner_area.width / 2, inner_area.y + 2, inner_area.width / 2, 1), buf);
+
+        // Instructions
+        let instructions = Paragraph::new("Use ↑↓ or ←→ to select, Enter to confirm, Esc to cancel")
+            .style(Style::default().fg(Color::Gray))
+            .alignment(ratatui::layout::Alignment::Center);
+        instructions.render(Rect::new(inner_area.x, inner_area.y + 4, inner_area.width, 1), buf);
     }
 
     /// Update cache & tabs data
@@ -247,7 +332,7 @@ impl App<'_>{
 }
 impl Widget for &mut App<'_>{
     // Each tab render function returns to this fn
-    fn render(mut self, area: Rect, buf: &mut Buffer)
+    fn render(self, area: Rect, buf: &mut Buffer)
     {
         use ratatui::layout::Constraint::{Length, Min};
         use ui::tabs::{render_top,render_inner,render_footer};
@@ -263,6 +348,11 @@ impl Widget for &mut App<'_>{
         render_top(self, top_area, buf);
         render_inner(self, inner_area, buf);
         render_footer(self, footer_area, buf);
+
+        // Render quit confirmation popup if in quitting mode
+        if self.app_mode == AppMode::Quitting {
+            self.render_quit_popup(area, buf);
+        }
     }
 }
 
@@ -278,7 +368,7 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
         let mut picker = Picker::from_query_stdio();
         let mut total_requested_picker = 0;
 
-        let mut already_downloaded_files:HashSet<MediaId> = HashSet::new();
+        let already_downloaded_files:HashSet<MediaId> = HashSet::new();
 
         loop {
             // Ascolto il canale main
@@ -432,7 +522,7 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
 
                                 ret_vec.push((id,top_alg));
                             }
-                            match tx_rsp.send(Computed(ret_vec)){
+                            match tx_rsp.send(RendererResponse::Computed(ret_vec)){
                                 Ok(_) => {
                                     info!(target: "topology", "[RENDERER] - Successfully sent computed topologies");
                                 },
@@ -560,7 +650,6 @@ fn renderer_thread_gen() ->((Sender<RendererCommand>, Receiver<RendererResponse>
                             }
                             Err(_) => (),
                         }
-                        let is_or_no = retvec.is_empty();
                         if !retvec.is_empty(){
                             match tx_rsp.send(RendererResponse::EncodedMediaChats(retvec)){
                                 Ok(_) => (),

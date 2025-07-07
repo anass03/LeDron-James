@@ -193,7 +193,7 @@ impl SimulationControllerData {
             }
         }
 
-        if let Some(mut vec) = self.running_network.get_mut(&first_node) {
+        if let Some(vec) = self.running_network.get_mut(&first_node) {
             vec.push(*second_node.id());
         }
 
@@ -294,7 +294,7 @@ impl SimulationControllerData {
             }
         }
 
-        if let Some(mut vec) = self.running_network.get_mut(&first_node) {
+        if let Some(vec) = self.running_network.get_mut(&first_node) {
             vec.retain(|id| id != second_node.id());
         }
 

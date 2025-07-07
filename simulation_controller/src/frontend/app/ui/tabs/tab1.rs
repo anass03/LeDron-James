@@ -1177,7 +1177,7 @@ pub(super) fn render_add_sender_popup(
             Constraint::Min(2),
         ])
         .areas(inner);
-    let mut nodeid_block = Block::default()
+    let nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(if cmd.cursor == 0 {
@@ -1257,7 +1257,7 @@ pub(super) fn render_remove_sender_popup(
             Constraint::Min(2),
         ])
         .areas(inner);
-    let mut nodeid_block = Block::default()
+    let nodeid_block = Block::default()
         .title("Node ID (u8)")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(if cmd.cursor == 0 {

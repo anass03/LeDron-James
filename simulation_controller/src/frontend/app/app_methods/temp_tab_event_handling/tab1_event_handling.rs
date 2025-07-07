@@ -508,7 +508,7 @@ impl App<'_> {
                                 let mut request: bool = false;
                                 let mut opt_server_id: ServerId = 0;
                                 match known_chat_servers
-                                    .get((self.cache.tab1_data.popup_cursor as usize))
+                                    .get(self.cache.tab1_data.popup_cursor as usize)
                                 {
                                     None => {
                                         // Should be impossible
@@ -917,7 +917,7 @@ impl App<'_> {
                             KeyCode::Enter => {
                                 // I get the selected item and pass it to the second page struct
                                 match known_content_servers
-                                    .get((self.cache.tab1_data.popup_cursor as usize))
+                                    .get(self.cache.tab1_data.popup_cursor as usize)
                                 {
                                     None => {
                                         // Should be impossible

@@ -11,7 +11,7 @@ pub(super) mod chart_rendering {
     // Chart showing messages dropped each n secs.
     pub(crate) fn render_sparkline_1(
         chdata: &mut ChartsData,
-        mut block: Block,
+        block: Block,
         area: Rect,
         buf: &mut Buffer,
     ) {
@@ -26,7 +26,7 @@ pub(super) mod chart_rendering {
     // Network Reliability
     pub(crate) fn render_sparkline_2(
         chdata: &mut ChartsData,
-        mut block: Block,
+        block: Block,
         area: Rect,
         buf: &mut Buffer,
     ) {
@@ -38,5 +38,5 @@ pub(super) mod chart_rendering {
     }
 
     //BARCHART
-    pub(crate) fn render_sparkline_3(chdata: &ChartsData, area: Rect, buf: &mut Buffer) {}
+    pub(crate) fn render_sparkline_3(_chdata: &ChartsData, _area: Rect, _buf: &mut Buffer) {}
 }

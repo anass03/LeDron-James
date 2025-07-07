@@ -25,7 +25,7 @@ pub(super) fn render_tab2(app: &App, area: Rect, buf: &mut Buffer) {
     let toml_view_area = inner_columns[0];
     let menu_view_area = inner_columns[1];
 
-    let mut toml_block = Block::default()
+    let toml_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if app.cache.cursor == 0 {
@@ -84,7 +84,7 @@ pub(super) fn render_tab2(app: &App, area: Rect, buf: &mut Buffer) {
         }
     }
 
-    let mut menu_view_area_block = Block::default()
+    let menu_view_area_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .border_style(Style::default().fg(if app.cache.cursor == 1 {

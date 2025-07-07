@@ -267,7 +267,7 @@ impl App<'_> {
         }
     }
     fn topology_main_status_initialize(&mut self) {
-        let mut top_alg = &mut self.simulation_controller_data.topology_algorithm_data;
+        let top_alg = &mut self.simulation_controller_data.topology_algorithm_data;
         top_alg.status = TopologyStatus::Computing;
         // Generate random positions for network
         for (node, _) in self.simulation_controller_data.running_network.clone() {

@@ -158,7 +158,7 @@ pub(in crate::frontend::app::ui::tabs) fn render_client_popup(
         )
         .x_bounds([-180.0, 180.0])
         .y_bounds([-90.0, 90.0])
-        .paint(|ctx| ctx.draw({ &Map::default() }));
+        .paint(|ctx| ctx.draw(&Map::default()));
     internet_canvas.render(server_symb, buf);
 
     // Draw function graph icon (sine wave)
@@ -226,7 +226,7 @@ fn render_client_options(
             opt_block.render(area, buf);
             return render_net_options(app, opt_inner, buf, net_page_data, selected_node);
         }
-        ClientPopup::DataPage(data_page_data) => {
+        ClientPopup::DataPage(_data_page_data) => {
             render_cl_sr_data_options(app, opt_inner, buf, *selected_node, 0);
         }
         ClientPopup::SettingsPage(cmd) => {
@@ -446,7 +446,7 @@ fn draw_server(ctx: &mut Context) {
         ..Default::default()
     });
 }
-fn draw_server_canvas<'a>(counter: u64) -> Canvas<'a, fn(&mut Context)> {
+fn draw_server_canvas<'a>(_counter: u64) -> Canvas<'a, fn(&mut Context)> {
     Canvas::default()
         .background_color(POPUP_BG_COLOR)
         .x_bounds([0.0, 40.0])
@@ -642,7 +642,7 @@ pub(super) mod chat_rendering {
                     widgets::Clear.render(centered_popup_area, buf);
                     let colored_bg_block =
                         Block::default().style(Style::default().bg(POPUP_BG_COLOR));
-                    let colored_popup_area = colored_bg_block.inner(centered_popup_area);
+                    let _colored_popup_area = colored_bg_block.inner(centered_popup_area);
                     colored_bg_block.render(centered_popup_area, buf);
 
                     app.cache
@@ -854,7 +854,7 @@ pub(super) mod chat_rendering {
                     last_msg.render(info_msg, buf);
                 }
                 Some(chat_list) => {
-                    let mut found_chat: Option<&Chat> = None;
+                    let mut _found_chat: Option<&Chat> = None;
                     match chat_list.chats_stored.get(&(selected_cl, **contact_id)) {
                         None => {
                             match chat_list.chats_stored.get(&(**contact_id, selected_cl)) {
@@ -918,7 +918,7 @@ pub(super) mod chat_rendering {
                                                                 .wrap(Wrap { trim: true });
                                                                 last_msg.render(info_msg, buf);
                                                             }
-                                                            Media(med) => {
+                                                            Media(_med) => {
                                                                 let initial_mess = format!("{:?}:{:?} - You sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                                        messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute);
                                                                 let last_msg =
@@ -968,7 +968,7 @@ pub(super) mod chat_rendering {
                                                                 .wrap(Wrap { trim: true });
                                                                 last_msg.render(info_msg, buf);
                                                             }
-                                                            Media(med) => {
+                                                            Media(_med) => {
                                                                 let initial_mess = format!("{:?}:{:?} - ID {:?} sent a media 🖇",messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).hour,
                                                                                        messdata.timestamp.time.unwrap_or(Time{ hour: 0, minute: 0, second: 0, nanosecond: 0, }).minute
                                                                                        ,messdata.id);
@@ -1059,7 +1059,7 @@ pub(super) mod chat_rendering {
                                                         .wrap(Wrap { trim: true });
                                                     last_msg.render(info_msg, buf);
                                                 }
-                                                Media(med) => {
+                                                Media(_med) => {
                                                     let initial_mess = format!(
                                                         "{:?}:{:?} - You sent a media 🖇",
                                                         messdata
@@ -1134,7 +1134,7 @@ pub(super) mod chat_rendering {
                                                         .wrap(Wrap { trim: true });
                                                     last_msg.render(info_msg, buf);
                                                 }
-                                                Media(med) => {
+                                                Media(_med) => {
                                                     let initial_mess = format!(
                                                         "{:?}:{:?} - ID {:?} sent a media 🖇",
                                                         messdata
@@ -1400,7 +1400,7 @@ pub(super) mod chat_rendering {
         }
     }
 
-    fn draw_empty_contacts_canvas<'a>(counter: u64) -> Canvas<'a, fn(&mut Context)> {
+    fn draw_empty_contacts_canvas<'a>(_counter: u64) -> Canvas<'a, fn(&mut Context)> {
         Canvas::default()
             .background_color(POPUP_BG_COLOR)
             .block(
@@ -1561,14 +1561,14 @@ pub(super) mod chat_rendering {
         }
     }
 
-    fn render_empty_chat(app: &App, area: Rect, buf: &mut Buffer) {}
+    fn render_empty_chat(_app: &App, _area: Rect, _buf: &mut Buffer) {}
 
     fn render_chats(
         app: &App,
         area: Rect,
         buf: &mut Buffer,
         selected_cl: NodeId,
-        third_page_data: &ChThirdPage,
+        _third_page_data: &ChThirdPage,
         ch: &Chat,
     ) {
         // Messages list (scrollable) with single unified offset
@@ -1870,7 +1870,7 @@ pub(super) mod chat_rendering {
                 }
             };
 
-            let mut bubble_block = Block::default()
+            let bubble_block = Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .title_bottom(time_str)
@@ -2059,7 +2059,7 @@ pub(super) mod net_rendering {
                     widgets::Clear.render(centered_popup_area, buf);
                     let colored_bg_block =
                         Block::default().style(Style::default().bg(POPUP_BG_COLOR));
-                    let colored_popup_area = colored_bg_block.inner(centered_popup_area);
+                    let _colored_popup_area = colored_bg_block.inner(centered_popup_area);
                     colored_bg_block.render(centered_popup_area, buf);
                     app.cache
                         .file_explorer
@@ -2074,7 +2074,7 @@ pub(super) mod net_rendering {
         app: &App,
         area: Rect,
         buf: &mut Buffer,
-        stpage_data: &NetFirstPage,
+        _stpage_data: &NetFirstPage,
         selected_node: &ClientId,
     ) {
         match app
@@ -2169,7 +2169,7 @@ pub(super) mod net_rendering {
             .title(" File List ")
             .title_alignment(Alignment::Center);
 
-        let mut attach_file_block = Block::default()
+        let attach_file_block = Block::default()
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
             .border_style(
@@ -2233,7 +2233,7 @@ pub(super) mod net_rendering {
                                             }
                                             NetCacheMedia::Downloaded(_) => {
                                                 match app.cache.counter % 20 {
-                                                    (num) => {
+                                                    num => {
                                                         if num < 10 {
                                                             '✓'
                                                         } else {
@@ -2951,7 +2951,7 @@ pub(super) mod net_rendering {
         area: Rect,
         buf: &mut Buffer,
         ndpage_data: &NetSecondPage,
-        selected_node: &ClientId,
+        _selected_node: &ClientId,
         file_id: MediaId,
     ) {
         match app
@@ -2979,7 +2979,7 @@ pub(super) mod net_rendering {
                     NetCacheMedia::Downloaded(vec) => {
                         render_media_waiting_for_rendering(app, area, buf);
                     }
-                    NetCacheMedia::Rendered(image_protocol) => {
+                    NetCacheMedia::Rendered(_image_protocol) => {
                         // I render it externally ddso no need to do it again here,
                         // sopratutto perchè serve un riferimento mutabile a app per farlo :)))
                     }
@@ -2996,7 +2996,7 @@ pub(super) mod net_rendering {
         area: Rect,
         buf: &mut Buffer,
         ndpage_data: &NetSecondPage,
-        selected_node: &ClientId,
+        _selected_node: &ClientId,
         file_id: FileId,
     ) {
         match app
@@ -3007,7 +3007,7 @@ pub(super) mod net_rendering {
         {
             None => {}
             Some(item) => match item.value() {
-                NetCacheFile::Downloading(x) => render_loading_gauge(
+                NetCacheFile::Downloading(_x) => render_loading_gauge(
                     app,
                     area,
                     buf,
@@ -3050,7 +3050,7 @@ pub(super) mod net_rendering {
                 // Warning/error color scheme (red/orange tones)
                 let warning_color = Color::Rgb(255, 100, 100);
                 let error_color = Color::Rgb(200, 50, 50);
-                let accent_color = Color::Rgb(255, 150, 50);
+                let _accent_color = Color::Rgb(255, 150, 50);
 
                 // Pulsing warning ring
                 let ring_radius = 20.0 + (time * 0.8).sin() * 3.0;
@@ -3244,7 +3244,7 @@ pub(super) mod net_rendering {
         action_para.render(action_right, buf);
     }
     fn render_file_utf8(
-        app: &App,
+        _app: &App,
         area: Rect,
         buf: &mut Buffer,
         lines: &Vec<String>,
@@ -3535,7 +3535,7 @@ pub(super) mod net_rendering {
         let status_para = Paragraph::new(status_line).alignment(Alignment::Center);
         status_para.render(bottom_area, buf);
     }
-    fn render_fatal_rendering_error(app: &App, area: Rect, buf: &mut Buffer) {
+    fn render_fatal_rendering_error(_app: &App, area: Rect, buf: &mut Buffer) {
         let [top_area, center_area, bottom_area] = Layout::default()
             .direction(Direction::Vertical)
             .constraints([

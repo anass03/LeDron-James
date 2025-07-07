@@ -81,7 +81,7 @@ fn render_server_options(
     selected_node: &NodeId,
 ) {
     match server_popup {
-        ServerPopup::DataPage(datapage) => {
+        ServerPopup::DataPage(_datapage) => {
             render_cl_sr_data_options(app, area, buf, *selected_node, 0)
         }
         ServerPopup::SettingsPage(setpage) => {
