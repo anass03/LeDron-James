@@ -229,7 +229,7 @@ impl TopologyAlgorithm{
         for (ids, res) in &self.nodes_resultant_vec {
             match self.map.get_mut(ids) {
                 Some(displayable) => {
-                    displayable.position = displayable.position.add(&res.scale(0.010));
+                    displayable.position = displayable.position.add(&res.scale(0.005));
                 }
                 None => {
                     error_counter += 1;
