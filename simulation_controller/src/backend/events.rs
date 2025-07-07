@@ -24,7 +24,7 @@ impl SimulationControllerData {
             DroneEvent::PacketSent(packet) => {
                 match packet.routing_header.current_hop() {
                     Some(drone_id) => {
-                        self.drone_packet_exchanged(drone_id);
+                        self.stats.packet_sent(drone_id)
                     },
                     None => {}
                 }
@@ -34,7 +34,7 @@ impl SimulationControllerData {
             DroneEvent::PacketDropped(packet) => {
                 match packet.routing_header.current_hop() {
                     Some(drone_id) => {
-                        self.drone_packet_exchanged(drone_id);
+                        self.stats.packet_dropped(drone_id)
                     },
                     None => {}
                 }
