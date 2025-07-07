@@ -788,9 +788,6 @@ use ratatui::buffer::Buffer;
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
 
-
-
-
         match app.simulation_controller_data.stats.node_statistic.get(&id){
             None => {
                 // Render inside the graph blocks the text a canvas drawing something that says NOT VALID .
@@ -882,7 +879,7 @@ use ratatui::buffer::Buffer;
         // CPU Utilize
 
         let data_3_block = Block::default()
-            .title("Route Visualization")
+            .title("Most Active Drones")
             .title_alignment(Alignment::Center)
             .borders(Borders::ALL)
             .border_type(BorderType::Rounded)
@@ -896,6 +893,8 @@ use ratatui::buffer::Buffer;
 
         let inner_data_3_block = data_3_block.inner(data_3);
         data_3_block.render(data_3, buf);
+        // Render the most active nodes bar chart in the third field
+        render_most_active_nodes_chart(app, inner_data_3_block, buf);
 
         // Handle drone data display
         match app.simulation_controller_data.stats.node_statistic.get(&id){
@@ -911,12 +910,7 @@ use ratatui::buffer::Buffer;
                     .style(Style::default().fg(Color::Gray))
                     .alignment(ratatui::layout::Alignment::Center);
                 no_data_text_2.render(inner_data_2_block, buf);
-                
-                // Also render no data for data_3_block
-                let no_data_text_3 = Paragraph::new("No route data available")
-                    .style(Style::default().fg(Color::Gray))
-                    .alignment(ratatui::layout::Alignment::Center);
-                no_data_text_3.render(inner_data_3_block, buf);
+
             }
             Some(stats) => {
                 // Render PDR bar chart in data_1_block for drones too
