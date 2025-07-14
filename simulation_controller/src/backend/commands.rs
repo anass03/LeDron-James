@@ -33,9 +33,16 @@ use wg_2024::packet::Packet;
 impl SimulationControllerData {
     /// - Drone Commands
     pub fn crash(&mut self, drone_id: NodeId) -> Result<(), String> {
-        // Early validation - check if drone exists and can be crashed
-        if let Err(e) = self.cannot_crash(drone_id) {
-            return Err(e);
+        match self.cannot_crash(drone_id) {
+            Ok(cannot_crash) => {
+                if cannot_crash {
+                    return Err(format!("Cannot crash drone {} - would disconnect network", drone_id));
+                }
+            }
+            Err(e) => {
+                debug!(target: "main", "[LEDRON-CLI] cannot_crash error: {}", e);
+                return Err(e);
+            }
         }
 
         // Find the drone and collect neighbors in one pass

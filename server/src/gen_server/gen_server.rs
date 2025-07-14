@@ -21,8 +21,16 @@ pub struct GenServer {
     pub host: Host,
     pub controller_recv: Receiver<HostCommand>,
     pub server_type: ServerTypes,
+    pub(crate) pending_downloads: HashMap<u64, ScheduledDownload>,
 }
 
+pub struct ScheduledDownload {
+    msg: Message,
+    pub destination: NodeId,
+    pub total: usize,
+    pub content_type: ContentType,
+    pub id: String,
+}
 impl GenServer {
     delegate_genserver_host_ref! {
         pub fn send_logging(&self, log_type: LogType, module: LogModule, msg: String);
@@ -50,6 +58,7 @@ impl GenServer {
             host,
             controller_recv,
             server_type,
+            pending_downloads: HashMap::new(),
         }
     }
     /// Handles commands from the Simulation Controller.
@@ -217,10 +226,51 @@ impl GenServer {
     pub fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
         if let Some((msg, meta, total)) = self.prepare_message(&response) {
             if let Some((content_type, id)) = meta {
+                // it’s a File or Media
                 if !matches!(response, ServerToClient::Sending(_, _)) {
-                    self.send_download(destination, total, content_type, id);
+                    // 1) build the Sending notification
+                    let cid = match content_type {
+                        ContentType::File  => ContentID::File(id.clone()),
+                        ContentType::Media => ContentID::Media(id.clone()),
+                    };
+                    let sending = ServerToClient::Sending(cid, total);
+
+                    // 2) prepare it so we get its session_id
+                    if let Some((send_msg, _, _)) = self.prepare_message(&sending) {
+                        let send_session = send_msg.session_id;
+
+                        // 3) stash the real content msg for later
+                        self.pending_downloads.insert(send_session, ScheduledDownload {
+                            msg,
+                            destination,
+                            total,                        // numero di frammenti calcolato
+                            content_type,                 // File o Media
+                            id: id.clone(),
+                        });
+
+                        // 4) send *only* the Sending notification now
+                        if let Err(e) = self.build_msg_fragment(destination, send_msg) {
+                            self.send_logging(
+                                LogType::ERROR,
+                                LogModule::PACKET,
+                                format!(
+                                    "Failed to send download notification to {}: {}",
+                                    destination, e
+                                ),
+                            );
+                        }
+                    } else {
+                        self.send_logging(
+                            LogType::ERROR,
+                            LogModule::PACKET,
+                            "Failed to prepare Sending notification".to_string(),
+                        );
+                    }
+                    return; // skip sending the real msg for now
                 }
             }
+
+            // all other cases (plain msgs or a “Sending” itself) go straight through
             if let Err(e) = self.build_msg_fragment(destination, msg) {
                 self.send_logging(
                     LogType::ERROR,
@@ -236,21 +286,57 @@ impl GenServer {
             );
         }
     }
+    // pub fn send_response(&mut self, response: ServerToClient, destination: NodeId) {
+    //     if let Some((msg, meta, total)) = self.prepare_message(&response) {
+    //         if let Some((content_type, id)) = meta {
+    //             if !matches!(response, ServerToClient::Sending(_, _)) {
+    //                 self.send_download(destination, total, content_type, id);
+    //             }
+    //         }
+    //         if let Err(e) = self.build_msg_fragment(destination, msg) {
+    //             self.send_logging(
+    //                 LogType::ERROR,
+    //                 LogModule::PACKET,
+    //                 format!("Failed to send response to {}: {}", destination, e),
+    //             );
+    //         }
+    //     } else {
+    //         self.send_logging(
+    //             LogType::ERROR,
+    //             LogModule::PACKET,
+    //             "prepare_message returned None".to_string(),
+    //         );
+    //     }
+    // }
 
-    /// Sends a content download notification before sending the actual data.
-    fn send_download(
-        &mut self,
-        destination: NodeId,
-        total: usize,
-        content: ContentType,
-        id: String,
-    ) {
-        let cid = match content {
-            ContentType::File => ContentID::File(id),
-            ContentType::Media => ContentID::Media(id),
-        };
-        self.send_response(ServerToClient::Sending(cid, total), destination);
+    /// Sending directly the prepared message, after receiving ack from client for packet ServerToClient::Sending(_, _)
+    pub fn send_stashed_content(&mut self, sd: ScheduledDownload) {
+        let session = sd.msg.session_id.clone();
+        if let Err(e) = self.build_msg_fragment(sd.destination, sd.msg) {
+            self.send_logging(
+                LogType::ERROR,
+                LogModule::PACKET,
+                format!(
+                    "Failed to send stashed content (session={}): {}",
+                    session, e
+                ),
+            );
+        }
     }
+    /// Sends a content download notification before sending the actual data.
+    // pub fn send_download(
+    //     &mut self,
+    //     destination: NodeId,
+    //     total: usize,
+    //     content: ContentType,
+    //     id: String,
+    // ) {
+    //     let cid = match content {
+    //         ContentType::File => ContentID::File(id),
+    //         ContentType::Media => ContentID::Media(id),
+    //     };
+    //     self.send_response(ServerToClient::Sending(cid, total), destination);
+    // }
 
     /// Prepares a message for transmission, optionally extracting content metadata.
     fn prepare_message(

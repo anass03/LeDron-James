@@ -133,7 +133,14 @@ impl ContentServer {
                     self.handle_nack(nack, generator, packet.session_id)
                 }
             }
-            Ack(ack) => self.handle_ack(ack, &packet.routing_header.hops, packet.session_id),
+            Ack(ack) => {
+                self.handle_ack(ack, &packet.routing_header.hops, packet.session_id.clone());
+                // ↓ NEW: check if that session_id was a “Sending” we’re waiting on
+                if let Some(sd) = self.info.pending_downloads.remove(&packet.session_id) {
+                    // now fire off the real file/media
+                    self.info.send_stashed_content(sd);
+                }
+            },
             FloodResponse(_) => self.process_flood_response(packet),
             FloodRequest(r) => self.process_flood_request(r, packet),
             MsgFragment(fragment) => {

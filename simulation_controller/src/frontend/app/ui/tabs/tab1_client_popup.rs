@@ -200,7 +200,7 @@ fn render_client_options(
         ClientPopup::InternetPage(net_page_data) => {
             opt_block = opt_block
                 .title_bottom(format!(
-                    "📲 Download ( MB/s ): {:?} | ⬋ Upload ( MB/s ): {:?}",
+                    "📲 Download ( KB/s ): {:?} | ⬋ Upload ( KB/s ): {:?}",
                     match app
                         .simulation_controller_data
                         .stats
